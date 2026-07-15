@@ -1,0 +1,122 @@
+/*
+ * Open Cut design tokens.
+ *
+ * One source of truth for color, spacing, radius, type, motion, and elevation. Panels and
+ * primitives reference these variables only — never hard-coded hex — so theming (dark /
+ * midnight / light) is a matter of swapping this palette. Dark-first.
+ */
+
+:root {
+  /* ── Surfaces (near-black, layered for depth) ── */
+  --surface-0: #0a0b0e; /* app background */
+  --surface-1: #101216; /* panels */
+  --surface-2: #16181d; /* raised panels, headers */
+  --surface-3: #1e2127; /* controls, hover */
+  --surface-4: #272b33; /* active, selected */
+  --surface-float: rgba(22, 24, 29, 0.72); /* glass overlays (with backdrop blur) */
+
+  /* ── Borders & dividers ── */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* ── Text ── */
+  --text-primary: #f2f4f8;
+  --text-secondary: #a4abb8;
+  --text-tertiary: #6b7280;
+  --text-disabled: #4b5563;
+
+  /* ── Brand / accent (electric indigo → violet) ── */
+  --accent: #6d5efc;
+  --accent-hover: #7d70ff;
+  --accent-active: #5b4de0;
+  --accent-soft: rgba(109, 94, 252, 0.16);
+  --accent-glow: rgba(109, 94, 252, 0.45);
+
+  /* ── Semantic ── */
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --info: #60a5fa;
+
+  /* ── Timeline clip label palette ── */
+  --label-red: #f87171;
+  --label-orange: #fb923c;
+  --label-yellow: #fbbf24;
+  --label-green: #34d399;
+  --label-teal: #2dd4bf;
+  --label-blue: #60a5fa;
+  --label-purple: #a78bfa;
+  --label-pink: #f472b6;
+  --label-gray: #94a3b8;
+
+  /* ── Radius ── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 13px;
+  --radius-xl: 18px;
+  --radius-full: 999px;
+
+  /* ── Spacing scale (4px base) ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* ── Typography ── */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Code', monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+
+  /* ── Elevation ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 0 1px var(--accent), 0 0 20px var(--accent-glow);
+
+  /* ── Motion ── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 280ms;
+
+  --blur: 20px;
+}
+
+/* Midnight theme — deeper blues, same structure. */
+:root[data-theme='midnight'] {
+  --surface-0: #070a14;
+  --surface-1: #0c1120;
+  --surface-2: #121a2e;
+  --surface-3: #1a2540;
+  --accent: #4f8cff;
+  --accent-hover: #6a9cff;
+  --accent-soft: rgba(79, 140, 255, 0.16);
+}
+
+/* Light theme — provided so the toggle is real, not decorative. */
+:root[data-theme='light'] {
+  --surface-0: #f5f6f8;
+  --surface-1: #ffffff;
+  --surface-2: #f0f1f4;
+  --surface-3: #e6e8ec;
+  --surface-4: #dcdfe4;
+  --surface-float: rgba(255, 255, 255, 0.8);
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --text-primary: #14161a;
+  --text-secondary: #4b5563;
+  --text-tertiary: #6b7280;
+}

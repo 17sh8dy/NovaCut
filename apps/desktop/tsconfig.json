@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "@opencut/core": ["../../packages/core/src/index.ts"],
+      "@opencut/engine": ["../../packages/engine/src/index.ts"],
+      "@opencut/ui": ["../../packages/ui/src/index.ts"]
+    }
+  },
+  "include": ["src", "electron", "electron.vite.config.ts"]
+}

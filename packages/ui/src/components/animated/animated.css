@@ -1,0 +1,267 @@
+/*
+ * Motion primitives — Open Cut's "React Bits" layer.
+ *
+ * A small set of GPU-friendly, token-driven animation utilities (reveal-on-mount, gradient
+ * text, shine sweeps, pointer spotlights, shimmer skeletons). Everything animates only
+ * `transform`, `opacity`, or `background-position` so it stays cheap during editing, and
+ * everything is silenced by the app-wide reduced-motion gates in panels.css
+ * (`:root[data-reduce-motion]`, `:root[data-playing] .oc-workspace`). Flourish lives on the
+ * Home launcher, dialogs, buttons, and transitions — never in the editing surface itself.
+ */
+
+/* ── AnimatedContent: reveal-on-mount ──────────────────────────────────────────
+   One-shot enter animation. Direction + distance are driven by CSS vars so the same
+   class covers up/down/left/right/scale without extra keyframes. */
+.oc-reveal {
+  animation: oc-reveal-kf var(--dur-slow) var(--ease-out) both;
+  animation-delay: var(--oc-reveal-delay, 0ms);
+  will-change: transform, opacity;
+}
+@keyframes oc-reveal-kf {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--oc-reveal-x, 0), var(--oc-reveal-y, 0), 0) scale(var(--oc-reveal-s, 1));
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+.oc-reveal[data-dir='up'] {
+  --oc-reveal-y: var(--oc-reveal-dist, 16px);
+}
+.oc-reveal[data-dir='down'] {
+  --oc-reveal-y: calc(-1 * var(--oc-reveal-dist, 16px));
+}
+.oc-reveal[data-dir='left'] {
+  --oc-reveal-x: var(--oc-reveal-dist, 16px);
+}
+.oc-reveal[data-dir='right'] {
+  --oc-reveal-x: calc(-1 * var(--oc-reveal-dist, 16px));
+}
+.oc-reveal[data-dir='scale'] {
+  --oc-reveal-s: 0.96;
+}
+
+/* ── GradientText: slow flowing accent gradient ───────────────────────────────── */
+.oc-gradient-text {
+  background: linear-gradient(
+    100deg,
+    var(--accent) 0%,
+    #b06dff 25%,
+    var(--accent-hover) 50%,
+    #b06dff 75%,
+    var(--accent) 100%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: oc-gradient-flow 7s linear infinite;
+}
+@keyframes oc-gradient-flow {
+  to {
+    background-position: 220% center;
+  }
+}
+
+/* ── ShinyText: a soft highlight that sweeps across muted text ─────────────────── */
+.oc-shiny-text {
+  color: var(--text-secondary);
+  background: linear-gradient(
+    110deg,
+    currentColor 40%,
+    var(--text-primary) 50%,
+    currentColor 60%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: oc-shine-text 6s linear infinite;
+}
+@keyframes oc-shine-text {
+  0% {
+    background-position: 180% 0;
+  }
+  60%,
+  100% {
+    background-position: -80% 0;
+  }
+}
+
+/* ── Shine sweep: a glare that crosses a surface on hover (buttons, cards) ─────── */
+.oc-shine {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.oc-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.28) 48%,
+    rgba(255, 255, 255, 0.28) 52%,
+    transparent 70%
+  );
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+.oc-shine:hover::after {
+  animation: oc-shine-sweep 0.85s var(--ease-out);
+}
+@keyframes oc-shine-sweep {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+/* ── SpotlightCard: a radial glow that follows the pointer ─────────────────────── */
+.oc-spotlight {
+  position: relative;
+  isolation: isolate;
+}
+.oc-spotlight::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    240px circle at var(--oc-spot-x, 50%) var(--oc-spot-y, 50%),
+    var(--accent-soft),
+    transparent 60%
+  );
+  opacity: var(--oc-spot-o, 0);
+  transition: opacity var(--dur) var(--ease-out);
+  pointer-events: none;
+}
+.oc-spotlight > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Aurora: a slow, calm animated backdrop for the hero ──────────────────────── */
+.oc-aurora {
+  position: absolute;
+  inset: -20% -10% auto -10%;
+  height: 70%;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(60px) saturate(140%);
+  opacity: 0.55;
+}
+.oc-aurora::before,
+.oc-aurora::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(40% 55% at 25% 30%, color-mix(in srgb, var(--accent) 55%, transparent), transparent 70%),
+    radial-gradient(38% 50% at 75% 40%, color-mix(in srgb, #b06dff 50%, transparent), transparent 70%);
+  animation: oc-aurora-drift 18s var(--ease-in-out) infinite alternate;
+}
+.oc-aurora::after {
+  background:
+    radial-gradient(45% 55% at 60% 25%, color-mix(in srgb, var(--info) 34%, transparent), transparent 70%),
+    radial-gradient(35% 50% at 35% 55%, color-mix(in srgb, var(--accent-hover) 45%, transparent), transparent 70%);
+  animation-duration: 24s;
+  animation-direction: alternate-reverse;
+}
+@keyframes oc-aurora-drift {
+  from {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(5%, 3%, 0) scale(1.15);
+  }
+}
+
+/* ── Skeleton shimmer for loading placeholders ────────────────────────────────── */
+.oc-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.oc-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--text-primary) 8%, transparent),
+    transparent
+  );
+  animation: oc-skeleton-sweep 1.4s ease-in-out infinite;
+}
+@keyframes oc-skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* ── Spinner (ring) — a calmer alternative to the icon spinner ─────────────────── */
+.oc-spinner {
+  display: inline-block;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--surface-4);
+  border-top-color: var(--accent);
+  animation: oc-spin 0.7s linear infinite;
+}
+
+/* ── View transition: cross-fade + subtle rise between Home and Editor ────────── */
+.oc-view {
+  height: 100%;
+  animation: oc-view-in var(--dur-slow) var(--ease-out) both;
+}
+@keyframes oc-view-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Honor the OS "reduce motion" setting for these decorative effects, mirroring the app's
+   own `data-reduce-motion` gate. Durations collapse to ~0 so `both`-filled reveals still
+   settle on their final (visible) state rather than sticking at the start frame. */
+@media (prefers-reduced-motion: reduce) {
+  .oc-reveal,
+  .oc-gradient-text,
+  .oc-shiny-text,
+  .oc-shine::after,
+  .oc-spotlight::before,
+  .oc-aurora::before,
+  .oc-aurora::after,
+  .oc-skeleton::after,
+  .oc-view,
+  .oc-pulse-glow {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ── Pulse glow — a gentle breathing halo for brand marks ─────────────────────── */
+.oc-pulse-glow {
+  animation: oc-pulse-glow-kf 3.6s var(--ease-in-out) infinite;
+}
+@keyframes oc-pulse-glow-kf {
+  0%,
+  100% {
+    box-shadow: 0 0 14px var(--accent-glow);
+  }
+  50% {
+    box-shadow: 0 0 26px var(--accent-glow), 0 0 4px var(--accent-glow);
+  }
+}

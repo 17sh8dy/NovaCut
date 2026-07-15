@@ -1,0 +1,164 @@
+/**
+ * Main-process IPC handlers. Every capability the renderer needs from the OS is registered
+ * here and nowhere else, so the trust boundary is easy to audit.
+ */
+
+import { app, dialog, ipcMain, Notification } from 'electron';
+import { readFile, writeFile, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, extname, join } from 'node:path';
+import { CH, type ExportJobDTO, type ImportedFileDTO, type RecentProjectDTO } from './ipc-types.js';
+import { ffmpegThumbnail, ffprobeMedia, FfmpegEncoder } from './ffmpeg.js';
+
+const MEDIA_EXTS = ['mp4', 'mov', 'mkv', 'avi', 'webm', 'mp3', 'wav', 'aac', 'flac', 'm4a', 'ogg', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'];
+const MIME: Record<string, string> = {
+  mp4: 'video/mp4', mov: 'video/quicktime', mkv: 'video/x-matroska', avi: 'video/x-msvideo', webm: 'video/webm',
+  mp3: 'audio/mpeg', wav: 'audio/wav', aac: 'audio/aac', flac: 'audio/flac', m4a: 'audio/mp4', ogg: 'audio/ogg',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', bmp: 'image/bmp',
+};
+
+const encoders = new Map<string, FfmpegEncoder>();
+
+function recentsPath(): string {
+  return join(app.getPath('userData'), 'recent-projects.json');
+}
+
+async function readRecents(): Promise<RecentProjectDTO[]> {
+  try {
+    return JSON.parse(await readFile(recentsPath(), 'utf8')) as RecentProjectDTO[];
+  } catch {
+    return [];
+  }
+}
+
+async function pushRecent(path: string): Promise<void> {
+  const list = await readRecents();
+  const next = [{ path, name: basename(path).replace(/\.opencut$/, ''), modifiedAt: Date.now() }, ...list.filter((r) => r.path !== path)].slice(0, 12);
+  await writeFile(recentsPath(), JSON.stringify(next), 'utf8').catch(() => {});
+}
+
+export function registerHandlers(): void {
+  // ── Project persistence ──
+  ipcMain.handle(CH.openProject, async () => {
+    const res = await dialog.showOpenDialog({
+      title: 'Open Project',
+      filters: [{ name: 'Open Cut Project', extensions: ['opencut'] }],
+      properties: ['openFile'],
+    });
+    if (res.canceled || !res.filePaths[0]) return null;
+    const path = res.filePaths[0];
+    const json = await readFile(path, 'utf8');
+    await pushRecent(path);
+    return { path, json };
+  });
+
+  ipcMain.handle(CH.saveProject, async (_e, json: string, path?: string) => {
+    let target = path;
+    if (!target) {
+      const res = await dialog.showSaveDialog({
+        title: 'Save Project',
+        defaultPath: 'Untitled.opencut',
+        filters: [{ name: 'Open Cut Project', extensions: ['opencut'] }],
+      });
+      if (res.canceled || !res.filePath) return null;
+      target = res.filePath;
+    }
+    await writeFile(target, json, 'utf8');
+    await pushRecent(target);
+    return { path: target };
+  });
+
+  ipcMain.handle(CH.loadProject, async (_e, path: string) => readFile(path, 'utf8'));
+  ipcMain.handle(CH.recentProjects, () => readRecents());
+
+  // ── Media import ──
+  ipcMain.handle(CH.importFiles, async (): Promise<ImportedFileDTO[]> => {
+    const res = await dialog.showOpenDialog({
+      title: 'Import Media',
+      filters: [{ name: 'Media', extensions: MEDIA_EXTS }, { name: 'All Files', extensions: ['*'] }],
+      properties: ['openFile', 'multiSelections'],
+    });
+    if (res.canceled) return [];
+    const files = await Promise.all(
+      res.filePaths.map(async (p) => {
+        const ext = extname(p).slice(1).toLowerCase();
+        const info = await stat(p).catch(() => ({ size: 0 }));
+        return { src: p, name: basename(p), mime: MIME[ext] ?? 'application/octet-stream', size: info.size };
+      }),
+    );
+    return files;
+  });
+
+  ipcMain.handle(CH.probeMedia, async (_e, src: string) => {
+    try {
+      return await ffprobeMedia(src);
+    } catch {
+      // ffprobe unavailable: return neutral defaults so import still works.
+      return { duration: 0, width: 1920, height: 1080, hasAudio: true };
+    }
+  });
+
+  ipcMain.handle(CH.generateThumbnail, async (_e, src: string, atSeconds: number) => {
+    return ffmpegThumbnail(src, atSeconds || 0); // rejection handled by the renderer
+  });
+
+  // ── Export path + encoder session ──
+  ipcMain.handle(CH.chooseExportPath, async (_e, defaultName: string) => {
+    const res = await dialog.showSaveDialog({ title: 'Export Video', defaultPath: defaultName });
+    return res.canceled ? null : res.filePath ?? null;
+  });
+
+  ipcMain.handle(
+    CH.encoderCreate,
+    async (
+      _e,
+      job: ExportJobDTO,
+      inW: number,
+      inH: number,
+      outW: number,
+      outH: number,
+      audioWav?: ArrayBuffer | null,
+    ) => {
+      try {
+        let audioPath: string | undefined;
+        if (audioWav && audioWav.byteLength > 0) {
+          audioPath = join(tmpdir(), `opencut-audio-${job.id}.wav`);
+          await writeFile(audioPath, Buffer.from(audioWav));
+        }
+        encoders.set(job.id, new FfmpegEncoder(job, inW, inH, outW, outH, audioPath));
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    },
+  );
+
+  ipcMain.handle(CH.encoderWrite, async (_e, jobId: string, frame: ArrayBuffer) => {
+    const enc = encoders.get(jobId);
+    if (!enc) throw new Error('no such encoder');
+    await enc.writeFrame(Buffer.from(frame));
+  });
+
+  ipcMain.handle(CH.encoderFinish, async (_e, jobId: string) => {
+    const enc = encoders.get(jobId);
+    if (!enc) throw new Error('no such encoder');
+    try {
+      await enc.finish();
+    } finally {
+      encoders.delete(jobId);
+    }
+  });
+
+  ipcMain.handle(CH.encoderAbort, async (_e, jobId: string) => {
+    const enc = encoders.get(jobId);
+    if (enc) {
+      await enc.abort();
+      encoders.delete(jobId);
+    }
+  });
+
+  // ── Misc ──
+  ipcMain.on(CH.notify, (_e, title: string, body: string) => {
+    if (Notification.isSupported()) new Notification({ title, body }).show();
+  });
+}

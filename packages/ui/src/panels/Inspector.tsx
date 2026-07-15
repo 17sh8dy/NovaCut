@@ -1,0 +1,425 @@
+import {
+  getEffectDef,
+  sample,
+  updateClip,
+  upsertKeyframe,
+  newKeyframeId,
+  TICKS_PER_SECOND,
+  type AnimatedValue,
+  type Clip,
+  type EffectInstance,
+  type Transform,
+} from '@opencut/core';
+import { Diamond, Trash2, Power, ArrowLeftRight } from 'lucide-react';
+import { NumberField, Slider, EmptyState, Segmented } from '../components/primitives/index.js';
+import { useAppStore, useStore } from '../state/context.js';
+import type { InspectorTab } from '../state/store.js';
+
+const TABS: { id: InspectorTab; label: string }[] = [
+  { id: 'transform', label: 'Transform' },
+  { id: 'effects', label: 'Effects' },
+  { id: 'audio', label: 'Audio' },
+  { id: 'speed', label: 'Speed' },
+  { id: 'text', label: 'Text' },
+];
+
+/** Quick-pick text colors (the full picker is still available alongside these). */
+const TEXT_COLORS = [
+  '#ffffff', '#000000', '#f5624d', '#ff9f43', '#ffd93d', '#4cd97b',
+  '#2dd4bf', '#4d8bf5', '#a763f5', '#ff6bd5', '#9aa4b2', '#1e2530',
+];
+
+export function Inspector() {
+  const store = useAppStore();
+  const tab = useStore((s) => s.inspectorTab);
+  const clip = useStore((s) => s.selectedClip());
+
+  if (!clip) {
+    return <EmptyState title="No clip selected" hint="Select a clip to edit its properties" />;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div className="oc-inspector__tabs">
+        {TABS.filter((t) => (t.id === 'text' ? clip.kind === 'text' : t.id === 'audio' ? !!clip.audio : true)).map((t) => (
+          <button
+            key={t.id}
+            className="oc-inspector__tab"
+            data-active={tab === t.id}
+            onClick={() => store.getState().setInspectorTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        {tab === 'transform' && <TransformTab clip={clip} />}
+        {tab === 'effects' && <EffectsTab clip={clip} />}
+        {tab === 'audio' && clip.audio && <AudioTab clip={clip} />}
+        {tab === 'speed' && <SpeedTab clip={clip} />}
+        {tab === 'text' && clip.text && <TextTab clip={clip} />}
+      </div>
+    </div>
+  );
+}
+
+/** Shared hook: update a clip via a coalescing command. */
+function useClipUpdater(clip: Clip) {
+  const store = useAppStore();
+  return (label: string, fn: (c: Clip) => Clip, coalesceKey?: string) => {
+    const seq = store.getState().sequence();
+    store.getState().dispatch({
+      label,
+      ...(coalesceKey ? { coalesceKey } : {}),
+      apply: (p) => updateClip(p, seq.id, clip.id, fn),
+    });
+  };
+}
+
+/** A labeled animatable numeric row with a keyframe toggle. */
+function AnimatedRow({
+  clip,
+  label,
+  field,
+  min,
+  max,
+  step = 0.01,
+  unit,
+  toValue = (v) => v,
+  fromValue = (v) => v,
+}: {
+  clip: Clip;
+  label: string;
+  field: keyof Transform;
+  min: number;
+  max: number;
+  step?: number;
+  unit?: string;
+  toValue?: (v: number) => number;
+  fromValue?: (v: number) => number;
+}) {
+  const playhead = useStore((s) => s.playhead);
+  const update = useClipUpdater(clip);
+  const av = clip.transform[field] as AnimatedValue;
+  const local = playhead - clip.start;
+  const current = toValue(sample(av, local));
+
+  const setValue = (v: number) => {
+    const raw = fromValue(v);
+    update(
+      `Set ${label}`,
+      (c) => {
+        const t = { ...c.transform };
+        const cur = t[field] as AnimatedValue;
+        // If animated, write a keyframe at the playhead; else set the static value.
+        if (cur.keyframes.length > 0) {
+          t[field] = upsertKeyframe(cur, {
+            id: newKeyframeId(),
+            time: Math.max(0, local),
+            value: raw,
+            interpolation: 'linear',
+          }) as never;
+        } else {
+          t[field] = { ...cur, static: raw } as never;
+        }
+        return { ...c, transform: t };
+      },
+      `transform:${field}:${clip.id}`,
+    );
+  };
+
+  const addKeyframe = () => {
+    update(`Keyframe ${label}`, (c) => {
+      const t = { ...c.transform };
+      const cur = t[field] as AnimatedValue;
+      t[field] = upsertKeyframe(cur, {
+        id: newKeyframeId(),
+        time: Math.max(0, local),
+        value: fromValue(current),
+        interpolation: 'linear',
+      }) as never;
+      return { ...c, transform: t };
+    });
+  };
+
+  return (
+    <div className="oc-field">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="oc-field__label">{label}</span>
+        <button
+          className="oc-tt"
+          data-on={av.keyframes.length > 0}
+          onClick={addKeyframe}
+          title="Add keyframe at playhead"
+        >
+          <Diamond size={13} />
+        </button>
+      </div>
+      <Slider value={current} min={min} max={max} step={step} unit={unit} onChange={setValue} />
+    </div>
+  );
+}
+
+function TransformTab({ clip }: { clip: Clip }) {
+  const update = useClipUpdater(clip);
+  return (
+    <>
+      <AnimatedRow clip={clip} label="Position X" field="x" min={-2000} max={2000} step={1} unit="px" />
+      <AnimatedRow clip={clip} label="Position Y" field="y" min={-2000} max={2000} step={1} unit="px" />
+      <AnimatedRow clip={clip} label="Scale" field="scaleX" min={0} max={4} step={0.01} toValue={(v) => v * 100} fromValue={(v) => v / 100} unit="%" />
+      <AnimatedRow clip={clip} label="Rotation" field="rotation" min={-180} max={180} step={1} unit="°" />
+      <AnimatedRow clip={clip} label="Opacity" field="opacity" min={0} max={1} step={0.01} toValue={(v) => v * 100} fromValue={(v) => v / 100} unit="%" />
+      <div className="oc-field">
+        <span className="oc-field__label">Blend Mode</span>
+        <select
+          value={clip.blendMode}
+          onChange={(e) => update('Set Blend Mode', (c) => ({ ...c, blendMode: e.target.value as Clip['blendMode'] }))}
+          style={{ height: 30, background: 'var(--surface-3)', border: 'none', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '0 8px' }}
+        >
+          {['normal', 'multiply', 'screen', 'overlay', 'add', 'darken', 'lighten', 'difference'].map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
+}
+
+function EffectsTab({ clip }: { clip: Clip }) {
+  const update = useClipUpdater(clip);
+
+  if (clip.effects.length === 0) {
+    return <EmptyState title="No effects" hint="Add effects from the Effects panel" />;
+  }
+
+  const setParam = (fx: EffectInstance, key: string, value: number) => {
+    update(
+      'Adjust Effect',
+      (c) => ({
+        ...c,
+        effects: c.effects.map((e) =>
+          e.id === fx.id ? { ...e, params: { ...e.params, [key]: { ...e.params[key]!, static: value } } } : e,
+        ),
+      }),
+      `fx:${fx.id}:${key}`,
+    );
+  };
+  const removeEffect = (id: string) =>
+    update('Remove Effect', (c) => ({ ...c, effects: c.effects.filter((e) => e.id !== id) }));
+  const toggleEffect = (id: string) =>
+    update('Toggle Effect', (c) => ({ ...c, effects: c.effects.map((e) => (e.id === id ? { ...e, enabled: !e.enabled } : e)) }));
+
+  return (
+    <>
+      {clip.effects.map((fx) => {
+        const def = getEffectDef(fx.type);
+        if (!def) return null;
+        return (
+          <div key={fx.id} style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8 }}>
+            <div className="oc-section-title" style={{ textTransform: 'none' }}>
+              <span style={{ color: fx.enabled ? 'var(--text-secondary)' : 'var(--text-disabled)' }}>{def.label}</span>
+              <span style={{ display: 'flex', gap: 2 }}>
+                <button className="oc-tt" data-on={fx.enabled} onClick={() => toggleEffect(fx.id)} title="Enable/disable">
+                  <Power size={13} />
+                </button>
+                <button className="oc-tt" onClick={() => removeEffect(fx.id)} title="Remove">
+                  <Trash2 size={13} />
+                </button>
+              </span>
+            </div>
+            {fx.enabled &&
+              def.params.map((param) => (
+                <div className="oc-field" key={param.key} style={{ borderBottom: 'none', paddingTop: 4, paddingBottom: 4 }}>
+                  <Slider
+                    label={param.label}
+                    value={fx.params[param.key]?.static ?? param.default}
+                    min={param.min}
+                    max={param.max}
+                    step={param.step}
+                    unit={param.unit ?? ''}
+                    onChange={(v) => setParam(fx, param.key, v)}
+                  />
+                </div>
+              ))}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function AudioTab({ clip }: { clip: Clip }) {
+  const update = useClipUpdater(clip);
+  const a = clip.audio!;
+  const setAudio = (label: string, patch: Partial<typeof a>, key?: string) =>
+    update(label, (c) => ({ ...c, audio: { ...c.audio!, ...patch } }), key);
+
+  return (
+    <>
+      <div className="oc-field">
+        <Slider
+          label="Volume"
+          value={a.volume.static * 100}
+          min={0}
+          max={200}
+          step={1}
+          unit="%"
+          onChange={(v) => setAudio('Set Volume', { volume: { ...a.volume, static: v / 100 } }, `vol:${clip.id}`)}
+        />
+      </div>
+      <div className="oc-field">
+        <div className="oc-field__row">
+          <div>
+            <span className="oc-field__label">Fade In (s)</span>
+            <NumberField value={a.fadeIn / TICKS_PER_SECOND} step={0.1} min={0} onChange={(v) => setAudio('Fade In', { fadeIn: Math.round(v * TICKS_PER_SECOND) })} />
+          </div>
+          <div>
+            <span className="oc-field__label">Fade Out (s)</span>
+            <NumberField value={a.fadeOut / TICKS_PER_SECOND} step={0.1} min={0} onChange={(v) => setAudio('Fade Out', { fadeOut: Math.round(v * TICKS_PER_SECOND) })} />
+          </div>
+        </div>
+      </div>
+      <div className="oc-field">
+        <Slider label="Pitch (semitones)" value={a.pitch} min={-12} max={12} step={1} onChange={(v) => setAudio('Set Pitch', { pitch: v }, `pitch:${clip.id}`)} />
+      </div>
+      <ToggleField label="Mute" value={a.muted} onChange={(v) => setAudio('Mute', { muted: v })} />
+      <ToggleField label="Normalize" value={a.normalize} onChange={(v) => setAudio('Normalize', { normalize: v })} />
+    </>
+  );
+}
+
+function SpeedTab({ clip }: { clip: Clip }) {
+  const update = useClipUpdater(clip);
+  const s = clip.speed;
+  const RATES = [0.1, 0.25, 0.5, 1, 2, 4, 8];
+  return (
+    <>
+      <div className="oc-field">
+        <span className="oc-field__label">Speed</span>
+        <Segmented
+          options={RATES.map((r) => ({ value: String(r), label: `${r}×` }))}
+          value={String(s.rate)}
+          onChange={(v) => update('Set Speed', (c) => ({ ...c, speed: { ...c.speed, rate: parseFloat(v) } }))}
+        />
+      </div>
+      <div className="oc-field">
+        <Slider label="Fine Speed" value={s.rate} min={0.1} max={8} step={0.05} unit="×" onChange={(v) => update('Set Speed', (c) => ({ ...c, speed: { ...c.speed, rate: v } }), `speed:${clip.id}`)} />
+      </div>
+      <ToggleField label="Reverse" value={s.reverse} icon={<ArrowLeftRight size={13} />} onChange={(v) => update('Reverse', (c) => ({ ...c, speed: { ...c.speed, reverse: v } }))} />
+      <ToggleField label="Preserve Pitch" value={s.preservePitch} onChange={(v) => update('Preserve Pitch', (c) => ({ ...c, speed: { ...c.speed, preservePitch: v } }))} />
+    </>
+  );
+}
+
+function TextTab({ clip }: { clip: Clip }) {
+  const update = useClipUpdater(clip);
+  const t = clip.text!;
+  const setText = (label: string, patch: Partial<typeof t>, key?: string) =>
+    update(label, (c) => ({ ...c, text: { ...c.text!, ...patch }, name: patch.content ?? c.name }), key);
+
+  return (
+    <>
+      <div className="oc-field">
+        <span className="oc-field__label">Content</span>
+        <textarea
+          value={t.content}
+          onChange={(e) => setText('Edit Text', { content: e.target.value }, `text:${clip.id}`)}
+          rows={2}
+          style={{ resize: 'vertical', background: 'var(--surface-3)', border: '1px solid transparent', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: 8, font: 'inherit', outline: 'none' }}
+        />
+      </div>
+      <div className="oc-field">
+        <Slider label="Font Size" value={t.fontSize} min={8} max={400} step={1} unit="px" onChange={(v) => setText('Font Size', { fontSize: v }, `fs:${clip.id}`)} />
+      </div>
+      <div className="oc-field">
+        <span className="oc-field__label">Weight</span>
+        <Segmented
+          options={[
+            { value: '400', label: 'Regular' },
+            { value: '600', label: 'Semibold' },
+            { value: '800', label: 'Bold' },
+          ]}
+          value={String(t.fontWeight >= 800 ? 800 : t.fontWeight >= 600 ? 600 : 400)}
+          onChange={(v) => setText('Weight', { fontWeight: parseInt(v) })}
+        />
+      </div>
+      <div className="oc-field">
+        <span className="oc-field__label">Alignment</span>
+        <Segmented
+          options={[
+            { value: 'left', label: 'Left' },
+            { value: 'center', label: 'Center' },
+            { value: 'right', label: 'Right' },
+          ]}
+          value={t.align === 'justify' ? 'left' : t.align}
+          onChange={(v) => setText('Align', { align: v as typeof t.align })}
+        />
+      </div>
+      <div className="oc-field">
+        <div className="oc-field__row">
+          <div>
+            <span className="oc-field__label">Color</span>
+            <input type="color" value={t.color} onChange={(e) => setText('Text Color', { color: e.target.value })} style={{ width: '100%', height: 28, border: 'none', borderRadius: 'var(--radius-sm)', background: 'var(--surface-3)', cursor: 'pointer' }} />
+          </div>
+          <div>
+            <span className="oc-field__label">Letter Spacing</span>
+            <NumberField value={t.letterSpacing} step={0.5} onChange={(v) => setText('Letter Spacing', { letterSpacing: v })} />
+          </div>
+        </div>
+        <div className="oc-swatches">
+          {TEXT_COLORS.map((c) => (
+            <button
+              key={c}
+              className="oc-swatch"
+              style={{ background: c }}
+              data-active={t.color.toLowerCase() === c.toLowerCase()}
+              title={c}
+              onClick={() => setText('Text Color', { color: c })}
+            />
+          ))}
+        </div>
+      </div>
+      <ToggleField label="Italic" value={t.italic} onChange={(v) => setText('Italic', { italic: v })} />
+      <ToggleField label="Underline" value={t.underline} onChange={(v) => setText('Underline', { underline: v })} />
+    </>
+  );
+}
+
+function ToggleField({ label, value, onChange, icon }: { label: string; value: boolean; onChange: (v: boolean) => void; icon?: React.ReactNode }) {
+  return (
+    <div className="oc-field" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <span className="oc-field__label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {icon}
+        {label}
+      </span>
+      <button
+        onClick={() => onChange(!value)}
+        style={{
+          width: 38,
+          height: 22,
+          borderRadius: 'var(--radius-full)',
+          border: 'none',
+          cursor: 'pointer',
+          background: value ? 'var(--accent)' : 'var(--surface-4)',
+          position: 'relative',
+          transition: 'background var(--dur-fast) var(--ease-out)',
+        }}
+      >
+        <span
+          style={{
+            position: 'absolute',
+            top: 3,
+            left: value ? 19 : 3,
+            width: 16,
+            height: 16,
+            borderRadius: '50%',
+            background: '#fff',
+            transition: 'left var(--dur-fast) var(--ease-out)',
+          }}
+        />
+      </button>
+    </div>
+  );
+}

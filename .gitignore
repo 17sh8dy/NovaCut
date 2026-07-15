@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+out/
+build/
+*.tsbuildinfo
+.verify/dist-ui/
+
+# Electron
+release/
+app/dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code local overrides (machine-specific paths; settings.json is shared, .local isn't)
+.claude/settings.local.json
+
+# Env
+.env
+.env.local
+
+# Open Cut runtime data (local dev)
+.opencut-cache/
+*.opencut.bak

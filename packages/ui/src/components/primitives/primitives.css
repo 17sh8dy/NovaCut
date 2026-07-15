@@ -1,0 +1,327 @@
+/* Styles for the shared UI primitives. Tokens only — no hard-coded colors. */
+
+/* ── Button ── */
+.oc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--surface-3);
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: var(--text-base);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.oc-btn:hover {
+  background: var(--surface-4);
+}
+.oc-btn:active {
+  transform: scale(0.97);
+}
+.oc-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.oc-btn--primary {
+  background: var(--accent);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* A glare sweeps across primary actions on hover (React Bits "Shiny Button"). */
+.oc-btn--primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.3) 48%,
+    rgba(255, 255, 255, 0.3) 52%,
+    transparent 70%
+  );
+  transform: translateX(-140%);
+  pointer-events: none;
+}
+.oc-btn--primary:hover::after {
+  animation: oc-shine-sweep 0.85s var(--ease-out);
+}
+.oc-btn--primary:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 0 20px var(--accent-glow);
+}
+.oc-btn--primary:active {
+  background: var(--accent-active);
+}
+.oc-btn--ghost {
+  background: transparent;
+}
+.oc-btn--ghost:hover {
+  background: var(--surface-3);
+}
+.oc-btn--danger:hover {
+  background: color-mix(in srgb, var(--danger) 24%, var(--surface-3));
+}
+.oc-btn--lg {
+  height: 40px;
+  padding: 0 var(--space-5);
+  font-size: var(--text-md);
+  border-radius: var(--radius-lg);
+}
+.oc-btn--sm {
+  height: 26px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* ── Icon button ── */
+.oc-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.oc-iconbtn:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+.oc-iconbtn:active {
+  transform: scale(0.92);
+}
+.oc-iconbtn[data-active='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+.oc-iconbtn--sm {
+  width: 26px;
+  height: 26px;
+}
+
+/* ── Tooltip ── */
+.oc-tooltip {
+  position: fixed;
+  z-index: 1000;
+  padding: 5px 9px;
+  background: var(--surface-4);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  animation: oc-fade-in var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+}
+.oc-tooltip kbd {
+  margin-left: 6px;
+  padding: 1px 5px;
+  background: var(--surface-2);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* ── Slider ── */
+.oc-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.oc-slider__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.oc-slider__label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.oc-slider__value {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+.oc-slider__track {
+  position: relative;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  cursor: pointer;
+}
+.oc-slider__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+}
+.oc-slider__thumb {
+  position: absolute;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  border-radius: var(--radius-full);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  transform: translate(-50%, -50%);
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+.oc-slider__track:hover .oc-slider__thumb {
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+/* ── Number field ── */
+.oc-number {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 var(--space-2);
+  background: var(--surface-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  width: 100%;
+  cursor: ew-resize;
+}
+.oc-number:focus-within {
+  border-color: var(--accent);
+  cursor: text;
+}
+.oc-number input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  font: inherit;
+  color: inherit;
+}
+
+/* ── Segmented control ── */
+.oc-segmented {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  gap: 2px;
+}
+.oc-segmented button {
+  height: 26px;
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.oc-segmented button:hover {
+  color: var(--text-primary);
+}
+.oc-segmented button[data-active='true'] {
+  background: var(--surface-4);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Panel ── */
+.oc-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 0;
+  width: 100%;
+  height: 100%;
+}
+.oc-grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.oc-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.oc-panel__title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+.oc-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ── Resizer handle (between resizable panes) ── */
+.oc-resizer {
+  position: relative;
+  z-index: 5;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.oc-resizer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+.oc-resizer:hover {
+  background: var(--accent-soft);
+}
+.oc-resizer:active {
+  background: var(--accent);
+}
+
+/* ── Empty state ── */
+.oc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  height: 100%;
+  padding: var(--space-6);
+  color: var(--text-tertiary);
+  text-align: center;
+}
+.oc-empty svg {
+  opacity: 0.5;
+}

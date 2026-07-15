@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@opencut/core": ["../core/src/index.ts"]
+    }
+  },
+  "references": [{ "path": "../core" }],
+  "include": ["src"]
+}

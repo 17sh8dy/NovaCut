@@ -1,0 +1,362 @@
+/* Home launcher screen. */
+.oc-home {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%),
+    var(--surface-0, var(--surface-1));
+  overflow: hidden;
+}
+.oc-home__scroll {
+  position: relative;
+  z-index: 1; /* above the aurora backdrop */
+  height: 100%;
+  overflow-y: auto;
+  padding: clamp(24px, 6vh, 72px) clamp(20px, 6vw, 96px) 64px;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* Hero */
+.oc-home__hero {
+  text-align: center;
+  padding: clamp(20px, 5vh, 56px) 0 clamp(24px, 4vh, 40px);
+}
+.oc-home__logo {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 20px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--accent), #b06dff);
+  box-shadow: 0 12px 40px -12px color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: oc-home-float 5.5s var(--ease-in-out) infinite;
+}
+@keyframes oc-home-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+.oc-home__title {
+  margin: 0;
+  font-size: clamp(32px, 5vw, 46px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.oc-home__tagline {
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: clamp(14px, 1.6vw, 17px);
+}
+.oc-home__cta {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+.oc-home__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+.oc-home__btn--sm {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+/* ── Workspace chooser ─────────────────────────────────────────────────────────
+   Each card is tinted by its own accent (--ws-accent). The live card is an interactive,
+   spotlit button; staged cards are muted and carry a status badge. */
+.oc-workspaces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+}
+.oc-ws-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 152px;
+  padding: 20px;
+  text-align: left;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--ws-accent) 9%, transparent), transparent 62%),
+    var(--surface-2);
+  color: var(--text-primary);
+  transition:
+    transform var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.oc-ws-card__icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--ws-accent) 16%, transparent);
+  color: var(--ws-accent);
+}
+.oc-ws-card__title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.oc-ws-card__desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.oc-ws-card__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 10px;
+  color: var(--ws-accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+.oc-ws-card__cta svg {
+  transition: transform var(--dur) var(--ease-out);
+}
+.oc-ws-card__badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ws-accent);
+  background: color-mix(in srgb, var(--ws-accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ws-accent) 30%, transparent);
+}
+
+/* Live card — interactive, lifts and glows in its accent on hover. */
+.oc-ws-card--live {
+  cursor: pointer;
+  border-color: color-mix(in srgb, var(--ws-accent) 45%, transparent);
+}
+.oc-ws-card--live:hover {
+  transform: translateY(-3px);
+  border-color: var(--ws-accent);
+  box-shadow:
+    0 16px 44px -20px var(--ws-accent),
+    0 0 0 1px color-mix(in srgb, var(--ws-accent) 35%, transparent);
+}
+.oc-ws-card--live:hover .oc-ws-card__cta svg {
+  transform: translateX(3px);
+}
+
+/* Staged cards — non-navigating; a touch muted, with a gentle hover cue only. */
+.oc-ws-card--soon,
+.oc-ws-card--future {
+  cursor: default;
+}
+.oc-ws-card--soon .oc-ws-card__desc,
+.oc-ws-card--future .oc-ws-card__desc {
+  color: var(--text-tertiary);
+}
+.oc-ws-card--soon:hover,
+.oc-ws-card--future:hover {
+  border-color: color-mix(in srgb, var(--ws-accent) 35%, transparent);
+}
+
+/* AI Tools card spans two columns and lists its capabilities. */
+.oc-ws-card--wide {
+  grid-column: span 2;
+}
+.oc-ws-card__features {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px 18px;
+}
+.oc-ws-card__features li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.oc-ws-card__features li svg {
+  color: var(--ws-accent);
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .oc-ws-card--wide {
+    grid-column: auto;
+  }
+  .oc-ws-card__features {
+    grid-template-columns: 1fr;
+  }
+}
+.oc-home__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--dur-fast, 0.12s) var(--ease-out), border-color var(--dur-fast, 0.12s);
+}
+.oc-home__btn:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+.oc-home__btn--primary {
+  background: linear-gradient(135deg, var(--accent), #a763f5);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* Recover banner */
+.oc-home__recover {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  margin: 8px 0 32px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.oc-home__recover-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.oc-home__recover-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.oc-home__recover-text strong {
+  color: var(--text-primary);
+}
+.oc-home__recover-text span {
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+/* Sections */
+.oc-home__section {
+  margin-top: 36px;
+}
+.oc-home__section-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+.oc-home__section-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.oc-home__cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+}
+@media (max-width: 760px) {
+  .oc-home__cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.oc-home__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+.oc-home__card {
+  text-align: left;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform var(--dur-fast, 0.12s) var(--ease-out), border-color var(--dur-fast, 0.12s);
+}
+.oc-home__card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+.oc-home__card--soon {
+  cursor: default;
+  opacity: 0.6;
+}
+.oc-home__card--soon:hover {
+  transform: none;
+  border-color: var(--border-subtle);
+}
+.oc-home__card-thumb {
+  display: grid;
+  place-items: center;
+  height: 72px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-tertiary);
+}
+.oc-home__card-name {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oc-home__card-meta {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.oc-home__empty {
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+.oc-home__list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.oc-home__list li {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}

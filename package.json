@@ -1,0 +1,24 @@
+{
+  "name": "open-cut",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open Cut — a modern, professional non-linear video editor. Desktop-first, built to expand to web and mobile.",
+  "author": "Open Cut",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @opencut/desktop",
+    "build": "npm run build --workspace @opencut/desktop",
+    "typecheck": "tsc --build --verbose",
+    "verify:orientation": "vite build --config .verify/vite.config.ts && electron .verify/main.cjs run.html",
+    "verify:photo": "vite build --config .verify/ui.config.ts && electron .verify/main.cjs ui.html",
+    "lint": "eslint . --ext .ts,.tsx",
+    "clean": "node -e \"const fs=require('fs');['packages/core','packages/engine','packages/ui','apps/desktop'].forEach(p=>{try{fs.rmSync(p+'/dist',{recursive:true,force:true})}catch{}})\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

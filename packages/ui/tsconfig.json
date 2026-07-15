@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "paths": {
+      "@opencut/core": ["../core/src/index.ts"],
+      "@opencut/photo": ["../photo/src/index.ts"],
+      "@opencut/engine": ["../engine/src/index.ts"]
+    }
+  },
+  "references": [{ "path": "../core" }, { "path": "../photo" }, { "path": "../engine" }],
+  "include": ["src"]
+}
