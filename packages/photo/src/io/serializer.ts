@@ -11,7 +11,9 @@
  * `createSerializer<T>()` would be the move if a third document type ever appears.
  */
 
-import { PHOTO_SCHEMA_VERSION, type PhotoDocument } from '../model/types.js';
+import type { EffectInstance, MediaId } from '@opencut/core';
+import type { LayerId } from '../model/ids.js';
+import { IDENTITY_TRANSFORM, PHOTO_SCHEMA_VERSION, type ImageLayer, type PhotoDocument } from '../model/types.js';
 
 export interface PhotoDocumentFile {
   schemaVersion: number;
@@ -19,10 +21,55 @@ export interface PhotoDocumentFile {
 }
 
 /**
- * Migration functions keyed by the version they upgrade FROM. Add as the schema grows.
- * Example: `1: (d) => ({ ...d, layers: d.layers.map(addTransform), schemaVersion: 2 })`
+ * A v1 layer: a flat list entry with no transform, blend mode, clipping or kind discriminator.
+ * Typed loosely on purpose — this describes bytes on disk, not a model we still believe in.
  */
-const migrations: Record<number, (doc: PhotoDocument) => PhotoDocument> = {};
+interface LayerV1 {
+  id: string;
+  name: string;
+  mediaId?: string;
+  visible?: boolean;
+  locked?: boolean;
+  opacity?: number;
+  effects?: unknown[];
+}
+
+/**
+ * Migration functions keyed by the version they upgrade FROM.
+ *
+ * Each one takes the PREVIOUS shape and returns the next, so the chain in
+ * `deserializePhotoDocument` can walk any old file up to current. They are cast at the
+ * boundary rather than typed against the live model: a migration's input type is frozen
+ * history, and letting it drift with the current model is how migrations quietly stop
+ * migrating (the compiler starts "helping" by agreeing the old shape is the new shape).
+ */
+const migrations: Record<number, (doc: PhotoDocument) => PhotoDocument> = {
+  /**
+   * 1 → 2: flat list of image layers ⇒ layer tree with transform + blend.
+   *
+   * Every v1 layer was an aspect-fitted image at full opacity with no blend mode, which is
+   * exactly what the identity transform and 'normal' render to — so a migrated document is
+   * pixel-identical to what v1 drew. That equivalence is the whole reason this migration is
+   * safe to run silently on open.
+   */
+  1: (doc) => {
+    const v1 = doc as unknown as { layers?: LayerV1[] };
+    const layers: ImageLayer[] = (v1.layers ?? []).map((l) => ({
+      kind: 'image',
+      id: l.id as LayerId,
+      name: l.name ?? 'Layer',
+      ...(l.mediaId ? { mediaId: l.mediaId as MediaId } : {}),
+      visible: l.visible ?? true,
+      locked: l.locked ?? false,
+      opacity: l.opacity ?? 1,
+      blendMode: 'normal', // v1 had no blend mode; 'normal' is what it actually rendered
+      clipped: false,
+      transform: { ...IDENTITY_TRANSFORM },
+      effects: (l.effects ?? []) as EffectInstance[],
+    }));
+    return { ...doc, layers, schemaVersion: 2 };
+  },
+};
 
 export function serializePhotoDocument(document: PhotoDocument): string {
   const file: PhotoDocumentFile = {

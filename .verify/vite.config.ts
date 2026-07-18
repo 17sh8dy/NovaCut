@@ -11,6 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@opencut/core': resolve(__dirname, '../packages/core/src/index.ts'),
+      '@opencut/photo': resolve(__dirname, '../packages/photo/src/index.ts'),
       '@opencut/engine': resolve(__dirname, '../packages/engine/src/index.ts'),
     },
   },

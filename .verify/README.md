@@ -4,7 +4,7 @@ Two headless checks that run the **real** engine and UI under Electron and asser
 rendered pixels. Run them after touching the compositor, the effect chain, or the photo flow.
 
 ```bash
-npm run verify:orientation   # compositor renders upright at every effect count
+npm run verify:orientation   # the photo render graph: orientation + compositing, on real pixels
 npm run verify:photo         # the photo workspace, end to end
 ```
 
@@ -20,6 +20,34 @@ effects. A check that only tried 0 and 2 would have passed against the broken co
 
 Both harnesses use a red-top / blue-bottom test image, so orientation is unambiguous rather
 than a judgement call about a photo looking "about right".
+
+## verify:orientation
+
+Despite the name it now covers the whole photo render graph, and it drives `PhotoRenderer`
+rather than the retired `Compositor.renderStill`. That still pins the video path: both
+renderers share one `GLContext` and one effect chain (`packages/engine/src/gl`), which is
+exactly why that plumbing was extracted — one copy of the orientation convention, one place to
+pin it.
+
+Beyond orientation it asserts **exact expected colours**, worked out by hand from the W3C
+compositing formula, for blend modes, layer/group opacity, group isolation, clipping masks,
+adjustment layers and transforms. "It changed" is not an assertion; every case names the RGB it
+expects and why.
+
+Two cases exist specifically because they are the ones that fail silently:
+
+- `blend_over_transparent_backdrop` pins the `(1 - ab)` term in `Cr = (1-ab)·Cs + ab·B(Cb,Cs)`,
+  which hand-rolled blend shaders routinely drop. Every other case blends onto the opaque
+  document background, where `ab = 1` and the term vanishes — so none of them can catch it. A
+  Multiply layer alone inside a group blends against transparency, where dropping the term
+  turns it black.
+- `fbo_pool_balanced_over_25_frames` re-renders a nested document repeatedly. A single frame can
+  leak a buffer and still look perfectly correct.
+
+**Confirm a new case FAILS against broken code before trusting it.** Both of the above were
+verified by deliberately sabotaging the shader and watching them go red — the clipping case
+turns the masked half blue, the transparent-backdrop case turns white to `(0,0,0)`. Several
+"bugs" here have really been harness artifacts.
 
 ## verify:photo
 

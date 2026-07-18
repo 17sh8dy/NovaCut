@@ -1,27 +1,59 @@
 /**
  * Factory helpers — the *only* sanctioned way to construct photo domain objects, so defaults
  * stay consistent everywhere. UI code never hand-builds a Layer; it calls these.
+ *
+ * Each layer kind gets its own factory rather than one `createLayer(kind)` with optional
+ * fields, so the discriminated union stays exhaustive at the construction site too: adding a
+ * kind breaks the compile here, which is the earliest place it can usefully break.
  */
 
-import type { MediaAsset } from '@opencut/core';
+import { instantiateEffect, type EffectInstance, type MediaAsset } from '@opencut/core';
 import { newLayerId, newPhotoDocumentId } from './ids.js';
-import { PHOTO_SCHEMA_VERSION, type Layer, type PhotoDocument } from './types.js';
+import {
+  IDENTITY_TRANSFORM,
+  PHOTO_SCHEMA_VERSION,
+  type AdjustmentLayer,
+  type GroupLayer,
+  type ImageLayer,
+  type Layer,
+  type PhotoDocument,
+} from './types.js';
 
-/** A4-ish default canvas for an empty document, replaced the moment an image is imported. */
+/** Default canvas for an empty document, replaced the moment an image is imported. */
 const DEFAULT_WIDTH = 1920;
 const DEFAULT_HEIGHT = 1080;
 
-export function createLayer(name: string, media?: MediaAsset): Layer {
-  return {
-    id: newLayerId(),
-    kind: 'image',
-    name,
-    ...(media ? { mediaId: media.id } : {}),
-    visible: true,
-    locked: false,
-    opacity: 1,
-    effects: [],
-  };
+/** The fields every kind shares, defaulted identically. */
+const base = (name: string) => ({
+  id: newLayerId(),
+  name,
+  visible: true,
+  locked: false,
+  opacity: 1,
+  blendMode: 'normal' as const,
+  clipped: false,
+  transform: { ...IDENTITY_TRANSFORM },
+  effects: [] as EffectInstance[],
+});
+
+export function createImageLayer(name: string, media?: MediaAsset): ImageLayer {
+  return { ...base(name), kind: 'image', ...(media ? { mediaId: media.id } : {}) };
+}
+
+export function createGroupLayer(name = 'Group', children: Layer[] = []): GroupLayer {
+  return { ...base(name), kind: 'group', children, collapsed: false };
+}
+
+/**
+ * An adjustment layer wrapping a registry effect.
+ *
+ * `instantiateEffect` THROWS on an unknown key rather than returning undefined. Callers reach
+ * this from inside History.dispatch, where a throw escapes as a UI crash, so every command
+ * that builds one probes the registry with `getEffectDef` first and degrades to a no-op.
+ */
+export function createAdjustmentLayer(type: string, name?: string): AdjustmentLayer {
+  const adjustment = instantiateEffect(type);
+  return { ...base(name ?? type), kind: 'adjustment', adjustment };
 }
 
 /**
@@ -40,7 +72,7 @@ export function createPhotoDocument(name = 'Untitled', media?: MediaAsset): Phot
     width: media?.width || DEFAULT_WIDTH,
     height: media?.height || DEFAULT_HEIGHT,
     background: '#000000',
-    layers: media ? [createLayer(media.name || 'Background', media)] : [],
+    layers: media ? [createImageLayer(media.name || 'Background', media)] : [],
     media: media ? [media] : [],
   };
 }

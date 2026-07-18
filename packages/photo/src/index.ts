@@ -9,7 +9,9 @@
 
 // Model
 export * from './model/ids.js';
+export * from './model/blend.js';
 export * from './model/types.js';
+export * from './model/tree.js';
 export * from './model/factory.js';
 
 // Commands

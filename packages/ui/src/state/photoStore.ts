@@ -23,6 +23,7 @@ import {
 } from '@opencut/core';
 import {
   createPhotoDocument,
+  findLayer,
   importImage,
   serializePhotoDocument,
   type Layer,
@@ -73,9 +74,11 @@ export function createPhotoStore({ bridge, notify }: PhotoHost) {
     importing: false,
     selectedLayerId: null,
 
+    // findLayer, not doc.layers.find: layers nest, so a selected layer may live several
+    // groups deep and a flat scan would silently report "nothing selected".
     selectedLayer: () => {
       const { doc, selectedLayerId } = get();
-      return doc.layers.find((l) => l.id === selectedLayerId);
+      return selectedLayerId ? findLayer(doc.layers, selectedLayerId) : undefined;
     },
 
     dispatch: (command) => {

@@ -99,6 +99,87 @@
   color: var(--muted);
 }
 
+.oc-layers__tools {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.oc-layer__icon {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+/* Keeps a non-group row's name aligned with a group's, which has a twisty in front of it. */
+.oc-layer__twisty {
+  width: 20px;
+  flex: 0 0 20px;
+}
+
+/* A clipped layer reads as belonging to the one below it, so it sits visually attached: the
+   base row's rounded top edge is the boundary of the clipping unit. */
+.oc-layer--clipped {
+  border-top-color: transparent;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.oc-layer__clipmark {
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.oc-layer__controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-1);
+}
+
+.oc-layer__check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.oc-select {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+/* ── Inspector sections ───────────────────────────────────────────────────── */
+
+.oc-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+  background: var(--surface-2);
+}
+
+.oc-section__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.oc-section__spacer {
+  flex: 1;
+}
+
 /* ── Filter rack ──────────────────────────────────────────────────────────── */
 
 .oc-rack {

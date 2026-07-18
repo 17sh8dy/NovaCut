@@ -24,16 +24,41 @@ apps/desktop  ── Electron shell. main + preload + renderer entry. Owns the P
 packages/ui   ── React design system + editor panels. Talks to core through the store.
      │           Knows nothing about Electron; receives a PlatformBridge via context.
      ▼
-packages/engine ─ Playback clock, WebGL2 compositor, Web Audio graph, media probing,
-     │            export orchestration. Browser APIs only, no React, no Electron.
+packages/engine ─ Playback clock, WebGL2 compositor (video), photo render graph, shared GL
+     │            plumbing, Web Audio graph, media probing, export orchestration.
+     │            Browser APIs only, no React, no Electron.
+     ▼
+packages/photo ─ Still-image domain: PhotoDocument, the layer TREE (groups / adjustment
+     │           layers / clipping), transforms, blend modes, photo commands, versioned IO.
      ▼
 packages/core ── Domain model (Project/Sequence/Track/Clip/Media/Keyframe), the command
                  system + history, effect/transition registries, versioned project IO.
                  Zero runtime dependencies.
 ```
 
-Dependencies only ever point **downward**. `core` depends on nothing; `engine` and `ui`
-depend on `core`; `desktop` wires them together.
+Dependencies only ever point **downward**. `core` depends on nothing; `photo` depends on
+`core`; `engine` depends on both; `ui` depends on all three; `desktop` wires them together.
+
+`engine → photo` is deliberate. The photo render graph interprets the layer tree directly
+rather than being handed a flattened list, because flattening discards the very structure —
+group isolation, clipping runs, adjustment scope — that the graph exists to interpret. Both
+are zero-DOM domain packages, so the alternative was duplicating a 27-mode blend union and the
+layer tree inside the engine, where the two copies would drift.
+
+### Inside `packages/engine`
+
+```
+gl/       ── GLContext (programs, quad, uploads, FBOs), FboPool, the shared effect chain, mat3.
+compositor/ ─ Video: track walk, clip time-window search, source seeking, clip transform.
+photo/    ── PhotoRenderer: the recursive layer-tree render graph + blend-mode GLSL.
+```
+
+Both renderers stand on `gl/`. That is not tidiness: **every texture in the pipeline is
+bottom-up**, and two copies of that convention is how it comes to disagree — which it already
+did once, silently, in shipped code (each effect pass flipped the frame; upside-down at odd
+effect counts, self-cancelling at even ones). One implementation, pinned by `verify:orientation`.
+Sharing the effect chain is also why a filter written for video appears in the photo editor for
+free.
 
 ## The PlatformBridge seam
 
@@ -52,10 +77,34 @@ the app."
 
 ## Rendering pipeline
 
-`Sequence + playhead → Compositor`. For each visible track (top-down), the compositor
-uploads the clip's current frame to a WebGL2 texture, applies its stacked effect shaders,
-then blends according to opacity/blend mode. Audio is mixed in parallel through a Web
-Audio graph. Export reuses the exact same frame-generation path, piped to FFmpeg.
+**Video.** `Sequence + playhead → Compositor`. For each visible track (bottom-up), the
+compositor uploads the clip's current frame to a WebGL2 texture, applies its stacked effect
+shaders, then composites with its transform and opacity. Audio is mixed in parallel through a
+Web Audio graph. Export reuses the exact same frame-generation path, piped to FFmpeg.
+
+**Photo.** `PhotoDocument → PhotoRenderer`. The graph walks the layer tree bottom-up and, per
+layer, does the same three things regardless of kind:
+
+```
+source ─place(model matrix)─→ canvas-sized raster ─effect chain─→ ─blend(mode, opacity)─→ accumulator
+```
+
+Everything after `place` happens in canvas space, which is what makes the graph uniform: an
+image, a group and an adjustment differ only in how they produce their raster. A group renders
+its children against a *transparent* backdrop and composites the flattened result as one unit
+(so group opacity cross-fades the flattened group, not each child). An adjustment layer has no
+pixels — it re-runs its effect against the live backdrop beneath it. Clipping runs composite
+into their base layer's unit before that unit blends.
+
+Buffers come from an `FboPool` (acquire/release) rather than a fixed ping/pong pair, because
+nesting depth is a property of the user's document, not of the code. `render()` asserts the pool
+balances each frame, so a leaked buffer fails at the frame that leaked rather than by exhausting
+VRAM twenty minutes later.
+
+**Non-destructive by construction.** The document stores no pixels — only a description of how
+to composite the originals — and the graph re-derives the result every draw. That is what keeps
+transforms, adjustment params and effect stacks editable forever, and it is also why History can
+snapshot whole documents cheaply.
 
 ## Future roadmap hooks (designed-in, not bolted-on)
 

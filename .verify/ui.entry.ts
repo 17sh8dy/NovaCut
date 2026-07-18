@@ -81,7 +81,9 @@ async function main() {
 
     results.mounted = !!document.querySelector('.oc-photobar');
     results.hasLayersPanel = document.body.textContent!.includes('Layers');
-    results.hasFiltersPanel = document.body.textContent!.includes('Filters');
+    // The right-hand panel is the Inspector (transform + adjustment params + the filter rack).
+    // Its "Filters" section only exists once a layer is selected, so assert on the panel title.
+    results.hasInspectorPanel = document.body.textContent!.includes('Inspector');
     results.emptyState = document.body.textContent!.includes('No image yet');
 
     // 1. Import — exercises importDialog → decodeSize → importImage command → layer.

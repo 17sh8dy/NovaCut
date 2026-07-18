@@ -6,6 +6,11 @@
  */
 
 export * from './playback/clock.js';
+export * from './photo/photoRenderer.js';
+export { BLEND_MODE_ID } from './photo/blendShaders.js';
+export * from './gl/glContext.js';
+export * from './gl/fboPool.js';
+export * from './gl/effectChain.js';
 export * from './compositor/compositor.js';
 export * from './compositor/transitions.js';
 export * from './media/frameSource.js';
