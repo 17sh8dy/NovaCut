@@ -19,7 +19,9 @@ import {
   type GroupLayer,
   type ImageLayer,
   type Layer,
+  type LayerMask,
   type PhotoDocument,
+  type RasterLayer,
   type ShapeLayer,
   type TextLayer,
 } from './types.js';
@@ -111,6 +113,39 @@ export function createShapeLayer(
   };
 }
 
+/**
+ * An empty painted surface, sized to the canvas.
+ *
+ * Canvas-sized rather than "as big as the strokes" so a stroke's coordinates keep meaning the
+ * same thing forever: the layer's own space IS the canvas's space at the moment it was made,
+ * which is what lets a paint layer be moved and scaled like anything else without the strokes
+ * shifting under it.
+ */
+export function createRasterLayer(width: number, height: number, name = 'Paint'): RasterLayer {
+  return {
+    ...base(name),
+    kind: 'raster',
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
+    ops: [],
+  };
+}
+
+/**
+ * A fresh mask.
+ *
+ * `reveal` is the default because that is what "add a mask" means in every editor: the layer
+ * keeps looking exactly as it did, and the user paints away what they want gone. Starting
+ * hidden makes the layer vanish the moment the mask is added, which reads as a bug.
+ */
+export const createMask = (base: 'reveal' | 'hide' = 'reveal'): LayerMask => ({
+  enabled: true,
+  inverted: false,
+  base,
+  regions: [],
+  ops: [],
+});
+
 /** Deep-copy a fill so gradient stops are never aliased between layers. */
 export const cloneFill = (fill: Fill): Fill =>
   fill.kind === 'solid' ? { ...fill } : { ...fill, stops: fill.stops.map((s) => ({ ...s })) };
@@ -147,5 +182,6 @@ export function createPhotoDocument(
     background: '#00000000',
     layers: media ? [createImageLayer(media.name || 'Background', media)] : [],
     media: media ? [media] : [],
+    selection: null,
   };
 }

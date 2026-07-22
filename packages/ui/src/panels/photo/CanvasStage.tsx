@@ -28,30 +28,49 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
-import { layoutText } from '@opencut/engine';
+import { floodSelect, layoutText, traceMask } from '@opencut/engine';
 import {
+  addRasterLayer,
+  addSelectionRegion,
   addShapeLayer,
   addTextLayer,
   applyMat,
   boundsOf,
+  combineFromModifiers,
   cropCanvas,
   cssFont,
+  deselect,
+  drawGradient,
+  ellipseRegion,
+  extendStroke,
+  fillBucket,
   fitModeOf,
   isTextLayer,
   mul as matMul,
+  newPaintOpId,
+  pathRegion,
+  rectRegion,
+  resolveCombine,
+  resolvePaintTarget,
   setLayerTransform,
   setTextContent,
+  type BrushSettings,
+  type Fill,
   type Layer,
   type LayerId,
+  type PaintTarget,
   type PhotoDocument,
   type Point,
   type Rect,
+  type StrokePoint,
   type Transform2D,
 } from '@opencut/photo';
 import { Button, EmptyState } from '../../components/primitives/index.js';
 import { usePhoto, usePhotoStore } from '../../state/photoContext.js';
 import type { PhotoEngine } from '../../state/usePhotoEngine.js';
 import { cornersOf, hitTest, hitTestDeep, matrixOf, naturalSizeOf, snapMove, type SnapGuide } from './layerGeometry.js';
+import { selectionOutline } from './selectionOutline.js';
+import { isPaintTool, isSelectTool } from '../../state/photoStore.js';
 
 /** Screen-space sizes that must not change with zoom. */
 const HANDLE_PX = 9;
@@ -97,7 +116,27 @@ type Drag =
     }
   | { mode: 'rotate'; layerId: LayerId; centre: Point; startAngle: number; startRotation: number }
   | { mode: 'draw'; start: Point; current: Point }
-  | { mode: 'crop'; start: Point; current: Point };
+  | { mode: 'crop'; start: Point; current: Point }
+  | {
+      mode: 'paint';
+      layerId: LayerId;
+      target: PaintTarget;
+      strokeId: string;
+      brush: BrushSettings;
+      /** Points accumulated since the last dispatch — the command APPENDS, so this is a queue. */
+      pending: StrokePoint[];
+    }
+  | {
+      mode: 'gradient';
+      layerId: LayerId;
+      target: PaintTarget;
+      opId: string;
+      from: Point;
+      fill: Fill;
+      shape: 'linear' | 'radial';
+    }
+  | { mode: 'marquee'; start: Point; current: Point; ellipse: boolean; dragId: string; combine: ReturnType<typeof combineFromModifiers> }
+  | { mode: 'lasso'; points: Point[]; dragId: string; combine: ReturnType<typeof combineFromModifiers> };
 
 export function CanvasStage({ engine }: { engine: PhotoEngine }) {
   const store = usePhotoStore();
@@ -117,6 +156,8 @@ export function CanvasStage({ engine }: { engine: PhotoEngine }) {
   const [guides, setGuides] = useState<SnapGuide[]>([]);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [preview, setPreview] = useState<Rect | null>(null);
+  /** Vertices of a polygon lasso in progress. Empty when no polygon is being drawn. */
+  const [polyPoints, setPolyPoints] = useState<Point[]>([]);
 
   useEffect(() => {
     if (canvasRef.current) engine.attach(canvasRef.current);
@@ -143,13 +184,13 @@ export function CanvasStage({ engine }: { engine: PhotoEngine }) {
     });
   }, [doc.width, doc.height, store]);
 
-  // Re-fit when the canvas changes size, and when anything turns auto-fit back on (the "fit to
-  // window" button, a crop, a canvas resize). Watching the flag itself is what makes those
-  // callers a one-liner — they set `autoFit: true` and this decides what that means.
+  // Re-fit when the canvas changes size, when auto-fit is turned back on, or when anything
+  // explicitly asks for a fit. The nonce is what makes "Fit to window" work even though
+  // `autoFit` is usually already true — see the field's note in the store.
   useLayoutEffect(() => {
     if (viewport.autoFit) fit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.width, doc.height, viewport.autoFit]);
+  }, [doc.width, doc.height, viewport.autoFit, viewport.fitNonce]);
 
   useEffect(() => {
     const el = viewRef.current;
@@ -178,6 +219,31 @@ export function CanvasStage({ engine }: { engine: PhotoEngine }) {
       window.removeEventListener('keyup', up);
     };
   }, []);
+
+  // A polygon in progress belongs to the polygon tool; switching away abandons it rather than
+  // leaving vertices that would attach themselves to the next selection the user makes.
+  useEffect(() => {
+    if (tool !== 'polygon' && polyPoints.length > 0) setPolyPoints([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tool]);
+
+  useEffect(() => {
+    if (tool !== 'polygon') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+      if (e.key === 'Enter' && polyPoints.length >= 3) {
+        e.preventDefault();
+        closePolygon(polyPoints, resolveCombine('replace', store.getState().doc.selection));
+        setPolyPoints([]);
+      } else if (e.key === 'Escape' && polyPoints.length > 0) {
+        e.preventDefault();
+        setPolyPoints([]);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tool, polyPoints]);
 
   const { zoom, panX, panY } = viewport;
 
@@ -230,21 +296,84 @@ export function CanvasStage({ engine }: { engine: PhotoEngine }) {
 
   // ── Pointer ───────────────────────────────────────────────────────────────
 
+  /**
+   * Take pointer capture, tolerating failure.
+   *
+   * `setPointerCapture` THROWS `InvalidPointerId` when the pointer is not currently active —
+   * which happens for real on a fast click where the pointer is released between dispatch and
+   * this call, and always for a synthetically dispatched event. An uncaught throw here aborts
+   * the whole handler, so the drag never starts and the tool silently does nothing. Capture is
+   * an optimisation (it keeps events coming when the cursor leaves the stage), not a
+   * requirement, so losing it is far better than losing the interaction.
+   */
+  const capture = (e: React.PointerEvent) => {
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* see above — the drag proceeds without capture */
+    }
+  };
+
   const beginPan = (e: React.PointerEvent) => {
     drag.current = { mode: 'pan', startX: e.clientX, startY: e.clientY, panX, panY };
   };
 
+  /**
+   * The Magic Wand.
+   *
+   * Samples the COMPOSITED canvas — what the user can actually see — flood-fills from the click,
+   * and traces the result into polygon contours. Those contours are what lands in the document;
+   * the wand itself is not a stored region kind. See the header of `@opencut/photo`'s
+   * `selection.ts` for why that indirection exists rather than storing the seed and tolerance.
+   */
+  const runWand = (p: Point, combine: ReturnType<typeof combineFromModifiers>) => {
+    const gl = canvasRef.current;
+    if (!gl) return;
+    // Copy the GL canvas into a 2D one to read pixels. `preserveDrawingBuffer` is on (see
+    // GLContext), so what is on screen is still there to be read.
+    const work = document.createElement('canvas');
+    work.width = gl.width;
+    work.height = gl.height;
+    const ctx = work.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+    ctx.drawImage(gl, 0, 0);
+
+    const image = ctx.getImageData(0, 0, work.width, work.height);
+    const state = store.getState();
+    const mask = floodSelect(image, p.x, p.y, {
+      tolerance: state.sample.tolerance,
+      contiguous: state.sample.contiguous,
+    });
+    const contours = traceMask(mask, work.width, work.height);
+    if (contours.length === 0) return;
+    state.dispatch(addSelectionRegion(pathRegion(contours.map((c) => c.map((q) => ({ x: q.x, y: q.y }))), combine)));
+  };
+
+  /** Finish a polygon lasso. Fewer than three points is not a shape, so it is dropped. */
+  const closePolygon = (points: readonly Point[], combine: ReturnType<typeof combineFromModifiers>) => {
+    if (points.length < 3) return;
+    store.getState().dispatch(addSelectionRegion(pathRegion([[...points]], combine)));
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button === 1 || spaceHeld || tool === 'hand') {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      capture(e);
       beginPan(e);
       return;
     }
     if (e.button !== 0) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    capture(e);
     const p = toCanvas(e);
     const state = store.getState();
 
+    if (isPaintTool(tool)) {
+      beginPaint(e, p);
+      return;
+    }
+    if (isSelectTool(tool)) {
+      beginSelect(e, p);
+      return;
+    }
     if (tool === 'crop') {
       drag.current = { mode: 'crop', start: p, current: p };
       setPreview(rectBetween(p, p));
@@ -306,6 +435,119 @@ export function CanvasStage({ engine }: { engine: PhotoEngine }) {
     };
   };
 
+  /**
+   * Pressure, normalised.
+   *
+   * A mouse reports 0.5 while held and 0 otherwise, which would make every mouse stroke render
+   * at half size on a pressure-sensitive brush. Only a pen has real pressure, so only a pen's
+   * value is used; everything else paints at full.
+   */
+  const pressureOf = (e: React.PointerEvent): number =>
+    e.pointerType === 'pen' ? Math.max(0.01, e.pressure) : 1;
+
+  /**
+   * Resolve where paint should land, creating a paint layer when there is nowhere to put it.
+   *
+   * The create-if-needed path is what makes the brush usable on a freshly imported photo: the
+   * selected layer is a bitmap, which cannot be painted into without destroying it, so a paint
+   * layer appears above it and the stroke goes there. Non-destructive by construction rather
+   * than by the user remembering to add a layer first.
+   */
+  const ensurePaintSurface = (): { layerId: LayerId; target: PaintTarget } | null => {
+    const state = store.getState();
+    const resolved = resolvePaintTarget(state.doc, state.selectedLayerId, state.maskMode);
+    if (!('needsNewLayer' in resolved)) return resolved;
+    if (state.maskMode) return null; // mask mode with no mask: the inspector's job, not a silent create
+    state.dispatch(addRasterLayer(resolved.aboveId));
+    const added = store.getState().doc.layers.at(-1);
+    if (!added) return null;
+    state.selectLayer(added.id, 'replace');
+    return { layerId: added.id, target: 'layer' };
+  };
+
+  const beginPaint = (e: React.PointerEvent, p: Point) => {
+    const state = store.getState();
+    const surface = ensurePaintSurface();
+    if (!surface) return;
+
+    if (tool === 'bucket') {
+      state.dispatch(
+        fillBucket(surface.layerId, surface.target, p, state.foreground, {
+          tolerance: state.sample.tolerance,
+          contiguous: state.sample.contiguous,
+        }),
+      );
+      return;
+    }
+    if (tool === 'gradient') {
+      drag.current = {
+        mode: 'gradient',
+        layerId: surface.layerId,
+        target: surface.target,
+        opId: newPaintOpId(),
+        from: p,
+        fill: state.gradientFill,
+        shape: state.gradientShape,
+      };
+      return;
+    }
+
+    // Brush and eraser share everything but the composite mode; `kind` carries the difference.
+    const brush: BrushSettings = {
+      ...state.brush,
+      kind: tool === 'eraser' ? 'eraser' : state.brush.kind === 'eraser' ? 'brush' : state.brush.kind,
+      // A mask stores COVERAGE, not colour — the rasterizer reads only alpha there, so painting
+      // white is what "reveal" means and the foreground swatch is irrelevant.
+      color: surface.target === 'mask' ? '#ffffff' : state.foreground,
+    };
+    const strokeId = newPaintOpId();
+    const first: StrokePoint = { x: p.x, y: p.y, p: pressureOf(e) };
+    state.dispatch(extendStroke(surface.layerId, surface.target, strokeId, brush, [first]));
+    drag.current = {
+      mode: 'paint',
+      layerId: surface.layerId,
+      target: surface.target,
+      strokeId,
+      brush,
+      pending: [],
+    };
+  };
+
+  const beginSelect = (e: React.PointerEvent, p: Point) => {
+    const state = store.getState();
+    const combine = resolveCombine(combineFromModifiers(e.shiftKey, e.altKey), state.doc.selection);
+
+    if (tool === 'wand') {
+      runWand(p, combine);
+      return;
+    }
+    if (tool === 'polygon') {
+      // Click-to-add. Closing is handled by the click landing near the first point, or by
+      // Enter / double-click — all three routed through `closePolygon`.
+      setPolyPoints((pts) => {
+        if (pts.length >= 3 && Math.hypot(p.x - pts[0]!.x, p.y - pts[0]!.y) < 12 / zoom) {
+          closePolygon(pts, combine);
+          return [];
+        }
+        return [...pts, p];
+      });
+      return;
+    }
+    if (tool === 'lasso') {
+      drag.current = { mode: 'lasso', points: [p], dragId: newPaintOpId(), combine };
+      return;
+    }
+    drag.current = {
+      mode: 'marquee',
+      start: p,
+      current: p,
+      ellipse: tool === 'select-ellipse',
+      dragId: newPaintOpId(),
+      combine,
+    };
+    setPreview(rectBetween(p, p));
+  };
+
   const startHandleDrag = (handle: { id: HandleId; rotate: boolean }, p: Point) => {
     const layer = store.getState().selectedLayer();
     if (!layer) return;
@@ -361,6 +603,58 @@ export function CanvasStage({ engine }: { engine: PhotoEngine }) {
     }
 
     const p = toCanvas(e);
+
+    if (d.mode === 'paint') {
+      // Coalesced events give the full sub-frame path on a high-rate pointer, which is what
+      // keeps a fast stroke smooth instead of sampling it at 60Hz and cutting corners.
+      const raw = typeof e.nativeEvent.getCoalescedEvents === 'function'
+        ? e.nativeEvent.getCoalescedEvents()
+        : [e.nativeEvent];
+      const points: StrokePoint[] = raw.map((ev) => {
+        const q = toCanvas(ev);
+        return { x: q.x, y: q.y, p: ev.pointerType === 'pen' ? Math.max(0.01, ev.pressure) : 1 };
+      });
+      if (points.length === 0) return;
+      // The command APPENDS, so only the new points go out. Sending the whole path each move
+      // would be O(n²) over a long stroke.
+      state.dispatch(extendStroke(d.layerId, d.target, d.strokeId, d.brush, points));
+      return;
+    }
+
+    if (d.mode === 'gradient') {
+      state.dispatch(drawGradient(d.layerId, d.target, d.opId, d.from, p, d.fill, d.shape));
+      return;
+    }
+
+    if (d.mode === 'marquee') {
+      const current = e.shiftKey ? square(d.start, p) : p;
+      drag.current = { ...d, current };
+      const rect = rectBetween(d.start, current);
+      setPreview(rect);
+      state.dispatch(
+        addSelectionRegion(
+          d.ellipse
+            ? ellipseRegion(rect.x, rect.y, rect.width, rect.height, d.combine)
+            : rectRegion(rect.x, rect.y, rect.width, rect.height, d.combine),
+          d.dragId,
+        ),
+      );
+      return;
+    }
+
+    if (d.mode === 'lasso') {
+      // Thin the path as it is captured: a lasso at 240Hz produces thousands of points that all
+      // land inside one screen pixel, and every one of them would be serialized into the
+      // document and re-traced on every render.
+      const last = d.points[d.points.length - 1]!;
+      if (Math.hypot(p.x - last.x, p.y - last.y) < 2 / zoom) return;
+      const points = [...d.points, p];
+      drag.current = { ...d, points };
+      if (points.length >= 3) {
+        state.dispatch(addSelectionRegion(pathRegion([points], d.combine), d.dragId));
+      }
+      return;
+    }
 
     if (d.mode === 'crop' || d.mode === 'draw') {
       // Shift constrains to a square, which for the crop tool is the only way to hit an exact
@@ -446,10 +740,22 @@ export function CanvasStage({ engine }: { engine: PhotoEngine }) {
     setGuides([]);
     const state = store.getState();
 
+    // A selection drag that never moved is a click on empty space: deselect, which is what
+    // every editor does and the only way to clear a marquee without reaching for a menu.
+    if (d?.mode === 'marquee' && d.start.x === d.current.x && d.start.y === d.current.y) {
+      if (d.combine === 'replace') state.dispatch(deselect());
+      setPreview(null);
+      return;
+    }
+    if (d?.mode === 'lasso' && d.points.length < 3) {
+      if (d.combine === 'replace') state.dispatch(deselect());
+      return;
+    }
+
     if (d?.mode === 'crop' && preview) {
       if (preview.width > 4 && preview.height > 4) state.dispatch(cropCanvas(preview));
       state.setTool('move');
-      state.setViewport({ autoFit: true });
+      state.fitToWindow();
     } else if (d?.mode === 'draw' && preview) {
       if (preview.width > 4 && preview.height > 4) {
         state.dispatch(
@@ -496,13 +802,22 @@ export function CanvasStage({ engine }: { engine: PhotoEngine }) {
     () => selection.map((id) => findIn(doc, id)).filter((l): l is Layer => !!l),
     [selection, doc],
   );
+
+  // Re-traced only when the selection itself changes, not on every render — the trace
+  // rasterizes a bitmap, which is far too expensive to redo when a slider moved.
+  const ants = useMemo(
+    () => selectionOutline(doc.selection, { width: doc.width, height: doc.height }),
+    [doc.selection, doc.width, doc.height],
+  );
   const primary = selectedLayers.at(-1);
   const empty = doc.layers.length === 0;
 
   const cursor =
     spaceHeld || tool === 'hand' ? 'grab'
       : tool === 'text' ? 'text'
-        : tool === 'crop' || tool === 'shape' ? 'crosshair'
+        // Every tool that draws by dragging out a region gets the crosshair, which is the one
+        // cursor that says "the point matters" rather than "the object under you matters".
+        : tool === 'crop' || tool === 'shape' || isPaintTool(tool) || isSelectTool(tool) ? 'crosshair'
           : 'default';
 
   return (
@@ -556,7 +871,7 @@ export function CanvasStage({ engine }: { engine: PhotoEngine }) {
             />
           ))}
 
-          {selectedLayers.map((layer) => (
+          {tool === 'move' && selectedLayers.map((layer) => (
             <polygon
               key={layer.id}
               className="oc-selbox"
@@ -569,7 +884,30 @@ export function CanvasStage({ engine }: { engine: PhotoEngine }) {
             <SelectionHandles layer={primary} doc={doc} zoom={zoom} />
           )}
 
-          {preview && (
+          {/*
+            Marching ants: two coincident strokes, black under white dashes, so the boundary
+            stays visible over both light and dark artwork. The dash animation lives in CSS.
+          */}
+          {ants && (
+            <g className="oc-ants">
+              <path d={ants.d} className="oc-ants__under" vectorEffect="non-scaling-stroke" />
+              <path d={ants.d} className="oc-ants__over" vectorEffect="non-scaling-stroke" />
+            </g>
+          )}
+
+          {polyPoints.length > 0 && (
+            <g className="oc-poly">
+              <polyline
+                points={polyPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                vectorEffect="non-scaling-stroke"
+              />
+              {polyPoints.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={4 / zoom} vectorEffect="non-scaling-stroke" />
+              ))}
+            </g>
+          )}
+
+          {preview && tool !== 'select-rect' && tool !== 'select-ellipse' && (
             <rect
               className={`oc-marquee${tool === 'crop' ? ' oc-marquee--crop' : ''}`}
               x={preview.x}

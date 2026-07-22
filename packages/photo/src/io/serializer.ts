@@ -79,6 +79,18 @@ const migrations: Record<number, (doc: PhotoDocument) => PhotoDocument> = {
    * bug to hide.
    */
   2: (doc) => ({ ...doc, schemaVersion: 3 }),
+
+  /**
+   * 3 → 4: raster layers, layer masks, and a document-level selection.
+   *
+   * `selection` is the one field that needs writing rather than defaulting: it is `Selection |
+   * null`, and a v3 file simply has no key there. Leaving it `undefined` would typecheck (the
+   * property is not optional, but JSON is not typechecked) and then every `doc.selection`
+   * read would be undefined-vs-null — which the model treats identically today and would stop
+   * treating identically the first time someone writes `'selection' in doc`. Normalising here
+   * means the rest of the codebase only ever sees one shape.
+   */
+  3: (doc) => ({ ...doc, selection: doc.selection ?? null, schemaVersion: 4 }),
 };
 
 export function serializePhotoDocument(document: PhotoDocument): string {

@@ -72,6 +72,14 @@ async function main() {
   const results: Record<string, unknown> = {};
   try {
     const host = document.createElement('div');
+    // The workspace lays itself out with flex against a sized ancestor. Without an explicit
+    // viewport here the stage measures 0x0, `fit()` clamps the zoom to its minimum, and the
+    // canvas ends up sub-pixel — so every pointer coordinate lands outside it and the paint
+    // and selection tools appear broken when they are not. The real app gets its size from the
+    // Electron window; the harness has to say so.
+    document.documentElement.style.cssText = 'width:100%;height:100%';
+    document.body.style.cssText = 'margin:0;width:1280px;height:860px;overflow:hidden';
+    host.style.cssText = 'width:100%;height:100%';
     document.body.appendChild(host);
 
     const store = createAppStore(bridge);
@@ -169,6 +177,112 @@ async function main() {
     button('Undo')?.click();
     await sleep(250);
 
+    // 6. Paint — a brush stroke must create a paint layer, deposit pixels, and collapse into
+    //    exactly ONE undo step no matter how many pointermoves produced it. The one-step part is
+    //    the assertion that matters: without command coalescing a stroke is 400 undo entries,
+    //    and that failure is invisible until someone presses Ctrl+Z.
+    const stage = document.querySelector('.oc-stage') as HTMLElement | null;
+    const doc = document.querySelector('.oc-stage__doc') as HTMLElement | null;
+    results.hasStage = !!stage && !!doc;
+    /**
+     * A hash of every pixel, NOT a coverage count.
+     *
+     * The test image already fills the canvas edge to edge, so "how many pixels are opaque"
+     * cannot go up no matter what is painted — an assertion on coverage would pass on a broken
+     * brush and fail on a working one. Hashing the actual colours is the only measure that
+     * detects paint on an already-opaque document.
+     */
+    const pixelHash = () => {
+      if (!canvas) return 0;
+      const o = document.createElement('canvas');
+      o.width = canvas.width;
+      o.height = canvas.height;
+      const cx = o.getContext('2d', { willReadFrequently: true })!;
+      cx.drawImage(canvas, 0, 0);
+      const d = cx.getImageData(0, 0, o.width, o.height).data;
+      let h = 0;
+      for (let i = 0; i < d.length; i++) h = (Math.imul(h, 31) + d[i]!) | 0;
+      return h;
+    };
+    const pointer = (type: string, x: number, y: number) => {
+      const r = doc!.getBoundingClientRect();
+      stage!.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          clientX: r.left + x,
+          clientY: r.top + y,
+          button: 0,
+          buttons: type === 'pointerup' ? 0 : 1,
+          pointerId: 1,
+          pointerType: 'mouse',
+          isPrimary: true,
+        }),
+      );
+    };
+
+    const rail = (title: string) =>
+      ([...document.querySelectorAll('.oc-rail button')].find((b) =>
+        (b.getAttribute('title') || '').includes(title),
+      ) as HTMLButtonElement | undefined);
+
+    results.foundBrushTool = !!rail('Brush');
+    rail('Brush')?.click();
+    await sleep(200);
+    results.brushToolActive = !!document.querySelector('.oc-brushpresets');
+    // Back to the Layers tab: the shape/text steps above left the dock on Assets, and a check
+    // for a layer ROW would otherwise fail simply because no rows are rendered.
+    ([...document.querySelectorAll('.oc-dock__tabs button')].find((b) =>
+      (b.textContent || '').includes('Layers'),
+    ) as HTMLButtonElement | undefined)?.click();
+    await sleep(150);
+    const beforePaint = pixelHash();
+    // Coordinates are taken as FRACTIONS of the rendered document, so the assertions hold at
+    // whatever zoom the fit lands on rather than assuming one.
+    // Pin the stage to a known size. The panel SPLITTER's own sizing is not what these
+    // assertions are about, and under the harness's synthetic viewport it hands the canvas a
+    // few pixels — which would make every pointer coordinate land outside the document and the
+    // tools look broken when they are not. Resizing triggers the stage's ResizeObserver, which
+    // re-fits the zoom, so the coordinates below stay meaningful.
+    // `flex: none` first: the stage is a flex item with `flex: 1`, so its flex-basis wins over
+    // any width set here and the resize would silently do nothing.
+    stage!.style.flex = 'none';
+    stage!.style.width = '700px';
+    stage!.style.height = '500px';
+    button('Fit to window')?.click();
+    await sleep(250);
+    const rect = doc!.getBoundingClientRect();
+    results.docRect = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
+
+    pointer('pointerdown', rect.width * 0.2, rect.height * 0.2);
+    pointer('pointermove', rect.width * 0.4, rect.height * 0.4);
+    pointer('pointermove', rect.width * 0.7, rect.height * 0.6);
+    pointer('pointerup', rect.width * 0.7, rect.height * 0.6);
+    await sleep(400);
+    results.paintLayerCreated = [...document.querySelectorAll('.oc-layer__name')].some((e) =>
+      (e.textContent || '').includes('Paint'),
+    );
+    results.paintDeposited = pixelHash() !== beforePaint;
+
+    const undoBtn = button('Undo');
+    undoBtn?.click();
+    await sleep(300);
+    // ONE undo removes the whole stroke, not one pointermove's worth of it.
+    results.strokeIsOneUndoStep = pixelHash() === beforePaint;
+
+    // 7. Selection — a marquee must produce marching ants, and Escape must clear it.
+    rail('Rectangle Select')?.click();
+    await sleep(120);
+    pointer('pointerdown', rect.width * 0.1, rect.height * 0.1);
+    pointer('pointermove', rect.width * 0.5, rect.height * 0.5);
+    pointer('pointerup', rect.width * 0.6, rect.height * 0.7);
+    await sleep(400);
+    const antPath = document.querySelector('.oc-ants__over')?.getAttribute('d') || '';
+    results.selectionAnts = antPath.length > 0;
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await sleep(300);
+    results.selectionCleared = !document.querySelector('.oc-ants__over');
+
     const ori = (r: unknown) => (r as { top: string; bottom: string } | null);
     results.ok =
       results.mounted === true &&
@@ -180,6 +294,12 @@ async function main() {
       results.shapeChangedPixels === true &&
       results.foundTextPreset === true &&
       results.textChangedPixels === true &&
+      results.hasStage === true &&
+      results.paintLayerCreated === true &&
+      results.paintDeposited === true &&
+      results.strokeIsOneUndoStep === true &&
+      results.selectionAnts === true &&
+      results.selectionCleared === true &&
       ori(results.renderedNoFilter)?.top === 'red' &&
       ori(results.renderedNoFilter)?.bottom === 'blue' &&
       ori(results.renderedOneFilter)?.top === 'red' &&

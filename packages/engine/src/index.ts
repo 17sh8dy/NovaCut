@@ -8,6 +8,11 @@
 export * from './playback/clock.js';
 export * from './photo/photoRenderer.js';
 export * from './photo/vectorRaster.js';
+export * from './photo/paintRaster.js';
+export * from './photo/coverage.js';
+export * from './photo/maskRaster.js';
+export * from './photo/maskCache.js';
+export * from './photo/trace.js';
 export { BLEND_MODE_ID } from './photo/blendShaders.js';
 export * from './gl/glContext.js';
 export * from './gl/fboPool.js';

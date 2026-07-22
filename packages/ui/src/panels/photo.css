@@ -1265,3 +1265,226 @@
   border-radius: var(--radius-full);
   background: var(--warning);
 }
+
+/* ── Tool rail groups & colours ───────────────────────────────────────────── */
+
+.oc-rail__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.oc-rail__group:last-of-type {
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
+/* The foreground/background pair, offset so they overlap the way every editor draws them. */
+.oc-rail__colors {
+  position: relative;
+  width: 34px;
+  height: 40px;
+  margin: var(--space-2) auto 0;
+}
+
+.oc-rail__swatch {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  cursor: pointer;
+}
+
+.oc-rail__swatch::-webkit-color-swatch-wrapper {
+  padding: 1px;
+}
+
+.oc-rail__swatch::-webkit-color-swatch {
+  border: 0;
+  border-radius: 2px;
+}
+
+.oc-rail__swatch--fg {
+  left: 0;
+  top: 0;
+  z-index: 2;
+}
+
+.oc-rail__swatch--bg {
+  right: 0;
+  bottom: 0;
+}
+
+.oc-rail__swap {
+  position: absolute;
+  right: -2px;
+  top: -4px;
+  padding: 1px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.oc-rail__swap:hover {
+  color: var(--text-primary);
+}
+
+/* ── Options bar additions ────────────────────────────────────────────────── */
+
+.oc-options__slider {
+  width: 108px;
+  flex: 0 0 108px;
+}
+
+.oc-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.oc-check--accent {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.oc-check--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Marching ants ────────────────────────────────────────────────────────── */
+
+/*
+ * Two coincident strokes: a solid dark one underneath, a dashed light one on top. That pairing
+ * is what keeps a selection boundary readable over both a white sky and a black shadow — a
+ * single-colour outline disappears against one of them, always.
+ */
+.oc-ants {
+  fill: none;
+  pointer-events: none;
+}
+
+.oc-ants__under {
+  stroke: rgba(0, 0, 0, 0.85);
+  stroke-width: 1;
+}
+
+.oc-ants__over {
+  stroke: #fff;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  animation: oc-ants-march 0.6s linear infinite;
+}
+
+@keyframes oc-ants-march {
+  to {
+    stroke-dashoffset: -8;
+  }
+}
+
+/* The march is decorative motion; honour the app-wide reduce-motion switches. */
+:root[data-reduce-motion] .oc-ants__over,
+:root[data-playing] .oc-ants__over {
+  animation: none;
+}
+
+/* ── Polygon lasso in progress ────────────────────────────────────────────── */
+
+.oc-poly polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}
+
+.oc-poly circle {
+  fill: var(--surface-1);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+/* ── Brush presets ────────────────────────────────────────────────────────── */
+
+.oc-brushpresets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: var(--space-1);
+}
+
+.oc-brushpreset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  height: 62px;
+  padding: var(--space-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.oc-brushpreset:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.oc-brushpreset__dot {
+  display: block;
+  border-radius: var(--radius-full);
+  background: var(--text-primary);
+  margin: auto 0;
+}
+
+/* ── Layer mask badge ─────────────────────────────────────────────────────── */
+
+.oc-layer__mask {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-4);
+  color: var(--text-secondary);
+}
+
+.oc-layer__mask[data-off='true'] {
+  opacity: 0.4;
+}
+
+/*
+ * Options-bar sliders are bare tracks: the value lives in the label beside them, because the
+ * Slider primitive's own readout sits ABOVE its track and a 36px-tall bar has no room for two
+ * rows. Without this the number renders on top of the label it belongs to.
+ */
+.oc-options__slider .oc-slider__top {
+  display: none;
+}
+
+.oc-options__slider .oc-slider {
+  gap: 0;
+}
+
+.oc-options .oc-options__label {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

@@ -12,19 +12,34 @@
 import { useEffect } from 'react';
 import {
   alignLayers,
+  clearSelection as clearSelectionOp,
   deleteLayer,
+  deselect,
   duplicateLayer,
   groupSelection,
+  hasSelection,
+  invertSelection,
   moveLayer,
   parentOf,
+  selectAllPixels,
   setLayerTransform,
   setLayerVisible,
   ungroup,
   isGroupLayer,
+  isRasterLayer,
   type LayerId,
 } from '@opencut/photo';
 import type { PhotoStore } from '../../state/photoStore.js';
 import { naturalSizeOf } from './layerGeometry.js';
+
+/**
+ * Brush size steps proportionally, not by a fixed amount.
+ *
+ * `[` and `]` on a 4px pencil and on a 400px airbrush have to feel like the same gesture; a
+ * flat ±1 would take four hundred presses to cross the range, and a flat ±20 would make the
+ * pencil unusable.
+ */
+const brushStep = (size: number): number => Math.max(1, Math.round(size * 0.15));
 
 /** Nudge distance in canvas pixels; Shift makes it a big step. */
 const NUDGE = 1;
@@ -56,7 +71,14 @@ export function usePhotoShortcuts(store: PhotoStore) {
             return;
           case 'a':
             e.preventDefault();
-            s.selectAll();
+            // Shift is the pixel version, matching Select > All vs. selecting layers.
+            if (e.shiftKey) s.dispatch(selectAllPixels());
+            else s.selectAll();
+            return;
+          case 'i':
+            if (!e.shiftKey) return;
+            e.preventDefault();
+            s.dispatch(invertSelection());
             return;
           case 'c':
             e.preventDefault();
@@ -69,6 +91,13 @@ export function usePhotoShortcuts(store: PhotoStore) {
             s.pasteClipboard();
             return;
           case 'd':
+            // Photoshop's binding: Ctrl+D deselects, Ctrl+J duplicates. Worth matching even
+            // though it moves duplicate off the key it had in the previous slice — muscle
+            // memory for Deselect is far stronger, and a wrong Ctrl+D is a lost selection.
+            e.preventDefault();
+            s.dispatch(deselect());
+            return;
+          case 'j':
             e.preventDefault();
             for (const id of selection) s.dispatch(duplicateLayer(id));
             return;
@@ -93,7 +122,7 @@ export function usePhotoShortcuts(store: PhotoStore) {
             return;
           case '0':
             e.preventDefault();
-            s.setViewport({ autoFit: true });
+            s.fitToWindow();
             return;
           case '1':
             e.preventDefault();
@@ -132,14 +161,27 @@ export function usePhotoShortcuts(store: PhotoStore) {
       // ── Unmodified ──
       switch (e.key) {
         case 'Delete':
-        case 'Backspace':
+        case 'Backspace': {
+          // With a marquee up, Delete erases INSIDE it rather than dropping the whole layer —
+          // which is what Delete means in every photo editor, and the destructive alternative
+          // would be a very surprising way to lose work.
+          const layer = primary ? find(s, primary) : undefined;
+          if (hasSelection(s.doc.selection) && layer) {
+            e.preventDefault();
+            if (isRasterLayer(layer)) s.dispatch(clearSelectionOp(layer.id, 'layer'));
+            else if (layer.mask) s.dispatch(clearSelectionOp(layer.id, 'mask'));
+            else s.dispatch(deleteLayer(layer.id));
+            return;
+          }
           if (selection.length === 0) return;
           e.preventDefault();
           for (const id of selection) s.dispatch(deleteLayer(id));
           return;
+        }
         case 'Escape':
           e.preventDefault();
           if (s.editingTextId) s.setEditingText(null);
+          else if (hasSelection(s.doc.selection)) s.dispatch(deselect());
           else if (s.tool !== 'move') s.setTool('move');
           else s.selectLayer(null);
           return;
@@ -175,6 +217,16 @@ export function usePhotoShortcuts(store: PhotoStore) {
         case 'r': s.setTool('shape'); return;
         case 'c': s.setTool('crop'); return;
         case 'h': s.setTool('hand'); return;
+        // The families whose key toggles between their two members, as Photoshop's do.
+        case 'm': s.setTool(s.tool === 'select-rect' ? 'select-ellipse' : 'select-rect'); return;
+        case 'l': s.setTool(s.tool === 'lasso' ? 'polygon' : 'lasso'); return;
+        case 'w': s.setTool('wand'); return;
+        case 'b': s.setTool('brush'); return;
+        case 'e': s.setTool('eraser'); return;
+        case 'g': s.setTool(s.tool === 'bucket' ? 'gradient' : 'bucket'); return;
+        case 'x': s.swapColors(); return;
+        case '[': s.setBrush({ size: Math.max(1, s.brush.size - brushStep(s.brush.size)) }); return;
+        case ']': s.setBrush({ size: Math.min(600, s.brush.size + brushStep(s.brush.size)) }); return;
         case ',':
           // Hide/show, the way Photoshop's eye column works from the keyboard.
           for (const id of selection) {
@@ -182,8 +234,9 @@ export function usePhotoShortcuts(store: PhotoStore) {
             if (layer) s.dispatch(setLayerVisible(id, !layer.visible));
           }
           return;
-        case 'l': {
-          // Centre on the canvas — the single most common alignment, worth one key.
+        case 'k': {
+          // Centre on the canvas. Moved off `L`, which the lasso family now owns — a selection
+          // tool's letter is the stronger convention.
           if (selection.length === 0) return;
           s.dispatch(alignLayers(selection, 'hcenter', (l) => naturalSizeOf(l, s.doc)));
           s.dispatch(alignLayers(selection, 'vcenter', (l) => naturalSizeOf(l, s.doc)));

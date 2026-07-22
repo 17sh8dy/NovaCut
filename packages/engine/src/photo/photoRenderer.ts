@@ -41,6 +41,7 @@ import {
   flattenLayers,
   isAdjustmentLayer,
   isGroupLayer,
+  isRasterLayer,
   isVectorLayer,
   type FitMode,
   type Layer,
@@ -52,7 +53,9 @@ import { FboPool } from '../gl/fboPool.js';
 import { runEffectChain } from '../gl/effectChain.js';
 import { VERTEX_SHADER } from '../compositor/shaders.js';
 import { VectorRasterCache } from './vectorRaster.js';
-import { BLEND_FRAGMENT, BLEND_MODE_ID, BLEND_VERTEX, PLACE_FRAGMENT } from './blendShaders.js';
+import { BLEND_FRAGMENT, BLEND_MODE_ID, BLEND_VERTEX, MASK_FRAGMENT, PLACE_FRAGMENT } from './blendShaders.js';
+import { PaintCache } from './paintRaster.js';
+import { MaskCache } from './maskCache.js';
 import type { FrameBitmap } from '../media/frameSource.js';
 import { dlog, dthrottle } from '../debug.js';
 
@@ -84,6 +87,18 @@ export class PhotoRenderer {
    * both are torn down together in `dispose`, and neither can outlive the canvas.
    */
   private vectors = new VectorRasterCache();
+  /** Paint layers, replayed from their op lists and cached with an incremental append path. */
+  private paint = new PaintCache();
+  /** Layer masks, rasterized at canvas size and cached by mask signature. */
+  private masks = new MaskCache();
+  /**
+   * A second upload texture, used only for masks.
+   *
+   * It cannot share `source`: the mask pass binds the layer's content AND its mask at the same
+   * time, and `source` is already holding whatever content was uploaded a moment earlier.
+   * Re-uploading into it would overwrite the very pixels being masked.
+   */
+  private maskTex: WebGLTexture;
   private width = 0;
   private height = 0;
 
@@ -91,6 +106,7 @@ export class PhotoRenderer {
     this.gl = new GLContext(canvas);
     this.pool = new FboPool(this.gl);
     this.source = this.gl.createTexture();
+    this.maskTex = this.gl.createTexture();
   }
 
   /** Draw the document to the canvas. */
@@ -98,7 +114,11 @@ export class PhotoRenderer {
     const { doc } = ctx;
     this.resize(doc.width, doc.height);
     // Deleted layers' bitmaps would otherwise be retained for the life of the session.
-    this.vectors.retain(new Set(flattenLayers(doc.layers).map((l) => l.id)));
+    const live = new Set(flattenLayers(doc.layers).map((l) => l.id));
+    this.vectors.retain(live);
+    this.paint.retain(live);
+    this.masks.retain(live);
+    this.masks.setCanvasSize(doc.width, doc.height);
 
     try {
       // The root accumulator starts as the document background; every layer blends onto it.
@@ -276,6 +296,14 @@ export class PhotoRenderer {
       if (!raster) return null;
       this.gl.uploadFrame(this.source, raster.canvas);
       placed = this.place(this.source, raster.width, raster.height, layer.transform, 'exact');
+    } else if (isRasterLayer(layer)) {
+      // A paint layer's pixels are the replay of its op list. The cache does the incremental
+      // work — during a stroke only the final op is redrawn — so this is one upload per frame,
+      // not a full replay. An empty layer rasterizes to null and is skipped entirely.
+      const painted = this.paint.get(layer.id, layer.ops, { width: layer.width, height: layer.height });
+      if (!painted) return null;
+      this.gl.uploadFrame(this.source, painted);
+      placed = this.place(this.source, layer.width, layer.height, layer.transform, 'exact');
     } else {
       if (!layer.mediaId) return null;
       const media = ctx.getMedia(layer.mediaId);
@@ -289,11 +317,41 @@ export class PhotoRenderer {
     if (!placed) return null;
 
     const chain = this.runEffects(placed.tex, layer.effects);
+    let content = placed;
     if (chain.owned) {
       this.pool.release(placed);
-      return chain.owned;
+      content = chain.owned;
     }
-    return placed;
+
+    // The mask multiplies alpha AFTER the effect chain and before opacity/blend. That order is
+    // the feature: masking a layer that carries a Blur hides the BLURRED result, which is what
+    // makes "add a Blur adjustment and paint its mask" the non-destructive blur brush.
+    return this.applyMask(content, layer);
+  }
+
+  /**
+   * Multiply a layer's alpha by its mask. Returns the input untouched when there is no mask.
+   *
+   * The mask is rasterized on the CPU at CANVAS size, not at the layer's size, because a mask
+   * is authored against the composition the user is looking at — painting over where a layer
+   * *appears* has to hide what appears there, even when the layer is scaled or rotated. So the
+   * mask is applied in canvas space, after `place`, which is where the layer already is.
+   */
+  private applyMask(content: Fbo, layer: Layer): Fbo {
+    const coverage = this.masks.get(layer);
+    if (!coverage) return content;
+
+    this.gl.uploadFrame(this.maskTex, coverage);
+    const out = this.pool.acquire(this.width, this.height);
+    this.gl.bindTarget(out, this.width, this.height);
+    this.gl.disableBlend();
+    const prog = this.gl.getProgram('__photoMask', BLEND_VERTEX, MASK_FRAGMENT);
+    this.gl.useProgram(prog);
+    this.gl.bindTexture(prog, 'u_texture', content.tex, 0);
+    this.gl.bindTexture(prog, 'u_mask', this.maskTex, 1);
+    this.gl.drawQuad();
+    this.pool.release(content);
+    return out;
   }
 
   private runEffects(input: WebGLTexture, effects: readonly EffectInstance[]) {
@@ -427,8 +485,11 @@ export class PhotoRenderer {
 
   dispose(): void {
     this.vectors.clear();
+    this.paint.clear();
+    this.masks.clear();
     this.pool.dispose();
     this.gl.deleteTexture(this.source);
+    this.gl.deleteTexture(this.maskTex);
     this.gl.dispose();
   }
 }

@@ -260,3 +260,25 @@ void main() {
   // meaningless — returning NaN here would poison every later pass that samples this texel.
   fragColor = ao > 0.0 ? vec4(clamp(co / ao, 0.0, 1.0), ao) : vec4(0.0);
 }`;
+
+/**
+ * Multiply a layer's alpha by a coverage mask.
+ *
+ * One line of arithmetic and its own pass, rather than folding `u_mask` into the place shader.
+ * The mask has to land AFTER the effect chain — masking a blurred layer must hide the blurred
+ * result, not the sharp source — and `place` runs before the chain. Two passes is the honest
+ * cost of getting that order right.
+ *
+ * Colour is passed through untouched. These textures are unpremultiplied (see GLContext), so
+ * scaling alpha alone is the whole operation; premultiplied colour would have to be scaled too.
+ */
+export const MASK_FRAGMENT = /* glsl */ `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 fragColor;
+uniform sampler2D u_texture;
+uniform sampler2D u_mask;
+void main() {
+  vec4 c = texture(u_texture, v_uv);
+  fragColor = vec4(c.rgb, c.a * texture(u_mask, v_uv).a);
+}`;

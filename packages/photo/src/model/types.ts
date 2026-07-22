@@ -30,6 +30,8 @@ import type { BlendMode } from './blend.js';
 import type { FitMode } from './geometry.js';
 import type { LayerId, PhotoDocumentId } from './ids.js';
 import type { Fill, Glow, Shadow, Stroke } from './paint.js';
+import type { PaintOp } from './paintOps.js';
+import type { Selection, SelectionRegion } from './selection.js';
 import type { ShapeKind, ShapeParams } from './shapes.js';
 import type { TextStyle } from './text.js';
 
@@ -80,7 +82,43 @@ export const IDENTITY_TRANSFORM: Readonly<Transform2D> = Object.freeze({
 // Layers
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type LayerKind = 'image' | 'group' | 'adjustment' | 'text' | 'shape';
+export type LayerKind = 'image' | 'group' | 'adjustment' | 'text' | 'shape' | 'raster';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Masks
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A layer mask: per-pixel coverage, painted and/or taken from a selection.
+ *
+ * This is the field the previous model note deferred — "needs a raster surface the user can
+ * paint into" — and what unblocked it is the op-list surface in `paintOps.ts` rather than a
+ * pixel buffer. A mask is therefore still pure JSON: a starting coverage, an optional set of
+ * selection regions it was made from, and the brush work laid on top.
+ *
+ * The mask multiplies the layer's alpha AFTER its effects and BEFORE its opacity and blend, so
+ * masking a layer that carries a Blur hides the blurred result rather than the sharp source —
+ * which is what makes "add a Blur adjustment and paint its mask" the non-destructive
+ * replacement for a blur brush.
+ */
+export interface LayerMask {
+  /** Off keeps the mask in the document but stops it affecting the render. */
+  enabled: boolean;
+  /** Swap black and white without repainting. Photoshop's Ctrl+I on a mask. */
+  inverted: boolean;
+  /**
+   * Coverage before any regions or paint: `reveal` starts fully visible (paint to hide),
+   * `hide` starts fully hidden (paint to reveal).
+   */
+  base: 'reveal' | 'hide';
+  /**
+   * Regions the mask was seeded from — how "make a mask from the selection" is expressed.
+   * Geometric, so the mask stays re-derivable with no pixels stored.
+   */
+  regions: SelectionRegion[];
+  /** Brush work on top of the base and regions, replayed in order. */
+  ops: PaintOp[];
+}
 
 /** Photoshop's layer colour labels, for organising a deep stack. Purely cosmetic. */
 export type ColorLabel = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'violet' | 'gray';
@@ -116,6 +154,12 @@ interface LayerBase {
    * Applied bottom-up to the layer's own pixels, BEFORE opacity and blending.
    */
   effects: EffectInstance[];
+  /**
+   * Per-pixel coverage. Absent means fully opaque, which is why it is optional rather than a
+   * default-full mask on every layer — an all-white mask on 200 layers is 200 rasterizations
+   * that provably change nothing.
+   */
+  mask?: LayerMask;
 }
 
 /** A still. The only layer kind that owns pixels. */
@@ -200,7 +244,22 @@ export interface ShapeLayer extends LayerBase {
   glow: Glow | null;
 }
 
-export type Layer = ImageLayer | GroupLayer | AdjustmentLayer | TextLayer | ShapeLayer;
+/**
+ * A painted surface.
+ *
+ * Its pixels are the replay of `ops` — see the header of `paintOps.ts` for why the document
+ * holds operations rather than a buffer. The layer is canvas-sized at creation and keeps that
+ * size in `width`/`height`, so a stroke's coordinates mean the same thing after the canvas is
+ * resized around it.
+ */
+export interface RasterLayer extends LayerBase {
+  kind: 'raster';
+  width: number;
+  height: number;
+  ops: PaintOp[];
+}
+
+export type Layer = ImageLayer | GroupLayer | AdjustmentLayer | TextLayer | ShapeLayer | RasterLayer;
 
 /** Type guards. Prefer these to `kind ===` at call sites so narrowing stays in one place. */
 export const isImageLayer = (l: Layer): l is ImageLayer => l.kind === 'image';
@@ -208,9 +267,18 @@ export const isGroupLayer = (l: Layer): l is GroupLayer => l.kind === 'group';
 export const isAdjustmentLayer = (l: Layer): l is AdjustmentLayer => l.kind === 'adjustment';
 export const isTextLayer = (l: Layer): l is TextLayer => l.kind === 'text';
 export const isShapeLayer = (l: Layer): l is ShapeLayer => l.kind === 'shape';
+export const isRasterLayer = (l: Layer): l is RasterLayer => l.kind === 'raster';
 /** Layers whose pixels are drawn rather than sampled — the ones the vector rasterizer owns. */
 export const isVectorLayer = (l: Layer): l is TextLayer | ShapeLayer =>
   l.kind === 'text' || l.kind === 'shape';
+/**
+ * Can the brush paint directly into this layer?
+ *
+ * Only a raster layer owns a paintable surface. Painting with an image, text or shape layer
+ * selected creates a raster layer above it instead of altering it — which is the
+ * non-destructive answer, and also the only one the model can honor.
+ */
+export const isPaintable = (l: Layer): l is RasterLayer => l.kind === 'raster';
 
 /**
  * How a layer's source maps onto the canvas.
@@ -220,7 +288,8 @@ export const isVectorLayer = (l: Layer): l is TextLayer | ShapeLayer =>
  * it actually occupies. Groups are already canvas-sized when they flatten, so either mode is
  * identity for them — `contain` is chosen for consistency with the layer they wrap.
  */
-export const fitModeOf = (l: Layer): FitMode => (isVectorLayer(l) ? 'exact' : 'contain');
+export const fitModeOf = (l: Layer): FitMode =>
+  isVectorLayer(l) || isRasterLayer(l) ? 'exact' : 'contain';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Document
@@ -242,6 +311,16 @@ export interface PhotoDocument {
   layers: Layer[];
   /** Imported stills. Metadata only — the bytes stay on disk, resolved via the bridge. */
   media: MediaAsset[];
+  /**
+   * The active selection, or null.
+   *
+   * Document state rather than session state — deliberately, and against the split described in
+   * the store's header. A selection is not a viewport: edits are *clipped* to it, so undoing an
+   * edit has to restore the selection that edit was made under, or replaying history produces
+   * pixels that were never on screen. It costs an undo step per marquee drag, which is what
+   * every editor does.
+   */
+  selection: Selection | null;
 }
 
 /**
@@ -251,8 +330,9 @@ export interface PhotoDocument {
  *   1 — flat layer list; visible/locked/opacity/effects only.
  *   2 — layer tree (groups), transform, blend modes, clipping, adjustment layers.
  *   3 — vector layers: text and shapes, with fills/strokes/shadows/glows.
+ *   4 — paint: raster layers (op lists), layer masks, document selection.
  */
-export const PHOTO_SCHEMA_VERSION = 3;
+export const PHOTO_SCHEMA_VERSION = 4;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Deliberately not modelled yet — the next slices attach here
@@ -261,8 +341,6 @@ export const PHOTO_SCHEMA_VERSION = 3;
 // Each of these is absent for the same reason: the renderer cannot honor it today, and this
 // model does not promise what the product cannot do.
 //
-//   • Layer masks — need a raster surface the user can paint into, which is the paint engine
-//     slice. A mask sourced only from an imported file would be a half-feature.
 //   • fillOpacity — differs from `opacity` ONLY in how layer styles and eight special blend
 //     modes respond to it. With no layer styles, it would be an exact duplicate of `opacity`
 //     wearing a second name. It lands with Effects (drop shadow, stroke, …).
@@ -271,8 +349,11 @@ export const PHOTO_SCHEMA_VERSION = 3;
 //     for groups, so this is a small step once nested documents serialize.
 //   • Per-character text runs — need a run model AND an in-canvas caret/selection to edit
 //     them. `TextStyle` is deliberately flat until both exist; see the header of `text.ts`.
-//   • Selections — a document-level region that constrains where edits land. Needs a raster
-//     mask surface (the same one masks need) plus a marching-ants overlay.
+//   • A sampleable raster surface — the prerequisite for "rasterize this layer and keep
+//     painting", for pasting pixels into a paint layer, and for the smudge/blur brushes that
+//     `paintOps.ts` explains at its foot. The op-list surface covers everything that DEPOSITS
+//     paint; what it cannot do is read back what is underneath.
 //
-// Landed since this list was written: text and shape layers (schema 3), via the vector
-// rasterizer in `engine/src/photo/vectorRaster.ts`.
+// Landed since this list was written: text and shape layers (schema 3); raster layers, layer
+// masks and selections (schema 4), via the op-list surface in `paintOps.ts` and the rasterizers
+// in `engine/src/photo/`.

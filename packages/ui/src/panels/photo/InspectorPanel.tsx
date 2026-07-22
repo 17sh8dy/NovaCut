@@ -14,6 +14,8 @@
 import { useMemo, useState } from 'react';
 import {
   AlignCenter,
+  Brush,
+  Eraser,
   AlignHorizontalJustifyCenter,
   AlignLeft,
   AlignRight,
@@ -55,6 +57,7 @@ import {
   TEXT_PRESETS,
   addLayerEffect,
   alignLayers,
+  clearPaint,
   applyTextPreset,
   deleteLayerEffect,
   flipLayer,
@@ -94,6 +97,7 @@ import {
   Toggle,
 } from './controls.js';
 import { naturalSizeOf } from './layerGeometry.js';
+import { BrushSection, MaskSection, SelectionSection } from './PaintSections.js';
 
 export function InspectorPanel() {
   const layer = usePhoto((s) => s.selectedLayer());
@@ -102,21 +106,51 @@ export function InspectorPanel() {
   if (!layer) {
     return (
       <div className="oc-inspector">
-        <EmptyState icon={<Wand2 size={22} />} title="Nothing selected" hint="Pick a layer to edit it." />
+        {/* The brush and the selection belong to the DOCUMENT, not to a layer, so they stay
+            reachable even with nothing selected — which is exactly when a user is most likely
+            to be building a selection. */}
+        <BrushSection />
+        <SelectionSection />
+        <EmptyState icon={<Wand2 size={22} />} title="No layer selected" hint="Pick a layer to edit it." />
       </div>
     );
   }
 
   return (
     <div className="oc-inspector">
+      <BrushSection />
       {selectionCount > 1 && <AlignSection />}
       {isTextLayer(layer) && <TextSections layer={layer} />}
       {isShapeLayer(layer) && <ShapeSections layer={layer} />}
       {isAdjustmentLayer(layer) && <AdjustmentSection layer={layer} />}
+      {layer.kind === 'raster' && <PaintLayerSection layer={layer} />}
+      <SelectionSection />
+      <MaskSection layer={layer} />
       <TransformSection layer={layer} />
       <BlendSection layer={layer} />
       {!isAdjustmentLayer(layer) && <FilterRack layer={layer} />}
     </div>
+  );
+}
+
+/**
+ * A paint layer's own section: what is on it, and how to take it back off.
+ *
+ * The op count is not decoration — a paint layer's cost is its op list, and "clear" being one
+ * step rather than N undos is the difference between experimenting and committing.
+ */
+function PaintLayerSection({ layer }: { layer: Extract<Layer, { kind: 'raster' }> }) {
+  const store = usePhotoStore();
+  return (
+    <Section title="Paint" icon={<Brush size={14} />}>
+      <p className="oc-hint">
+        {layer.ops.length} step{layer.ops.length === 1 ? '' : 's'} · {layer.width} × {layer.height}
+      </p>
+      <Button disabled={layer.ops.length === 0} onClick={() => store.getState().dispatch(clearPaint(layer.id, 'layer'))}>
+        <Eraser size={15} /> Clear Layer
+      </Button>
+      <p className="oc-hint">Every stroke stays a separate, undoable step.</p>
+    </Section>
   );
 }
 

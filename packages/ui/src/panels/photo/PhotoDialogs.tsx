@@ -138,7 +138,7 @@ export function CanvasSizeDialog() {
             variant="primary"
             onClick={() => {
               store.getState().dispatch(applyCanvasSize(size.width, size.height, scaleContent));
-              store.getState().setViewport({ autoFit: true });
+              store.getState().fitToWindow();
               store.getState().setDialog(null);
             }}
           >

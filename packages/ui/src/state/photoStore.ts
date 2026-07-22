@@ -30,6 +30,7 @@ import {
   type PlatformBridge,
 } from '@opencut/core';
 import {
+  DEFAULT_BRUSH,
   createPhotoDocument,
   deserializePhotoDocument,
   findLayer,
@@ -37,6 +38,8 @@ import {
   importImage,
   newLayerId,
   serializePhotoDocument,
+  type BrushSettings,
+  type Fill,
   type Layer,
   type LayerId,
   type PhotoDocument,
@@ -54,11 +57,47 @@ export interface PhotoHost {
 /**
  * The active tool.
  *
- * Only tools with a real implementation are listed. A rail full of greyed-out icons for
- * features that do not exist is a worse promise than a short rail — and the selection and
- * brush families both need a raster surface the engine does not have yet, so they are not here.
+ * Only tools with a real implementation are listed — a rail padded out with greyed-out icons
+ * for features that do not exist is a worse promise than a short rail. The paint and selection
+ * families landed with the op-list surface in `@opencut/photo`'s `paintOps.ts`; smudge, blur
+ * and sharpen brushes are still absent, and the note at the foot of that file explains both
+ * why and what replaces them.
  */
-export type PhotoTool = 'move' | 'text' | 'shape' | 'crop' | 'hand';
+export type PhotoTool =
+  | 'move'
+  | 'text'
+  | 'shape'
+  | 'crop'
+  | 'hand'
+  // Paint
+  | 'brush'
+  | 'eraser'
+  | 'bucket'
+  | 'gradient'
+  // Selection
+  | 'select-rect'
+  | 'select-ellipse'
+  | 'lasso'
+  | 'polygon'
+  | 'wand';
+
+/** Tools that deposit paint, and therefore need a paintable surface before they can run. */
+export const PAINT_TOOLS: readonly PhotoTool[] = ['brush', 'eraser', 'bucket', 'gradient'];
+/** Tools that build a selection rather than editing pixels. */
+export const SELECT_TOOLS: readonly PhotoTool[] = [
+  'select-rect', 'select-ellipse', 'lasso', 'polygon', 'wand',
+];
+
+export const isPaintTool = (t: PhotoTool): boolean => PAINT_TOOLS.includes(t);
+export const isSelectTool = (t: PhotoTool): boolean => SELECT_TOOLS.includes(t);
+
+/** How a magic wand or paint bucket decides what matches. */
+export interface SampleSettings {
+  /** 0..1 — how far a pixel may differ from the seed and still match. */
+  tolerance: number;
+  /** False matches every similar pixel anywhere, not just the connected blob. */
+  contiguous: boolean;
+}
 
 export type PhotoDialog = null | 'export' | 'newCanvas' | 'canvasSize';
 
@@ -73,6 +112,15 @@ export interface Viewport {
   panY: number;
   /** False once the user zooms or pans by hand, so a redraw stops re-fitting under them. */
   autoFit: boolean;
+  /**
+   * Bumped to request a re-fit RIGHT NOW.
+   *
+   * `autoFit` alone cannot express this: it is already true most of the time, so "Fit to
+   * window" would set it true again, the value would not change, and the effect watching it
+   * would never re-run — a button that silently does nothing whenever it is most likely to be
+   * pressed. A monotonic counter is an event rather than a state, which is what this is.
+   */
+  fitNonce: number;
 }
 
 interface PhotoState {
@@ -110,6 +158,23 @@ interface PhotoState {
   /** The layer whose text is being edited in place, if any. */
   editingTextId: LayerId | null;
 
+  // ── Paint ──
+  brush: BrushSettings;
+  /** The colour the brush, bucket and gradient use. Swappable with `background`. */
+  foreground: string;
+  background: string;
+  gradientFill: Fill;
+  gradientShape: 'linear' | 'radial';
+  sample: SampleSettings;
+  /**
+   * Paint into the selected layer's MASK rather than its pixels.
+   *
+   * A mode rather than a separate set of tools, because every paint tool works on both and the
+   * user's intent ("hide this part") is the same gesture either way. It is also what makes
+   * "add a Blur adjustment, then brush it in" a two-click workflow.
+   */
+  maskMode: boolean;
+
   // ── Derived ──
   selectedLayerId: LayerId | null;
   selectedLayer: () => Layer | undefined;
@@ -133,10 +198,19 @@ interface PhotoState {
   setTool: (tool: PhotoTool) => void;
   setShapeKind: (kind: ShapeKind) => void;
   setViewport: (patch: Partial<Viewport>) => void;
+  /** Fit the document to the viewport now, whatever the current auto-fit state. */
+  fitToWindow: () => void;
   setDock: (dock: PhotoDock) => void;
   setDialog: (dialog: PhotoDialog) => void;
   setEditingText: (id: LayerId | null) => void;
-  toggleFlag: (key: 'showRulers' | 'showGuides' | 'snapping') => void;
+  toggleFlag: (key: 'showRulers' | 'showGuides' | 'snapping' | 'maskMode') => void;
+
+  setBrush: (patch: Partial<BrushSettings>) => void;
+  setForeground: (color: string) => void;
+  setBackground: (color: string) => void;
+  swapColors: () => void;
+  setGradient: (patch: { fill?: Fill; shape?: 'linear' | 'radial' }) => void;
+  setSample: (patch: Partial<SampleSettings>) => void;
 
   copySelection: () => void;
   pasteClipboard: () => void;
@@ -166,7 +240,7 @@ export function createPhotoStore({ bridge, notify }: PhotoHost) {
     tool: 'move',
     shapeKind: 'rounded-rectangle',
     selection: [],
-    viewport: { zoom: 1, panX: 0, panY: 0, autoFit: true },
+    viewport: { zoom: 1, panX: 0, panY: 0, autoFit: true, fitNonce: 0 },
     showRulers: true,
     showGuides: true,
     snapping: true,
@@ -174,6 +248,17 @@ export function createPhotoStore({ bridge, notify }: PhotoHost) {
     dialog: null,
     clipboard: [],
     editingTextId: null,
+
+    brush: { ...DEFAULT_BRUSH },
+    foreground: '#ffffff',
+    background: '#000000',
+    gradientFill: { kind: 'linear', angle: 0, stops: [
+      { offset: 0, color: '#ffffff' },
+      { offset: 1, color: '#ffffff00' },
+    ] } as Fill,
+    gradientShape: 'linear',
+    sample: { tolerance: 0.18, contiguous: true },
+    maskMode: false,
 
     selectedLayerId: null,
 
@@ -252,7 +337,7 @@ export function createPhotoStore({ bridge, notify }: PhotoHost) {
         selection: [],
         selectedLayerId: null,
         editingTextId: null,
-        viewport: { zoom: 1, panX: 0, panY: 0, autoFit: true },
+        viewport: { zoom: 1, panX: 0, panY: 0, autoFit: true, fitNonce: get().viewport.fitNonce + 1 },
       });
     },
 
@@ -264,17 +349,41 @@ export function createPhotoStore({ bridge, notify }: PhotoHost) {
         selection: [],
         selectedLayerId: null,
         editingTextId: null,
-        viewport: { zoom: 1, panX: 0, panY: 0, autoFit: true },
+        viewport: { zoom: 1, panX: 0, panY: 0, autoFit: true, fitNonce: get().viewport.fitNonce + 1 },
       });
     },
 
-    setTool: (tool) => set({ tool, ...(tool === 'text' ? {} : { editingTextId: null }) }),
+    setTool: (tool) => set({
+      tool,
+      ...(tool === 'text' ? {} : { editingTextId: null }),
+      // Leaving the paint tools leaves mask-painting mode too. Staying in it while dragging a
+      // layer around would silently send the next brush stroke to a mask the user has stopped
+      // thinking about.
+      ...(isPaintTool(tool) ? {} : { maskMode: false }),
+    }),
     setShapeKind: (shapeKind) => set({ shapeKind }),
     setViewport: (patch) => set({ viewport: { ...get().viewport, ...patch } }),
+    fitToWindow: () =>
+      set({ viewport: { ...get().viewport, autoFit: true, fitNonce: get().viewport.fitNonce + 1 } }),
     setDock: (dock) => set({ dock }),
     setDialog: (dialog) => set({ dialog }),
     setEditingText: (editingTextId) => set({ editingTextId }),
     toggleFlag: (key) => set({ [key]: !get()[key] } as Partial<PhotoState>),
+
+    // The brush's own colour tracks the foreground, so changing one never leaves the other
+    // stale — a brush that paints a colour the swatch is not showing is a bug report.
+    setBrush: (patch) => set({ brush: { ...get().brush, ...patch } }),
+    setForeground: (foreground) => set({ foreground, brush: { ...get().brush, color: foreground } }),
+    setBackground: (background) => set({ background }),
+    swapColors: () => {
+      const { foreground, background } = get();
+      set({ foreground: background, background: foreground, brush: { ...get().brush, color: background } });
+    },
+    setGradient: (patch) => set({
+      ...(patch.fill ? { gradientFill: patch.fill } : {}),
+      ...(patch.shape ? { gradientShape: patch.shape } : {}),
+    }),
+    setSample: (patch) => set({ sample: { ...get().sample, ...patch } }),
 
     copySelection: () => {
       const layers = get().selectedLayers();

@@ -18,6 +18,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import {
+  Brush,
   ChevronDown,
   ChevronRight,
   CornerDownRight,
@@ -28,6 +29,7 @@ import {
   FolderOpen,
   FolderPlus,
   Image as ImageIcon,
+  Layers,
   Lock,
   Plus,
   SlidersHorizontal,
@@ -271,6 +273,18 @@ function LayerRow({ layer, doc, selection, depth, dragId, dropTarget, setDropTar
 
       {layer.clipped && <CornerDownRight size={12} className="oc-layer__clipmark" />}
 
+      {/* A mask is a second thumbnail in Photoshop; here it is a badge, because at 22px a mask
+          preview would be an indistinct grey square. The badge still says enabled vs. not. */}
+      {layer.mask && (
+        <span
+          className="oc-layer__mask"
+          data-off={!layer.mask.enabled}
+          title={`Layer mask · ${layer.mask.enabled ? 'on' : 'off'} · ${layer.mask.ops.length} brush steps`}
+        >
+          <Layers size={11} />
+        </span>
+      )}
+
       {renaming ? (
         <input
           className="oc-layer__rename"
@@ -398,6 +412,16 @@ function Thumbnail({ layer, doc }: { layer: Layer; doc: PhotoDocument }) {
             strokeWidth={layer.stroke ? Math.max(b.w, b.h) * 0.05 : 0}
           />
         </svg>
+      </span>
+    );
+  }
+  if (layer.kind === 'raster') {
+    // A paint layer's thumbnail is its op count, not a miniature of its pixels: replaying the
+    // ops at thumbnail size on every render would cost more than the canvas itself, and the
+    // result at 22px would be an indistinct smudge either way.
+    return (
+      <span className="oc-layer__thumb oc-layer__thumb--icon" title={`${layer.ops.length} paint steps`}>
+        <Brush size={13} />
       </span>
     );
   }

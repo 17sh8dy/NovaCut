@@ -11,6 +11,9 @@
 export * from './model/ids.js';
 export * from './model/blend.js';
 export * from './model/paint.js';
+export * from './model/brush.js';
+export * from './model/paintOps.js';
+export * from './model/selection.js';
 export * from './model/shapes.js';
 export * from './model/text.js';
 export * from './model/geometry.js';
@@ -23,6 +26,8 @@ export * from './model/presets.js';
 export * from './commands/mutations.js';
 export * from './commands/photoCommands.js';
 export * from './commands/vectorCommands.js';
+export * from './commands/paintCommands.js';
+export * from './commands/selectionCommands.js';
 
 // IO
 export * from './io/serializer.js';
