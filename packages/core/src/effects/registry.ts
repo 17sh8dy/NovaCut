@@ -22,10 +22,50 @@ export interface EffectParamDef {
   step: number;
   /** Display unit, e.g. '%', 'px', '°'. */
   unit?: string;
+  /**
+   * How the UI should edit this param. Omitted means a slider.
+   *
+   * `color` is still a *number* everywhere else in the pipeline — see `packColor` — so the
+   * engine's generic `uniform1f` binder, the keyframe sampler and both serializers are
+   * untouched. Only the inspector reads this, and only to swap a slider for a swatch.
+   */
+  kind?: 'number' | 'color';
 }
 
+/**
+ * Pack `#rrggbb` into one float, so a colour can travel the numeric param path.
+ *
+ * The alternative — widening `EffectInstance.params` to a union of numbers and strings — would
+ * ripple through the animated-value sampler, both compositors and both serializers, in order
+ * to give a handful of effects a colour picker. A 24-bit integer is exactly representable in a
+ * float32 mantissa, so this round-trips losslessly through the uniform, through `constant()`
+ * and through JSON. The shader unpacks it with two divisions (`unpackColor` in shaders.ts).
+ */
+export function packColor(hex: string): number {
+  const m = /^#?([0-9a-f]{6})/i.exec(hex.trim());
+  if (!m) return 0xffffff;
+  return parseInt(m[1]!, 16);
+}
+
+/** The inverse, for the inspector's swatch. */
+export function unpackColor(value: number): string {
+  const n = Math.max(0, Math.min(0xffffff, Math.round(value)));
+  return `#${n.toString(16).padStart(6, '0')}`;
+}
+
+/** The full 24-bit range — the only sane bounds for a colour param. */
+export const COLOR_PARAM_MAX = 0xffffff;
+
+/**
+ * `light` and `style` were added for the photo editor and are useful to both products.
+ *
+ * `light` is tonal work (exposure, highlights, shadows) as distinct from `color` (hue,
+ * saturation, temperature) — the same split every photo tool makes, and the one that keeps an
+ * adjustment picker of thirty entries navigable. `style` is the layer-style family (shadow,
+ * outline, overlays): effects that decorate a layer's silhouette rather than recolour it.
+ */
 export type EffectCategory =
-  | 'blur' | 'stylize' | 'color' | 'distort' | 'glitch' | 'time';
+  | 'blur' | 'stylize' | 'color' | 'light' | 'style' | 'distort' | 'glitch' | 'time';
 
 export interface EffectDefinition {
   type: string;

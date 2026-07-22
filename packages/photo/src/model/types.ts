@@ -27,7 +27,11 @@
 
 import type { EffectInstance, MediaAsset, MediaId } from '@opencut/core';
 import type { BlendMode } from './blend.js';
+import type { FitMode } from './geometry.js';
 import type { LayerId, PhotoDocumentId } from './ids.js';
+import type { Fill, Glow, Shadow, Stroke } from './paint.js';
+import type { ShapeKind, ShapeParams } from './shapes.js';
+import type { TextStyle } from './text.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Transform
@@ -76,7 +80,7 @@ export const IDENTITY_TRANSFORM: Readonly<Transform2D> = Object.freeze({
 // Layers
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type LayerKind = 'image' | 'group' | 'adjustment';
+export type LayerKind = 'image' | 'group' | 'adjustment' | 'text' | 'shape';
 
 /** Photoshop's layer colour labels, for organising a deep stack. Purely cosmetic. */
 export type ColorLabel = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'violet' | 'gray';
@@ -152,12 +156,71 @@ export interface AdjustmentLayer extends LayerBase {
   adjustment: EffectInstance;
 }
 
-export type Layer = ImageLayer | GroupLayer | AdjustmentLayer;
+/**
+ * Live type. Its glyphs are rasterized into the render graph every draw, so the content and
+ * every style field stay editable forever — the whole point of not "committing" text.
+ *
+ * The style is FLAT (one look for the whole layer). Per-character runs are a real feature and
+ * a much larger one — see the header of `text.ts` for why declaring them early would be the
+ * exact fiction this model guards against.
+ */
+export interface TextLayer extends LayerBase {
+  kind: 'text';
+  content: string;
+  style: TextStyle;
+  /**
+   * Wrap width in canvas pixels, or null to size to the longest line.
+   *
+   * Null is the default because a headline is written, not laid out: the box should follow the
+   * words. Dragging a side handle sets a width and switches the layer to wrapping, which is
+   * the same gesture every design tool uses to mean exactly that.
+   */
+  boxWidth: number | null;
+}
+
+/**
+ * A vector shape. Its geometry is a pure function of `shape` + `size` + `params` (see
+ * `shapes.ts`), so it re-rasterizes crisply at any scale rather than resampling like a bitmap.
+ *
+ * Size lives here in pixels, separate from `transform.scale`, and the distinction is load
+ * bearing: `width`/`height` change the *geometry* (a wider rounded rect keeps its corner
+ * radius), while scale changes the *rendering* (a scaled rounded rect stretches its corners).
+ * Collapsing them would make corner radius, stroke width and star points all silently
+ * scale-dependent.
+ */
+export interface ShapeLayer extends LayerBase {
+  kind: 'shape';
+  shape: ShapeKind;
+  width: number;
+  height: number;
+  params: ShapeParams;
+  fill: Fill;
+  stroke: Stroke | null;
+  shadow: Shadow | null;
+  glow: Glow | null;
+}
+
+export type Layer = ImageLayer | GroupLayer | AdjustmentLayer | TextLayer | ShapeLayer;
 
 /** Type guards. Prefer these to `kind ===` at call sites so narrowing stays in one place. */
 export const isImageLayer = (l: Layer): l is ImageLayer => l.kind === 'image';
 export const isGroupLayer = (l: Layer): l is GroupLayer => l.kind === 'group';
 export const isAdjustmentLayer = (l: Layer): l is AdjustmentLayer => l.kind === 'adjustment';
+export const isTextLayer = (l: Layer): l is TextLayer => l.kind === 'text';
+export const isShapeLayer = (l: Layer): l is ShapeLayer => l.kind === 'shape';
+/** Layers whose pixels are drawn rather than sampled — the ones the vector rasterizer owns. */
+export const isVectorLayer = (l: Layer): l is TextLayer | ShapeLayer =>
+  l.kind === 'text' || l.kind === 'shape';
+
+/**
+ * How a layer's source maps onto the canvas.
+ *
+ * Bitmaps aspect-fit (an imported photo fills the frame it was imported into); everything
+ * drawn is placed pixel-exact, because a shape's `width` in the inspector has to be the width
+ * it actually occupies. Groups are already canvas-sized when they flatten, so either mode is
+ * identity for them — `contain` is chosen for consistency with the layer they wrap.
+ */
+export const fitModeOf = (l: Layer): FitMode => (isVectorLayer(l) ? 'exact' : 'contain');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Document
@@ -187,8 +250,9 @@ export interface PhotoDocument {
  *
  *   1 — flat layer list; visible/locked/opacity/effects only.
  *   2 — layer tree (groups), transform, blend modes, clipping, adjustment layers.
+ *   3 — vector layers: text and shapes, with fills/strokes/shadows/glows.
  */
-export const PHOTO_SCHEMA_VERSION = 2;
+export const PHOTO_SCHEMA_VERSION = 3;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Deliberately not modelled yet — the next slices attach here
@@ -205,4 +269,10 @@ export const PHOTO_SCHEMA_VERSION = 2;
 //   • Smart Objects — a layer whose source is another PhotoDocument. Needs the render graph to
 //     recurse into a nested document + an invalidation path; the graph is already recursive
 //     for groups, so this is a small step once nested documents serialize.
-//   • Text / shape / vector layers — need their own rasterization pass into the graph.
+//   • Per-character text runs — need a run model AND an in-canvas caret/selection to edit
+//     them. `TextStyle` is deliberately flat until both exist; see the header of `text.ts`.
+//   • Selections — a document-level region that constrains where edits land. Needs a raster
+//     mask surface (the same one masks need) plus a marching-ants overlay.
+//
+// Landed since this list was written: text and shape layers (schema 3), via the vector
+// rasterizer in `engine/src/photo/vectorRaster.ts`.

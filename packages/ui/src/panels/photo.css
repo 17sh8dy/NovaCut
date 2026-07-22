@@ -1,55 +1,380 @@
-/* Photo workspace — layers, canvas, filter rack.
-   Uses the shared tokens so it themes with everything else. */
+/*
+ * Photo workspace styles.
+ *
+ * Rewritten against the real token set in `theme/tokens.css`. The previous version referenced
+ * `--radius-2`, `--muted` and `--text`, none of which exist — so every rule using them fell
+ * back to the browser default: square corners, invisible labels, no surface colour. That is the
+ * kind of bug a design system exists to make impossible, and the fix is to name only tokens
+ * that are actually defined.
+ *
+ * Everything below themes automatically because it names tokens, never hex.
+ */
+
+/* ── Title bar ────────────────────────────────────────────────────────────── */
 
 .oc-photobar {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-3);
 }
 
-.oc-photobar__name {
+.oc-photobar__name,
+.oc-photobar__nameinput {
+  font-size: var(--text-md);
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
   margin-left: var(--space-2);
+  cursor: text;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-photobar__name:hover {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
+.oc-photobar__nameinput {
+  border-color: var(--accent);
+  background: var(--surface-2);
+  outline: none;
 }
 
 .oc-photobar__spacer {
   flex: 1;
 }
 
-/* ── Canvas ───────────────────────────────────────────────────────────────── */
+/* ── Workspace shell ──────────────────────────────────────────────────────── */
 
-.oc-photo-canvas {
+.oc-workspace--photo {
+  display: flex;
+  gap: var(--space-2);
+  min-height: 0;
+}
+
+.oc-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-1);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  flex: 0 0 auto;
+}
+
+/* ── Options bar ──────────────────────────────────────────────────────────── */
+
+.oc-options {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border-subtle);
+  min-height: 36px;
+}
+
+.oc-options__tool {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.oc-options__view {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.oc-options__label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.oc-options__hint {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-options__sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 var(--space-1);
+}
+
+.oc-zoomlabel {
+  min-width: 56px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.oc-zoomlabel:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+
+/* ── Stage ────────────────────────────────────────────────────────────────── */
+
+.oc-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-0);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  touch-action: none; /* pointer drags must not turn into page scrolls */
+  user-select: none;
+}
+
+.oc-stage--dropping {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+}
+
+/* The document, centred and transformed. `translate(-50%, -50%)` puts its centre at the
+   viewport centre so pan is measured from there — the assumption the wheel handler's
+   zoom-at-cursor correction is built on. */
+.oc-stage__doc {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+/* Checkerboard so transparency is legible instead of looking like a black background. Sized in
+   document pixels, so it scales with the artwork and stays a stable reference. */
+.oc-stage__checker {
+  position: absolute;
+  inset: 0;
+  background-color: #2a2d34;
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.06) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.06) 75%);
+  background-size: 24px 24px;
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  box-shadow: var(--shadow-lg);
+}
+
+.oc-stage__canvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  min-height: 0;
-  padding: var(--space-3);
-  /* Checkerboard so transparency and letterboxing are legible behind the image. */
-  background-image:
-    linear-gradient(45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.04) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.04) 75%);
-  background-size: 20px 20px;
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  display: block;
 }
 
-.oc-photo-canvas--empty {
+.oc-stage__overlay {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.oc-selbox {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.oc-handle {
+  fill: var(--surface-1);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.oc-guide {
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.oc-guide--canvas {
+  stroke: var(--info);
+}
+
+.oc-guide--layer {
+  stroke: var(--label-pink);
+}
+
+.oc-marquee {
+  fill: rgba(109, 94, 252, 0.12);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+
+.oc-marquee--crop {
+  fill: rgba(0, 0, 0, 0.28);
+  stroke: var(--warning);
+}
+
+.oc-stage__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: var(--space-3);
+  pointer-events: none;
 }
 
-/* The backing store stays at the document's pixel size; only the display box shrinks. */
-.oc-photo-canvas__el {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: var(--radius-2);
-  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.45);
+.oc-stage__empty > * {
+  pointer-events: auto;
+}
+
+/* ── Inline text editor ───────────────────────────────────────────────────── */
+
+/* Transparent text over the GPU's own glyphs: the user sees their real stroke, shadow and
+   gradient while a native caret and selection ride on top. */
+.oc-textedit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--accent);
+  outline: 1px dashed var(--accent);
+  white-space: pre;
+}
+
+.oc-textedit::selection {
+  background: var(--accent-soft);
+  color: transparent;
+}
+
+/* ── Rulers ───────────────────────────────────────────────────────────────── */
+
+.oc-ruler {
+  position: absolute;
+  background: var(--surface-1);
+  color: var(--text-tertiary);
+  font-size: 9px;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.oc-ruler--h {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 18px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Above the horizontal ruler, so the two meet in a clean corner instead of the horizontal
+   one's ticks running underneath the vertical strip. */
+.oc-ruler--v {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 18px;
+  z-index: 3;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.oc-ruler__inner {
+  position: absolute;
+  inset: 0;
+}
+
+.oc-ruler__tick {
+  position: absolute;
+  font-variant-numeric: tabular-nums;
+}
+
+.oc-ruler--h .oc-ruler__tick {
+  top: 3px;
+  border-left: 1px solid var(--border);
+  padding-left: 3px;
+  line-height: 12px;
+}
+
+.oc-ruler--v .oc-ruler__tick {
+  left: 2px;
+  border-top: 1px solid var(--border);
+  padding-top: 1px;
+}
+
+/* ── Dock ─────────────────────────────────────────────────────────────────── */
+
+.oc-dock {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.oc-dock__tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-2);
+}
+
+.oc-dock__tabs button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  justify-content: center;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.oc-dock__tabs button:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+
+.oc-dock__tabs button[data-active='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.oc-dock__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* ── Layers ───────────────────────────────────────────────────────────────── */
@@ -58,30 +383,122 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  overflow-y: auto;
-  padding: var(--space-1);
+}
+
+.oc-layers__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.oc-layers__spacer {
+  flex: 1;
+}
+
+.oc-layers__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .oc-layer {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-2);
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.oc-layer:hover {
+  background: var(--surface-3);
 }
 
 .oc-layer--selected {
+  background: var(--accent-soft);
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
-.oc-layer__head {
-  display: flex;
+.oc-layer--hidden {
+  opacity: 0.45;
+}
+
+/* A clipped layer reads as belonging to the one below it, so it sits visually attached. */
+.oc-layer--clipped {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  margin-left: 10px;
+}
+
+.oc-layer--drop-above {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.oc-layer--drop-below {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.oc-layer--drop-inside {
+  box-shadow: 0 0 0 2px var(--accent) inset;
+}
+
+.oc-layer__twisty {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  justify-content: center;
+  width: 16px;
+  flex: 0 0 16px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.oc-layer__eye {
+  display: inline-flex;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.oc-layer__eye:hover {
+  color: var(--text-primary);
+}
+
+.oc-layer__thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-4);
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.oc-layer__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.oc-layer__thumb--text {
+  font-weight: 800;
+  line-height: 1;
+}
+
+.oc-layer__clipmark {
+  color: var(--accent);
+  flex: 0 0 auto;
 }
 
 .oc-layer__name {
@@ -91,146 +508,626 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--text-sm);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
-.oc-layer__meta {
-  font-size: var(--text-xs);
-  color: var(--muted);
+.oc-layer__rename {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xs);
+  padding: 1px 4px;
+  outline: none;
 }
 
-.oc-layers__tools {
-  display: flex;
-  gap: var(--space-1);
-}
-
-.oc-layer__icon {
-  display: inline-flex;
-  color: var(--muted);
-}
-
-/* Keeps a non-group row's name aligned with a group's, which has a twisty in front of it. */
-.oc-layer__twisty {
-  width: 20px;
-  flex: 0 0 20px;
-}
-
-/* A clipped layer reads as belonging to the one below it, so it sits visually attached: the
-   base row's rounded top edge is the boundary of the clipping unit. */
-.oc-layer--clipped {
-  border-top-color: transparent;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
-
-.oc-layer__clipmark {
-  color: var(--accent);
+.oc-layer__badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: var(--radius-full);
+  background: var(--surface-4);
+  color: var(--text-secondary);
   flex: 0 0 auto;
 }
 
-.oc-layer__controls {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding-top: var(--space-1);
+.oc-layer__badge--dim {
+  background: transparent;
+  color: var(--text-tertiary);
 }
 
-.oc-layer__check {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--text-xs);
-  color: var(--muted);
-  cursor: pointer;
-}
+/* ── Inspector ────────────────────────────────────────────────────────────── */
 
-.oc-select {
-  width: 100%;
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-1);
-  background: var(--surface-3);
-  color: var(--text);
-  font-size: var(--text-xs);
-  cursor: pointer;
-}
-
-/* ── Inspector sections ───────────────────────────────────────────────────── */
-
-.oc-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-2);
-  background: var(--surface-2);
-}
-
-.oc-section__head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-
-.oc-section__spacer {
-  flex: 1;
-}
-
-/* ── Filter rack ──────────────────────────────────────────────────────────── */
-
-.oc-rack {
+.oc-inspector {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  overflow-y: auto;
-  padding: var(--space-1);
 }
 
-.oc-rack__picker {
+.oc-sect {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.oc-sect__head {
   display: flex;
-  flex-direction: column;
-  max-height: 260px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-2);
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
   background: var(--surface-2);
 }
 
-.oc-rack__pick {
+.oc-sect__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.oc-sect__chev {
+  transition: transform var(--dur-fast) var(--ease-out);
+  color: var(--text-tertiary);
+}
+
+.oc-sect--closed .oc-sect__chev {
+  transform: rotate(-90deg);
+}
+
+.oc-sect__actions {
+  display: flex;
+  gap: 2px;
+}
+
+.oc-sect__count {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.oc-sect__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.oc-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.oc-field__label {
+  flex: 0 0 auto;
+  min-width: 26px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.oc-field__control {
+  flex: 1;
+  min-width: 0;
+}
+
+.oc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.oc-row > * {
+  min-width: 0;
+}
+
+.oc-hint {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.oc-bgroup {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+/* ── Form controls ────────────────────────────────────────────────────────── */
+
+.oc-select,
+.oc-text,
+.oc-num {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  outline: none;
+}
+
+.oc-select:focus,
+.oc-text:focus,
+.oc-num:focus {
+  border-color: var(--accent);
+}
+
+.oc-select {
+  cursor: pointer;
+}
+
+.oc-select--inline {
+  width: auto;
+  min-width: 150px;
+}
+
+.oc-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.oc-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.oc-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.oc-toggle__track {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  flex: 0 0 28px;
+  border-radius: var(--radius-full);
+  background: var(--surface-4);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.oc-toggle__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: var(--text-secondary);
+  transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.oc-toggle input:checked + .oc-toggle__track {
+  background: var(--accent);
+}
+
+.oc-toggle input:checked + .oc-toggle__track::after {
+  transform: translateX(12px);
+  background: #fff;
+}
+
+.oc-toggle__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Colour ───────────────────────────────────────────────────────────────── */
+
+.oc-color {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.oc-color__swatch {
+  width: 26px;
+  height: 24px;
+  flex: 0 0 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.oc-color__swatch::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.oc-color__swatch::-webkit-color-swatch {
+  border: 0;
+  border-radius: var(--radius-xs);
+}
+
+.oc-color__hex {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  outline: none;
+}
+
+.oc-fill {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* ── Segmented ────────────────────────────────────────────────────────────── */
+
+.oc-segmented--sm button {
+  padding: 3px 6px;
+  font-size: var(--text-xs);
+}
+
+/* ── Pickers ──────────────────────────────────────────────────────────────── */
+
+.oc-picker {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+.oc-picker__search,
+.oc-fontpicker__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+}
+
+.oc-picker__search input,
+.oc-fontpicker__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  outline: none;
+}
+
+.oc-picker__list,
+.oc-fontpicker__list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.oc-picker__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-2);
+  width: 100%;
+  padding: 6px var(--space-2);
   border: 0;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   font-size: var(--text-sm);
   text-align: left;
   cursor: pointer;
 }
 
-.oc-rack__pick:hover {
+.oc-picker__item:hover {
   background: var(--surface-3);
 }
 
-.oc-rack__cat {
+.oc-picker__cat {
   font-size: var(--text-xs);
-  color: var(--muted);
+  color: var(--text-tertiary);
 }
+
+/* ── Font picker ──────────────────────────────────────────────────────────── */
+
+.oc-fontpicker {
+  position: relative;
+}
+
+.oc-fontpicker__current {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-fontpicker__pop {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.oc-fontpicker__group {
+  padding: 6px var(--space-2) 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+.oc-fontpicker__row {
+  display: flex;
+  align-items: center;
+}
+
+.oc-fontpicker__pick {
+  flex: 1;
+  min-width: 0;
+  padding: 5px var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-fontpicker__pick:hover {
+  background: var(--surface-3);
+}
+
+.oc-fontpicker__pick[data-active='true'] {
+  background: var(--accent-soft);
+}
+
+.oc-fontpicker__star {
+  border: 0;
+  background: transparent;
+  padding: 4px 6px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.oc-fontpicker__star[data-active='true'] {
+  color: var(--warning);
+}
+
+/* ── Assets ───────────────────────────────────────────────────────────────── */
+
+.oc-assets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.oc-assets__search {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.oc-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: var(--space-1);
+}
+
+.oc-tiles--compact {
+  grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+}
+
+.oc-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-2) 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.oc-tile:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.oc-tile[data-active='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.oc-tile span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.oc-tile__glyph {
+  width: 34px;
+  height: 26px;
+}
+
+.oc-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.oc-preset {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.oc-preset:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+
+.oc-preset__sample {
+  flex: 0 0 auto;
+  min-width: 58px;
+  font-size: 15px;
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.oc-preset__label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-emoji {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  gap: 2px;
+}
+
+.oc-emoji__item {
+  padding: 4px;
+  font-size: 19px;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.oc-emoji__item:hover {
+  background: var(--surface-3);
+  border-color: var(--border);
+}
+
+/* ── History ──────────────────────────────────────────────────────────────── */
+
+.oc-history {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.oc-hrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 5px var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.oc-hrow:hover {
+  background: var(--surface-3);
+}
+
+.oc-hrow--current {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+/* Steps ahead of the cursor are still reachable — they are redo, not history — so they read as
+   dimmed rather than disabled. */
+.oc-hrow--future {
+  opacity: 0.45;
+}
+
+.oc-hrow__icon {
+  color: var(--text-tertiary);
+  flex: 0 0 auto;
+}
+
+.oc-hrow__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-hrow__num {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Effects rack ─────────────────────────────────────────────────────────── */
 
 .oc-fx {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-2);
-  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
 }
 
 .oc-fx--off {
@@ -240,12 +1137,131 @@
 .oc-fx__head {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 2px;
 }
 
 .oc-fx__name {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-primary);
+}
+
+/* ── Canvas presets ───────────────────────────────────────────────────────── */
+
+.oc-presetgrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.oc-presetgrid__group {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-1);
+}
+
+.oc-presetgrid__items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-2);
+}
+
+.oc-presetcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.oc-presetcard:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+
+.oc-presetcard[data-active='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* The ratio preview: a fixed-height box holding a shape of the preset's real aspect ratio, so
+   portrait / landscape / ultrawide is legible without reading the numbers. */
+.oc-presetcard__ratio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 44px;
+  margin-bottom: 2px;
+}
+
+.oc-presetcard__ratio > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-xs);
+  background: var(--surface-4);
+  border: 1px solid var(--border);
+}
+
+.oc-presetcard__label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.oc-presetcard__dims {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.oc-presetcard__check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: var(--accent);
+}
+
+/* ── Status bar ───────────────────────────────────────────────────────────── */
+
+.oc-statusbar--photo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.oc-statusbar--photo .oc-statusbar__sep {
+  width: 1px;
+  height: 12px;
+  background: var(--border);
+}
+
+.oc-statusbar--photo .oc-statusbar__spacer {
+  flex: 1;
+}
+
+.oc-statusbar__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--warning);
 }

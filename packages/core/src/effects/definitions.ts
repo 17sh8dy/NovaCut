@@ -3,10 +3,28 @@
  * reads from. Registering happens once at import time via `registerBuiltins()`.
  */
 
-import { registerEffect, registerTransition, type EffectDefinition, type TransitionDefinition } from './registry.js';
+import {
+  COLOR_PARAM_MAX,
+  packColor,
+  registerEffect,
+  registerTransition,
+  type EffectDefinition,
+  type EffectParamDef,
+  type TransitionDefinition,
+} from './registry.js';
 
 const p = (key: string, label: string, min: number, max: number, def: number, step = 1, unit?: string) =>
   ({ key, label, min, max, default: def, step, ...(unit ? { unit } : {}) });
+
+/**
+ * A colour param.
+ *
+ * Colours ride the numeric param path packed into a single float (see `packColor`), so this is
+ * an ordinary param carrying a `kind` the inspector reads. Nothing downstream — the animated
+ * value sampler, the uniform binder, either serializer — needs to know it is a colour.
+ */
+const color = (key: string, label: string, hex: string): EffectParamDef =>
+  ({ key, label, min: 0, max: COLOR_PARAM_MAX, default: packColor(hex), step: 1, kind: 'color' });
 
 const EFFECTS: EffectDefinition[] = [
   // ── Blur family ──
@@ -52,6 +70,98 @@ const EFFECTS: EffectDefinition[] = [
     params: [p('temperature', 'Temperature', -1, 1, 0, 0.01)] },
   { type: 'color-shift', label: 'Color Shift', category: 'color', render: 'colorAdjust',
     params: [p('hue', 'Hue Shift', -180, 180, 30, 1, '°'), p('saturation', 'Saturation', -1, 2, 0.2, 0.01)] },
+  { type: 'vibrance', label: 'Vibrance', category: 'color', render: 'colorAdjust',
+    params: [p('vibrance', 'Vibrance', -1, 2, 0, 0.01)] },
+  { type: 'white-balance', label: 'White Balance', category: 'color', render: 'colorAdjust',
+    params: [p('temperature', 'Temperature', -1, 1, 0, 0.01), p('tint', 'Tint', -1, 1, 0, 0.01)] },
+  {
+    // The whole colour panel as one adjustment layer. Composing these in a single pass keeps
+    // the result in float between steps — stacking them as separate layers quantises to 8 bits
+    // at every hop, which is exactly where a gradient sky starts banding.
+    type: 'color-mixer', label: 'Color', category: 'color', render: 'colorAdjust',
+    params: [
+      p('temperature', 'Temperature', -1, 1, 0, 0.01),
+      p('tint', 'Tint', -1, 1, 0, 0.01),
+      p('vibrance', 'Vibrance', -1, 2, 0, 0.01),
+      p('saturation', 'Saturation', -1, 2, 0, 0.01),
+      p('hue', 'Hue Shift', -180, 180, 0, 1, '°'),
+    ],
+  },
+
+  // ── Light (tonal) ──
+  { type: 'highlights', label: 'Highlights', category: 'light', render: 'colorAdjust',
+    params: [p('highlights', 'Highlights', -1, 1, 0, 0.01)] },
+  { type: 'shadows', label: 'Shadows', category: 'light', render: 'colorAdjust',
+    params: [p('shadows', 'Shadows', -1, 1, 0, 0.01)] },
+  { type: 'whites', label: 'Whites', category: 'light', render: 'colorAdjust',
+    params: [p('whites', 'Whites', -1, 1, 0, 0.01)] },
+  { type: 'blacks', label: 'Blacks', category: 'light', render: 'colorAdjust',
+    params: [p('blacks', 'Blacks', -1, 1, 0, 0.01)] },
+  { type: 'gamma', label: 'Gamma', category: 'light', render: 'colorAdjust',
+    params: [p('gamma', 'Gamma', -1, 1, 0, 0.01)] },
+  {
+    type: 'light', label: 'Light', category: 'light', render: 'colorAdjust',
+    params: [
+      p('exposure', 'Exposure', -3, 3, 0, 0.01, 'EV'),
+      p('contrast', 'Contrast', -1, 1, 0, 0.01),
+      p('highlights', 'Highlights', -1, 1, 0, 0.01),
+      p('shadows', 'Shadows', -1, 1, 0, 0.01),
+      p('whites', 'Whites', -1, 1, 0, 0.01),
+      p('blacks', 'Blacks', -1, 1, 0, 0.01),
+      p('gamma', 'Gamma', -1, 1, 0, 0.01),
+    ],
+  },
+
+  // ── Detail ──
+  { type: 'clarity', label: 'Clarity', category: 'stylize', render: 'clarity',
+    params: [p('amount', 'Amount', -1, 2, 0.4, 0.01), p('radius', 'Radius', 2, 60, 18, 1, 'px')] },
+  { type: 'noise-reduction', label: 'Noise Reduction', category: 'blur', render: 'denoise',
+    params: [p('amount', 'Amount', 0, 1, 0.5, 0.01), p('radius', 'Radius', 0.5, 6, 1.5, 0.1, 'px')] },
+
+  // ── Layer styles ──
+  { type: 'drop-shadow', label: 'Drop Shadow', category: 'style', render: 'dropShadow',
+    params: [
+      p('distance', 'Distance', 0, 200, 24, 1, 'px'),
+      p('angle', 'Angle', 0, 360, 315, 1, '°'),
+      p('softness', 'Softness', 0.5, 60, 12, 0.5, 'px'),
+      p('strength', 'Opacity', 0, 1, 0.6, 0.01),
+      color('color', 'Color', '#000000'),
+    ] },
+  { type: 'outline', label: 'Outline', category: 'style', render: 'outline',
+    params: [
+      p('width', 'Width', 0, 120, 14, 0.5, 'px'),
+      p('strength', 'Opacity', 0, 1, 1, 0.01),
+      color('color', 'Color', '#ffffff'),
+    ] },
+  { type: 'color-overlay', label: 'Color Overlay', category: 'style', render: 'colorOverlay',
+    params: [color('color', 'Color', '#6d5efc'), p('amount', 'Amount', 0, 1, 1, 0.01)] },
+  { type: 'gradient-overlay', label: 'Gradient Overlay', category: 'style', render: 'gradientOverlay',
+    params: [
+      color('color', 'From', '#6d5efc'),
+      color('color2', 'To', '#31d7ff'),
+      p('angle', 'Angle', 0, 360, 90, 1, '°'),
+      p('amount', 'Amount', 0, 1, 1, 0.01),
+    ] },
+  { type: 'bloom', label: 'Bloom', category: 'style', render: 'bloom',
+    params: [
+      p('threshold', 'Threshold', 0, 1, 0.65, 0.01),
+      p('intensity', 'Intensity', 0, 3, 0.9, 0.05),
+      p('radius', 'Radius', 1, 120, 30, 1, 'px'),
+    ] },
+
+  // ── Stylize additions ──
+  { type: 'duotone', label: 'Duotone', category: 'stylize', render: 'duotone',
+    params: [
+      color('color', 'Shadows', '#1b1464'),
+      color('color2', 'Highlights', '#ff6a3d'),
+      p('amount', 'Amount', 0, 1, 1, 0.01),
+    ] },
+  { type: 'posterize', label: 'Posterize', category: 'stylize', render: 'posterize',
+    params: [p('levels', 'Levels', 2, 32, 6, 1)] },
+  { type: 'threshold', label: 'Threshold', category: 'stylize', render: 'threshold',
+    params: [p('level', 'Level', 0, 1, 0.5, 0.01), p('softness', 'Softness', 0.001, 0.3, 0.02, 0.001)] },
+  { type: 'invert', label: 'Invert', category: 'stylize', render: 'invert',
+    params: [p('amount', 'Amount', 0, 1, 1, 0.01)] },
 
   // ── Distort ──
   { type: 'chromatic-aberration', label: 'Chromatic Aberration', category: 'distort', render: 'chromatic',

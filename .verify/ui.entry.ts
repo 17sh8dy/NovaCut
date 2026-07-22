@@ -84,7 +84,7 @@ async function main() {
     // The right-hand panel is the Inspector (transform + adjustment params + the filter rack).
     // Its "Filters" section only exists once a layer is selected, so assert on the panel title.
     results.hasInspectorPanel = document.body.textContent!.includes('Inspector');
-    results.emptyState = document.body.textContent!.includes('No image yet');
+    results.emptyState = document.body.textContent!.includes('Start with an image');
 
     // 1. Import — exercises importDialog → decodeSize → importImage command → layer.
     const add = button('Add Image');
@@ -92,7 +92,7 @@ async function main() {
     add?.click();
     await sleep(600);
     results.layerAdded = !!document.querySelector('.oc-layer');
-    const canvas = document.querySelector('.oc-photo-canvas__el') as HTMLCanvasElement | null;
+    const canvas = document.querySelector('.oc-stage__canvas') as HTMLCanvasElement | null;
     results.canvasPresent = !!canvas;
     results.canvasSize = canvas ? `${canvas.width}x${canvas.height}` : null;
 
@@ -121,9 +121,9 @@ async function main() {
     const layer = document.querySelector('.oc-layer') as HTMLElement | null;
     layer?.click();
     await sleep(120);
-    button('Add Filter')?.click();
+    button('Add Effect')?.click();
     await sleep(120);
-    const pick = [...document.querySelectorAll('.oc-rack__pick')].find((b) =>
+    const pick = [...document.querySelectorAll('.oc-picker__item')].find((b) =>
       (b.textContent || '').includes('Brightness'),
     ) as HTMLButtonElement | undefined;
     results.foundFilterPicker = !!pick;
@@ -137,6 +137,38 @@ async function main() {
     await sleep(300);
     results.undoRemovedFilter = !document.querySelector('.oc-fx');
 
+    // 4. Vector layers — the schema-3 slice. Adding a shape from the Assets panel must produce
+    //    a layer AND change pixels, which together prove the rasterizer reached the GPU. A layer
+    //    that appears in the panel but draws nothing is the exact failure this catches.
+    const beforeShape = read();
+    ([...document.querySelectorAll('.oc-dock__tabs button')].find((b) =>
+      (b.textContent || '').includes('Assets'),
+    ) as HTMLButtonElement | undefined)?.click();
+    await sleep(120);
+    const tile = [...document.querySelectorAll('.oc-tile')].find((b) =>
+      (b.textContent || '').includes('Label Chip'),
+    ) as HTMLButtonElement | undefined;
+    results.foundShapeAsset = !!tile;
+    tile?.click();
+    await sleep(400);
+    results.shapeChangedPixels = JSON.stringify(read()) !== JSON.stringify(beforeShape);
+
+    // 5. Text — inserted as a real text layer, rasterized through the same path.
+    const textPreset = [...document.querySelectorAll('.oc-preset')].find((b) =>
+      (b.textContent || '').includes('Thumbnail Punch'),
+    ) as HTMLButtonElement | undefined;
+    results.foundTextPreset = !!textPreset;
+    const beforeText = read();
+    textPreset?.click();
+    await sleep(400);
+    results.textChangedPixels = JSON.stringify(read()) !== JSON.stringify(beforeText);
+
+    // Undo both so the orientation assertions below still describe the imported image alone.
+    button('Undo')?.click();
+    await sleep(150);
+    button('Undo')?.click();
+    await sleep(250);
+
     const ori = (r: unknown) => (r as { top: string; bottom: string } | null);
     results.ok =
       results.mounted === true &&
@@ -144,6 +176,10 @@ async function main() {
       results.sizedFromDecode === true &&
       results.filterApplied === true &&
       results.undoRemovedFilter === true &&
+      results.foundShapeAsset === true &&
+      results.shapeChangedPixels === true &&
+      results.foundTextPreset === true &&
+      results.textChangedPixels === true &&
       ori(results.renderedNoFilter)?.top === 'red' &&
       ori(results.renderedNoFilter)?.bottom === 'blue' &&
       ori(results.renderedOneFilter)?.top === 'red' &&

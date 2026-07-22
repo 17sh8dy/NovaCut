@@ -36,8 +36,13 @@
 
 import { getEffectDef, type EffectInstance, type MediaAsset, type MediaId, type Ticks } from '@opencut/core';
 import {
+  clipMatrix,
+  fitModeOf,
+  flattenLayers,
   isAdjustmentLayer,
   isGroupLayer,
+  isVectorLayer,
+  type FitMode,
   type Layer,
   type PhotoDocument,
   type Transform2D,
@@ -45,8 +50,8 @@ import {
 import { GLContext, type Fbo } from '../gl/glContext.js';
 import { FboPool } from '../gl/fboPool.js';
 import { runEffectChain } from '../gl/effectChain.js';
-import { compose, rotate, scale, translate, type Mat3 } from '../gl/mat3.js';
 import { VERTEX_SHADER } from '../compositor/shaders.js';
+import { VectorRasterCache } from './vectorRaster.js';
 import { BLEND_FRAGMENT, BLEND_MODE_ID, BLEND_VERTEX, PLACE_FRAGMENT } from './blendShaders.js';
 import type { FrameBitmap } from '../media/frameSource.js';
 import { dlog, dthrottle } from '../debug.js';
@@ -72,6 +77,13 @@ export class PhotoRenderer {
   private pool: FboPool;
   /** Uploads land here, never in an FBO attachment — see GLContext.uploadFrame. */
   private source: WebGLTexture;
+  /**
+   * Text and shapes, rasterized on the CPU and cached by pixel signature.
+   *
+   * Owned by the renderer rather than the caller so its lifetime matches the GL context's:
+   * both are torn down together in `dispose`, and neither can outlive the canvas.
+   */
+  private vectors = new VectorRasterCache();
   private width = 0;
   private height = 0;
 
@@ -85,13 +97,18 @@ export class PhotoRenderer {
   render(ctx: PhotoRenderContext): void {
     const { doc } = ctx;
     this.resize(doc.width, doc.height);
+    // Deleted layers' bitmaps would otherwise be retained for the life of the session.
+    this.vectors.retain(new Set(flattenLayers(doc.layers).map((l) => l.id)));
 
     try {
-      // The root accumulator starts as the opaque document background; every layer blends onto it.
+      // The root accumulator starts as the document background; every layer blends onto it.
+      // The background carries ALPHA (`#rrggbbaa`), and defaults to fully transparent — a
+      // thumbnail or sticker exported straight to PNG has to keep its transparency, and an
+      // opaque clear would silently bake a black frame into every export.
       const acc = this.pool.acquire(this.width, this.height);
       this.gl.bindTarget(acc, this.width, this.height);
-      const [r, g, b] = hexToRgb(doc.background);
-      this.gl.clear(r, g, b, 1);
+      const [r, g, b, a] = hexToRgba(doc.background);
+      this.gl.clear(r, g, b, a);
 
       const composited = this.renderList(ctx, doc.layers, acc);
       this.blitToCanvas(composited);
@@ -246,10 +263,19 @@ export class PhotoRenderer {
       this.gl.clear(0, 0, 0, 0);
       const flattened = this.renderList(ctx, layer.children, inner);
       // The flattened group is already canvas-sized, so its "natural size" IS the canvas.
-      placed = this.place(flattened.tex, this.width, this.height, layer.transform);
+      placed = this.place(flattened.tex, this.width, this.height, layer.transform, 'contain');
       this.pool.release(flattened);
     } else if (isAdjustmentLayer(layer)) {
       return null; // adjustments have no pixels; applyAdjustmentLayer handles them
+    } else if (isVectorLayer(layer)) {
+      // Text and shapes are drawn on the CPU (see vectorRaster.ts for why) and uploaded like
+      // any other bitmap from here on. The raster's size already includes the layer's bleed —
+      // stroke, shadow, glow — so placing it EXACTLY, not aspect-fitted, is what makes a
+      // shape's `width` in the inspector the width it actually occupies.
+      const raster = this.vectors.get(layer);
+      if (!raster) return null;
+      this.gl.uploadFrame(this.source, raster.canvas);
+      placed = this.place(this.source, raster.width, raster.height, layer.transform, 'exact');
     } else {
       if (!layer.mediaId) return null;
       const media = ctx.getMedia(layer.mediaId);
@@ -257,7 +283,7 @@ export class PhotoRenderer {
       // Still decoding. Skipping beats drawing blank: the caller's onFrameReady brings us back.
       if (!media || !frame) return null;
       this.gl.uploadFrame(this.source, frame);
-      placed = this.place(this.source, media.width, media.height, layer.transform);
+      placed = this.place(this.source, media.width, media.height, layer.transform, fitModeOf(layer));
     }
 
     if (!placed) return null;
@@ -290,7 +316,13 @@ export class PhotoRenderer {
    * The buffer is cleared to transparent first, so the region the quad misses is empty rather
    * than whatever the pool handed us.
    */
-  private place(tex: WebGLTexture, srcW: number, srcH: number, transform: Transform2D): Fbo {
+  private place(
+    tex: WebGLTexture,
+    srcW: number,
+    srcH: number,
+    transform: Transform2D,
+    fit: FitMode,
+  ): Fbo {
     const out = this.pool.acquire(this.width, this.height);
     this.gl.bindTarget(out, this.width, this.height);
     this.gl.clear(0, 0, 0, 0);
@@ -298,7 +330,11 @@ export class PhotoRenderer {
 
     const prog = this.gl.getProgram('__photoPlace', VERTEX_SHADER, PLACE_FRAGMENT);
     this.gl.useProgram(prog);
-    this.gl.setUniformMat3(prog, 'u_model', this.modelMatrix(srcW, srcH, transform));
+    this.gl.setUniformMat3(
+      prog,
+      'u_model',
+      clipMatrix(transform, { width: srcW, height: srcH }, { width: this.width, height: this.height }, fit),
+    );
     this.gl.bindTexture(prog, 'u_texture', tex, 0);
     this.gl.drawQuad();
     return out;
@@ -350,60 +386,19 @@ export class PhotoRenderer {
   }
 
   // ── Geometry ────────────────────────────────────────────────────────────────
-
-  /**
-   * Column-major clip-space model matrix for a layer.
-   *
-   * Composition order, reading in the order things physically happen:
-   *   fit   — aspect-fit the source into the canvas, so it isn't stretched. For the common case
-   *           (canvas sized to the image on import) this is exactly identity, which is what
-   *           keeps a fresh import 1:1 with no resampling.
-   *   flip  — a negative scale, applied before rotation so flipping a rotated layer mirrors it
-   *           in its OWN axes, which is what the user means by "flip horizontal".
-   *   S,R   — about the anchor, hence the translate-to-origin sandwich.
-   *   T     — canvas pixels → clip units.
-   *
-   * Rotation gets a second sandwich of its own. Clip space is -1..1 on BOTH axes, so one clip
-   * unit is W/2 px across and H/2 px down — different distances unless the canvas is square.
-   * Rotating there is rotating in a squashed space, which shears: on a 1920×1080 canvas a
-   * square layer at 90° comes out 1920 wide and 607 tall instead of turning. So we un-squash to
-   * pixel-proportional units, rotate, and re-squash. (`Compositor.buildModelMatrix` has this
-   * same flaw for video clips — pre-existing, and out of scope here.)
-   */
-  private modelMatrix(srcW: number, srcH: number, t: Transform2D): Mat3 {
-    let fitX = 1;
-    let fitY = 1;
-    if (srcW && srcH) {
-      const canvasAspect = this.width / this.height;
-      const srcAspect = srcW / srcH;
-      if (srcAspect > canvasAspect) fitY = canvasAspect / srcAspect;
-      else fitX = srcAspect / canvasAspect;
-    }
-
-    // The layer occupies [-fitX, fitX] × [-fitY, fitY] in clip space. Map the 0..1 anchor into
-    // it. anchorY is top-down (0 = top, matching the inspector) while clip-space +y is up,
-    // hence the inversion — getting this backwards flips the pivot across the layer.
-    const px = fitX * (2 * t.anchorX - 1);
-    const py = fitY * (1 - 2 * t.anchorY);
-
-    const rad = (-t.rotation * Math.PI) / 180; // degrees are clockwise; clip-space rotate is CCW
-    const ndcX = (t.x / this.width) * 2;
-    const ndcY = -(t.y / this.height) * 2; // +y is down in the model, up in clip space
-    const aspect = this.width / this.height;
-
-    return compose(
-      scale(fitX, fitY),
-      scale(t.flipH ? -1 : 1, t.flipV ? -1 : 1),
-      translate(-px, -py),
-      scale(t.scaleX, t.scaleY),
-      // Rotate in pixel-proportional space, not clip space — see the note above.
-      scale(1, 1 / aspect),
-      rotate(rad),
-      scale(1, aspect),
-      translate(px, py),
-      translate(ndcX, ndcY),
-    );
-  }
+  //
+  // There used to be a `modelMatrix` here that composed the clip-space transform by hand. It is
+  // gone, and where it went matters: `@opencut/photo`'s `clipMatrix` now owns it, because the
+  // UI needs the SAME placement to draw the selection box and hit-test drags. Two independent
+  // derivations of "where does this layer land" is a bug generator — handles that float a few
+  // pixels off the artwork, a drag that accelerates away from the cursor — with no single place
+  // to fix it.
+  //
+  // The shared version also works in canvas PIXELS and converts to clip space at the end, which
+  // makes the old hand-composed version's trickiest correction unnecessary: clip space is -1..1
+  // on both axes, so one unit is W/2 px across but H/2 px down, and rotating there shears
+  // instead of turning. That needed an explicit un-squash/rotate/re-squash sandwich. Working in
+  // pixels first makes the error unrepresentable rather than corrected.
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
@@ -419,7 +414,19 @@ export class PhotoRenderer {
     this.pool.evictOtherSizes(width, height);
   }
 
+  /**
+   * Drop every cached vector bitmap, forcing text and shapes to re-rasterize.
+   *
+   * The one thing the pixel-signature cache cannot see: a font that finishes loading changes
+   * what a layer looks like without changing a single field of it. The UI calls this from
+   * `document.fonts`, which is the only signal that happened.
+   */
+  invalidateVectors(): void {
+    this.vectors.clear();
+  }
+
   dispose(): void {
+    this.vectors.clear();
     this.pool.dispose();
     this.gl.deleteTexture(this.source);
     this.gl.dispose();
@@ -435,9 +442,17 @@ function seedOf(id: string): number {
   return Math.abs(h % 1000);
 }
 
-function hexToRgb(hex: string): [number, number, number] {
+/**
+ * `#rgb` / `#rrggbb` / `#rrggbbaa` → normalized RGBA.
+ *
+ * Alpha defaults to 1 so every pre-existing document (which stored six digits) still clears to
+ * an opaque background exactly as before; only the new eight-digit form can be transparent.
+ */
+function hexToRgba(hex: string): [number, number, number, number] {
   const h = hex.replace('#', '');
-  const v = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const v = h.length === 3 || h.length === 4 ? h.split('').map((c) => c + c).join('') : h;
   const n = parseInt(v.slice(0, 6), 16);
-  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  const a = v.length >= 8 ? parseInt(v.slice(6, 8), 16) / 255 : 1;
+  if (!Number.isFinite(n)) return [0, 0, 0, 0];
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255, a];
 }

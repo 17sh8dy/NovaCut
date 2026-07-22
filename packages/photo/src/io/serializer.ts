@@ -69,6 +69,16 @@ const migrations: Record<number, (doc: PhotoDocument) => PhotoDocument> = {
     }));
     return { ...doc, layers, schemaVersion: 2 };
   },
+
+  /**
+   * 2 → 3: text and shape layers exist.
+   *
+   * Purely additive — no v2 field changed meaning, and the two new kinds simply could not
+   * appear in a v2 file. A version bump with no data rewrite is the honest migration here;
+   * writing a defensive re-map of every layer anyway would only add somewhere for a future
+   * bug to hide.
+   */
+  2: (doc) => ({ ...doc, schemaVersion: 3 }),
 };
 
 export function serializePhotoDocument(document: PhotoDocument): string {

@@ -15,6 +15,8 @@ const CATEGORY_LABEL: Record<EffectCategory, string> = {
   blur: 'Blur',
   stylize: 'Stylize',
   color: 'Color',
+  light: 'Light',
+  style: 'Layer Styles',
   distort: 'Distort',
   glitch: 'Glitch',
   time: 'Time',

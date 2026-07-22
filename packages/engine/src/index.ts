@@ -7,6 +7,7 @@
 
 export * from './playback/clock.js';
 export * from './photo/photoRenderer.js';
+export * from './photo/vectorRaster.js';
 export { BLEND_MODE_ID } from './photo/blendShaders.js';
 export * from './gl/glContext.js';
 export * from './gl/fboPool.js';

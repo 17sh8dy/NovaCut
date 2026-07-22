@@ -23,7 +23,8 @@ import {
   type MediaAsset,
 } from '@opencut/core';
 import type { BlendMode } from '../model/blend.js';
-import { createAdjustmentLayer, createGroupLayer, createImageLayer } from '../model/factory.js';
+import type { Glow, Shadow, Stroke } from '../model/paint.js';
+import { cloneFill, createAdjustmentLayer, createGroupLayer, createImageLayer } from '../model/factory.js';
 import { newLayerId, type LayerId } from '../model/ids.js';
 import { findLayer, parentOf } from '../model/tree.js';
 import type { ColorLabel, Layer, PhotoDocument, Transform2D } from '../model/types.js';
@@ -401,5 +402,21 @@ function cloneLayer(layer: Layer, name?: string): Layer {
     transform: { ...layer.transform },
   };
   if (isGroupLayer(fresh)) return { ...fresh, children: fresh.children.map((c) => cloneLayer(c)) };
+  // Drawn layers carry nested paint objects. A shallow spread would leave the copy sharing its
+  // original's fill/stroke/shadow, so restyling one would silently restyle the other — the
+  // exact bug fresh ids exist to prevent, one level down.
+  if (fresh.kind === 'text') {
+    return { ...fresh, style: { ...fresh.style, fill: cloneFill(fresh.style.fill), ...clonePaint(fresh.style) } };
+  }
+  if (fresh.kind === 'shape') {
+    return { ...fresh, params: { ...fresh.params }, fill: cloneFill(fresh.fill), ...clonePaint(fresh) };
+  }
   return fresh;
 }
+
+/** Copy the optional decorations shared by both drawn layer kinds. */
+const clonePaint = (src: { stroke: Stroke | null; shadow: Shadow | null; glow: Glow | null }) => ({
+  stroke: src.stroke ? { ...src.stroke } : null,
+  shadow: src.shadow ? { ...src.shadow } : null,
+  glow: src.glow ? { ...src.glow } : null,
+});

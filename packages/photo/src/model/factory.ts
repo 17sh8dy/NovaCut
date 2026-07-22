@@ -9,6 +9,9 @@
 
 import { instantiateEffect, type EffectInstance, type MediaAsset } from '@opencut/core';
 import { newLayerId, newPhotoDocumentId } from './ids.js';
+import { DEFAULT_FILL, type Fill, type Glow, type Shadow, type Stroke } from './paint.js';
+import { DEFAULT_SHAPE_PARAMS, type ShapeKind, type ShapeParams } from './shapes.js';
+import { DEFAULT_TEXT_STYLE, type TextStyle } from './text.js';
 import {
   IDENTITY_TRANSFORM,
   PHOTO_SCHEMA_VERSION,
@@ -17,6 +20,8 @@ import {
   type ImageLayer,
   type Layer,
   type PhotoDocument,
+  type ShapeLayer,
+  type TextLayer,
 } from './types.js';
 
 /** Default canvas for an empty document, replaced the moment an image is imported. */
@@ -57,11 +62,76 @@ export function createAdjustmentLayer(type: string, name?: string): AdjustmentLa
 }
 
 /**
+ * A live text layer.
+ *
+ * The style is DEEP-copied, not shared with the default: a preset object handed to two layers
+ * that then both mutate it is the classic way one edit silently changes another layer.
+ */
+export function createTextLayer(content = 'Your text', style: Partial<TextStyle> = {}): TextLayer {
+  const merged: TextStyle = { ...DEFAULT_TEXT_STYLE, ...style };
+  return {
+    ...base(firstLine(content) || 'Text'),
+    kind: 'text',
+    content,
+    style: {
+      ...merged,
+      fill: cloneFill(merged.fill),
+      stroke: merged.stroke ? { ...merged.stroke } : null,
+      shadow: merged.shadow ? { ...merged.shadow } : null,
+      glow: merged.glow ? { ...merged.glow } : null,
+    },
+    boxWidth: null,
+  };
+}
+
+export function createShapeLayer(
+  shape: ShapeKind,
+  width: number,
+  height: number,
+  opts: {
+    name?: string;
+    fill?: Fill;
+    stroke?: Stroke | null;
+    shadow?: Shadow | null;
+    glow?: Glow | null;
+    params?: Partial<ShapeParams>;
+  } = {},
+): ShapeLayer {
+  return {
+    ...base(opts.name ?? 'Shape'),
+    kind: 'shape',
+    shape,
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
+    params: { ...DEFAULT_SHAPE_PARAMS, ...opts.params },
+    fill: cloneFill(opts.fill ?? DEFAULT_FILL),
+    stroke: opts.stroke ? { ...opts.stroke } : null,
+    shadow: opts.shadow ? { ...opts.shadow } : null,
+    glow: opts.glow ? { ...opts.glow } : null,
+  };
+}
+
+/** Deep-copy a fill so gradient stops are never aliased between layers. */
+export const cloneFill = (fill: Fill): Fill =>
+  fill.kind === 'solid' ? { ...fill } : { ...fill, stops: fill.stops.map((s) => ({ ...s })) };
+
+/** A layer's default name follows its first line, the way every design tool names text. */
+const firstLine = (content: string): string => {
+  const line = content.split('\n')[0]?.trim() ?? '';
+  return line.length > 28 ? `${line.slice(0, 28)}…` : line;
+};
+
+/**
  * Build a document. When `media` is given the canvas takes the image's exact pixel size, so
  * the render is 1:1 with no resampling and no aspect-fit — the natural default for a photo,
  * where video instead fits media into a fixed frame.
  */
-export function createPhotoDocument(name = 'Untitled', media?: MediaAsset): PhotoDocument {
+export function createPhotoDocument(
+  name = 'Untitled',
+  media?: MediaAsset,
+  /** An explicit canvas size (a preset). Wins over the media's, which wins over the default. */
+  size?: { width: number; height: number },
+): PhotoDocument {
   const now = Date.now();
   return {
     schemaVersion: PHOTO_SCHEMA_VERSION,
@@ -69,9 +139,12 @@ export function createPhotoDocument(name = 'Untitled', media?: MediaAsset): Phot
     name,
     createdAt: now,
     modifiedAt: now,
-    width: media?.width || DEFAULT_WIDTH,
-    height: media?.height || DEFAULT_HEIGHT,
-    background: '#000000',
+    width: size?.width || media?.width || DEFAULT_WIDTH,
+    height: size?.height || media?.height || DEFAULT_HEIGHT,
+    // Transparent, not black: a thumbnail or sticker that is exported straight to PNG should
+    // keep its transparency, and a user who wants a solid backdrop can add one in a click.
+    // (A black default silently baked an opaque frame into every export.)
+    background: '#00000000',
     layers: media ? [createImageLayer(media.name || 'Background', media)] : [],
     media: media ? [media] : [],
   };
