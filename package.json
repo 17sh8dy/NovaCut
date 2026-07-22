@@ -12,6 +12,9 @@
   "scripts": {
     "dev": "npm run dev --workspace @opencut/desktop",
     "build": "npm run build --workspace @opencut/desktop",
+    "pack": "npm run pack --workspace @opencut/desktop",
+    "dist": "npm run dist --workspace @opencut/desktop",
+    "icon": "electron scripts/make-icons.cjs",
     "typecheck": "tsc --build --verbose",
     "verify:orientation": "vite build --config .verify/vite.config.ts && electron .verify/main.cjs run.html",
     "verify:photo": "vite build --config .verify/ui.config.ts && electron .verify/main.cjs ui.html",

@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { Button, IconButton, Tooltip } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
+import { AppMenuBar } from './AppMenuBar.js';
+import { WindowControls } from './WindowControls.js';
 
 /** Top application bar: brand, project state, global actions, export. */
 export function TitleBar() {
@@ -26,6 +28,8 @@ export function TitleBar() {
         <div className="oc-brand__mark oc-pulse-glow" />
         Open&nbsp;Cut
       </button>
+
+      <AppMenuBar />
 
       <div className="oc-menu-row">
         <Tooltip label="New Project" shortcut="Ctrl N">
@@ -86,6 +90,8 @@ export function TitleBar() {
       <Button variant="primary" icon={<Download size={16} />} onClick={() => store.getState().openDialog('export')}>
         Export
       </Button>
+
+      <WindowControls />
     </div>
   );
 }

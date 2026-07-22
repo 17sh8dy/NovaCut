@@ -30,6 +30,8 @@ import {
 import type { RecentProject } from '@opencut/core';
 import { useAppStore, useStore } from '../state/context.js';
 import { AnimatedContent, GradientText, ShinyText, SpotlightCard } from '../components/animated/index.js';
+import { AppMenuBar } from './AppMenuBar.js';
+import { WindowControls } from './WindowControls.js';
 import './home.css';
 
 const TIPS = [
@@ -185,6 +187,15 @@ export function HomePage() {
   return (
     <div className="oc-home" data-theme-scope>
       <div className="oc-aurora" aria-hidden />
+      {/*
+        Home has no title bar of its own, but the window is frameless — without a drag strip here
+        the app cannot be moved from its own start screen. It is a real row above the scroller
+        rather than an overlay so cards can never scroll underneath it and stop being clickable.
+      */}
+      <div className="oc-home__chrome">
+        <AppMenuBar />
+        <WindowControls />
+      </div>
       <div className="oc-home__scroll">
         {/* Hero */}
         <header className="oc-home__hero">

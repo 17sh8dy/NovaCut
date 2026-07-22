@@ -13,6 +13,11 @@ build/
 # Electron
 release/
 app/dist/
+# ...but apps/desktop/build is electron-builder's buildResources INPUT, not output: it holds the
+# app icon. The blanket `build/` rule above would quietly drop the logo from every clone and the
+# packaged app would fall back to the default Electron icon with nothing to explain why.
+!apps/desktop/build/
+!apps/desktop/build/**
 
 # Logs
 *.log

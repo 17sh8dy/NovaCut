@@ -5,10 +5,31 @@
  */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import { CH, type ExportJobDTO, type OpenCutApi } from './ipc-types.js';
+import {
+  CH,
+  type ExportJobDTO,
+  type MenuCommand,
+  type MenuId,
+  type OpenCutApi,
+  type WindowAction,
+} from './ipc-types.js';
+
+/**
+ * Subscribe to a main→renderer channel, returning an unsubscribe.
+ *
+ * The listener is wrapped so the renderer only ever sees the payload: handing it Electron's
+ * IpcRendererEvent would leak `sender` — a live handle back into the main process — straight
+ * through the context bridge, which is the one thing contextIsolation exists to prevent.
+ */
+function subscribe<T>(channel: string, handler: (value: T) => void): () => void {
+  const listener = (_e: unknown, value: T): void => handler(value);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.off(channel, listener);
+}
 
 const api: OpenCutApi = {
   platform: 'desktop',
+  os: process.platform,
   openProject: () => ipcRenderer.invoke(CH.openProject),
   saveProject: (json, path) => ipcRenderer.invoke(CH.saveProject, json, path),
   loadProject: (path) => ipcRenderer.invoke(CH.loadProject, path),
@@ -36,6 +57,15 @@ const api: OpenCutApi = {
   encoderFinish: (jobId) => ipcRenderer.invoke(CH.encoderFinish, jobId),
   encoderAbort: (jobId) => ipcRenderer.invoke(CH.encoderAbort, jobId),
   notify: (title, body) => ipcRenderer.send(CH.notify, title, body),
+
+  onMenuCommand: (handler) => subscribe<MenuCommand>(CH.menuCommand, handler),
+  onOpenProjectPath: (handler) => subscribe<string>(CH.openProjectPath, handler),
+  setDirty: (dirty, projectName) => ipcRenderer.send(CH.setDirty, dirty, projectName),
+  saveComplete: (saved) => ipcRenderer.send(CH.saveComplete, saved),
+  popupMenu: (id: MenuId, x, y) => ipcRenderer.send(CH.popupMenu, id, x, y),
+  openExternal: (url) => ipcRenderer.send(CH.openExternal, url),
+  windowAction: (action: WindowAction) => ipcRenderer.send(CH.windowAction, action),
+  onWindowState: (handler) => subscribe<{ maximized: boolean }>(CH.windowState, handler),
 };
 
 contextBridge.exposeInMainWorld('opencut', api);

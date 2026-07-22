@@ -105,4 +105,33 @@ export interface PlatformBridge {
 
   // ── Misc host services ──
   notify(title: string, body: string): void;
+
+  // ── Window chrome (desktop only) ──
+  /**
+   * Pop the host's native application menu at a point in the window.
+   *
+   * Optional, and absent everywhere but the desktop shell: the desktop window is frameless so
+   * that the app can draw its own title bar, and a frameless window gets no native menu bar —
+   * so the in-app File/Edit/View/Help buttons have to ask the host to open the real menu. A host
+   * without one simply doesn't implement this, and the UI hides the buttons.
+   */
+  popupMenu?(id: WindowMenuId, x: number, y: number): void;
+  /** Open a URL in the user's browser, rather than navigating the app away from itself. */
+  openExternal?(url: string): void;
+  /**
+   * Minimise / maximise / close the host window.
+   *
+   * Present only where the app draws its own title bar — which on the desktop it must, since the
+   * native one is hidden so the workspace can start at the very top of the window. A host that
+   * leaves its own chrome in place omits this, and the UI draws no buttons.
+   */
+  windowAction?(action: WindowAction): void;
+  /** Subscribe to host window state, so a maximise button can show the right icon. */
+  onWindowState?(handler: (state: { maximized: boolean }) => void): () => void;
 }
+
+/** The top-level menus a host may expose through `PlatformBridge.popupMenu`. */
+export type WindowMenuId = 'file' | 'edit' | 'view' | 'help';
+
+/** What `PlatformBridge.windowAction` accepts. */
+export type WindowAction = 'minimize' | 'toggleMaximize' | 'close';

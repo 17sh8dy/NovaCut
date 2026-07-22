@@ -6,11 +6,37 @@
     radial-gradient(1200px 600px at 50% -10%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%),
     var(--surface-0, var(--surface-1));
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/*
+ * Window chrome for a screen that has no title bar: the drag strip that lets a frameless window
+ * be moved, the app menu, and the window buttons. Sized to match .oc-titlebar so the two screens
+ * line up when switching between them.
+ */
+.oc-home__chrome {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  height: 48px;
+  padding: 0 var(--space-3);
+  -webkit-app-region: drag;
+}
+.oc-home__chrome > * {
+  -webkit-app-region: no-drag;
+}
+[data-os='mac'] .oc-home__chrome {
+  padding-left: 80px;
 }
 .oc-home__scroll {
   position: relative;
   z-index: 1; /* above the aurora backdrop */
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   overflow-y: auto;
   padding: clamp(24px, 6vh, 72px) clamp(20px, 6vw, 96px) 64px;
   max-width: 1120px;
@@ -22,13 +48,17 @@
   text-align: center;
   padding: clamp(20px, 5vh, 56px) 0 clamp(24px, 4vh, 40px);
 }
+/*
+ * The hero mark. `drop-shadow`, not `box-shadow`: box-shadow would trace the element's square
+ * box, and the logo's own rounded corners are transparent — so the halo would show through them
+ * as four bright triangles. drop-shadow follows the artwork's alpha instead.
+ */
 .oc-home__logo {
-  width: 68px;
-  height: 68px;
+  width: 96px;
+  height: 96px;
   margin: 0 auto 20px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, var(--accent), #b06dff);
-  box-shadow: 0 12px 40px -12px color-mix(in srgb, var(--accent) 60%, transparent);
+  background: url('../assets/logo.svg') center / contain no-repeat;
+  filter: drop-shadow(0 14px 34px var(--brand-glow));
   animation: oc-home-float 5.5s var(--ease-in-out) infinite;
 }
 @keyframes oc-home-float {
@@ -227,7 +257,7 @@
   border-color: var(--accent);
 }
 .oc-home__btn--primary {
-  background: linear-gradient(135deg, var(--accent), #a763f5);
+  background: linear-gradient(135deg, var(--accent), var(--accent-far));
   border-color: transparent;
   color: #fff;
 }

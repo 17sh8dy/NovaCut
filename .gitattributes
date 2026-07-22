@@ -1,0 +1,25 @@
+# The repo has core.autocrlf=true, which rewrites line endings in anything Git classifies as
+# text. Classification is a content heuristic, and the icons are the files where a wrong guess is
+# unrecoverable: a single 0x0A turned into 0x0D0A inside an .ico or .icns corrupts it silently —
+# it still commits, still checks out, and simply stops being a valid icon. Declaring the binary
+# types removes the guess.
+#
+# Deliberately NOT declaring `* text=auto` here: that would renormalise every existing source
+# file in the tree at once, which is a whole-repo change that deserves its own commit rather than
+# riding along inside an unrelated one.
+
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.mp4 binary
+*.mov binary
+*.wav binary
+*.opencut binary
+
+# Vectors and source are text, and should be LF everywhere so the icon pipeline's output is
+# byte-identical no matter which platform ran it.
+*.svg text eol=lf

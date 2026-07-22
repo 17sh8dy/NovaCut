@@ -1,19 +1,49 @@
 /**
  * Native FFmpeg integration (main process).
  *
- * Provides media probing, thumbnail extraction, and a streaming RGBA→video encoder. The
- * binaries are resolved from PATH (override with OPENCUT_FFMPEG / OPENCUT_FFPROBE). All
+ * Provides media probing, thumbnail extraction, and a streaming RGBA→video encoder. All
  * functions degrade gracefully: if ffmpeg isn't installed, callers get sensible fallbacks
  * rather than a crash, and the app remains usable for editing.
+ *
+ * BINARY RESOLUTION, in order: the OPENCUT_FFMPEG / OPENCUT_FFPROBE environment overrides, then
+ * `resources/ffmpeg/` inside the installed app, then PATH. The middle entry is what makes the
+ * packaged app self-sufficient without bloating the installer for everyone: drop the two
+ * executables in that folder and export works with no system-wide install, and nothing changes
+ * for users who already have ffmpeg on PATH.
  */
 
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { unlink } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { app } from 'electron';
 import type { ProbeResult, ExportJobDTO } from './ipc-types.js';
 
-const FFMPEG = process.env.OPENCUT_FFMPEG || 'ffmpeg';
-const FFPROBE = process.env.OPENCUT_FFPROBE || 'ffprobe';
+function resolveBinary(envKey: 'OPENCUT_FFMPEG' | 'OPENCUT_FFPROBE', name: string): string {
+  const override = process.env[envKey];
+  if (override) return override;
+  const exe = process.platform === 'win32' ? `${name}.exe` : name;
+  // `resourcesPath` only exists in a packaged app; in dev this simply falls through to PATH.
+  const bundled = app.isPackaged ? join(process.resourcesPath, 'ffmpeg', exe) : '';
+  if (bundled && existsSync(bundled)) return bundled;
+  return name; // let the OS resolve it from PATH
+}
+
+const FFMPEG = resolveBinary('OPENCUT_FFMPEG', 'ffmpeg');
+const FFPROBE = resolveBinary('OPENCUT_FFPROBE', 'ffprobe');
+
+/** ENOENT from a spawn means "not installed", which deserves a sentence a user can act on. */
+function describeSpawnFailure(err: unknown): Error {
+  const code = (err as { code?: string } | undefined)?.code;
+  if (code === 'ENOENT') {
+    return new Error(
+      'FFmpeg was not found. Install it and make sure `ffmpeg` is on your PATH, or set the ' +
+        'OPENCUT_FFMPEG environment variable to its full path.',
+    );
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
 
 /** Run a command to completion, capturing stdout. Rejects on non-zero exit. */
 function run(cmd: string, args: string[]): Promise<string> {
@@ -23,7 +53,7 @@ function run(cmd: string, args: string[]): Promise<string> {
     let err = '';
     child.stdout.on('data', (d) => (out += d.toString()));
     child.stderr.on('data', (d) => (err += d.toString()));
-    child.on('error', reject);
+    child.on('error', (e) => reject(describeSpawnFailure(e)));
     child.on('close', (code) => (code === 0 ? resolve(out) : reject(new Error(err || `exit ${code}`))));
   });
 }
@@ -75,7 +105,7 @@ export async function ffmpegThumbnail(src: string, atSeconds: number): Promise<s
     );
     const chunks: Buffer[] = [];
     child.stdout.on('data', (d) => chunks.push(d));
-    child.on('error', reject);
+    child.on('error', (e) => reject(describeSpawnFailure(e)));
     child.on('close', (code) => {
       if (code !== 0 || chunks.length === 0) return reject(new Error('thumbnail failed'));
       resolve(`data:image/jpeg;base64,${Buffer.concat(chunks).toString('base64')}`);
@@ -110,6 +140,16 @@ function videoEncoder(codec: string, hardware: boolean): string {
 export class FfmpegEncoder {
   private child: ReturnType<typeof spawn>;
   private closed: Promise<void>;
+  /**
+   * The reason the encoder is no longer usable, once it isn't.
+   *
+   * This exists because of a specific hang: a paused stdin resolves the pending write on
+   * `drain`, but a dead ffmpeg never drains, so an export against a missing binary or a
+   * rejected codec sat on an un-settled promise forever with the progress bar frozen. Every
+   * waiter is now failed explicitly the moment the process goes away.
+   */
+  private dead: Error | null = null;
+  private waiters: ((err: Error) => void)[] = [];
   /** Raw input frame size (what the compositor produces = the sequence resolution). */
   readonly width: number;
   readonly height: number;
@@ -168,21 +208,53 @@ export class FfmpegEncoder {
 
     this.child = spawn(FFMPEG, args, { windowsHide: true });
     let stderr = '';
+    let spawnError: Error | null = null;
     this.child.stderr?.on('data', (d) => (stderr += d.toString()));
+    // A failed spawn emits 'error' and then 'close' with a null code; capture the cause first so
+    // the close handler reports "FFmpeg was not found" instead of "ffmpeg exited null".
+    this.child.on('error', (e) => {
+      spawnError = describeSpawnFailure(e);
+      this.fail(spawnError);
+    });
     this.closed = once(this.child, 'close').then(([code]) => {
+      if (spawnError) throw spawnError;
       if (code !== 0) throw new Error(`ffmpeg exited ${code}: ${stderr.slice(-400)}`);
     });
-    // Surface spawn errors (e.g. ffmpeg missing) on the close promise.
-    this.child.on('error', () => {});
+    // stdin closing under us (ffmpeg rejected the arguments and quit) must fail pending writes
+    // rather than leave them waiting on a 'drain' that can no longer come.
+    this.child.stdin?.on('error', (e) => this.fail(describeSpawnFailure(e)));
+    this.child.on('close', (code) => {
+      if (code !== 0) this.fail(spawnError ?? new Error(`ffmpeg exited ${code}: ${stderr.slice(-400)}`));
+    });
+  }
+
+  /** Mark the encoder unusable and settle everything currently waiting on it. */
+  private fail(err: Error): void {
+    this.dead ??= err;
+    const pending = this.waiters;
+    this.waiters = [];
+    for (const reject of pending) reject(this.dead);
   }
 
   writeFrame(frame: Buffer): Promise<void> {
+    if (this.dead) return Promise.reject(this.dead);
     const stdin = this.child.stdin;
     if (!stdin || stdin.destroyed) return Promise.reject(new Error('encoder closed'));
     return new Promise((resolve, reject) => {
-      const ok = stdin.write(frame, (err) => err && reject(err));
-      if (ok) resolve();
-      else stdin.once('drain', resolve); // honor backpressure
+      const ok = stdin.write(frame, (err) => err && reject(describeSpawnFailure(err)));
+      if (ok) return resolve();
+      // Backpressure: wait for drain, but register with `waiters` too so a death in the meantime
+      // rejects instead of hanging.
+      const onDrain = (): void => {
+        this.waiters = this.waiters.filter((w) => w !== onFail);
+        resolve();
+      };
+      const onFail = (err: Error): void => {
+        stdin.off('drain', onDrain);
+        reject(err);
+      };
+      this.waiters.push(onFail);
+      stdin.once('drain', onDrain);
     });
   }
 

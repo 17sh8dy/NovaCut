@@ -140,6 +140,8 @@ function EditorLayout() {
       {dialog === 'export' && <ExportDialog />}
       {dialog === 'projectSettings' && <ProjectSettingsDialog />}
       {dialog === 'settings' && <SettingsDialog />}
+      {/* Same window, opened straight onto the shortcut editor (Help → Keyboard Shortcuts). */}
+      {dialog === 'shortcuts' && <SettingsDialog initialCategory="Keyboard Shortcuts" />}
     </div>
   );
 }

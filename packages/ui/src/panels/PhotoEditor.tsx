@@ -39,6 +39,7 @@ import { InspectorPanel } from './photo/InspectorPanel.js';
 import { LayersPanel } from './photo/LayersPanel.js';
 import { CanvasSizeDialog, ExportPhotoDialog, NewCanvasDialog } from './photo/PhotoDialogs.js';
 import { OptionsBar, ToolRail } from './photo/ToolRail.js';
+import { WindowControls } from './WindowControls.js';
 import { usePhotoShortcuts } from './photo/usePhotoShortcuts.js';
 import './photo.css';
 
@@ -152,6 +153,8 @@ function PhotoTitleBar({ engine }: { engine: PhotoEngine }) {
       >
         <Download size={14} />
       </IconButton>
+
+      <WindowControls />
     </div>
   );
 }

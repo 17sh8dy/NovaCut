@@ -1,0 +1,92 @@
+# electron-builder — turns the built `out/` tree into a real installable application.
+#
+# Two things about this config are load-bearing and easy to break:
+#
+# 1. `files` excludes node_modules entirely. Everything the app runs is already bundled by
+#    electron-vite (the renderer inlines the whole workspace; main/preload import nothing but
+#    Electron and Node built-ins), so shipping node_modules would only copy the monorepo's
+#    symlinked @opencut/* packages — the exact thing that breaks when it lands as real
+#    directories. Keeping it out makes the package small AND correct.
+#
+# 2. Every icon is committed, not derived at package time. `npm run icon` renders them from
+#    `assets/OpenCut.svg` — the single source of truth — into `build/`, and the per-platform
+#    `icon:` keys below point at those files explicitly. Letting electron-builder convert a PNG
+#    into an .ico instead would hand the most visible asset in the product to an implicit
+#    conversion nobody reviews, at sizes nobody chose.
+
+appId: com.opencut.editor
+productName: Open Cut
+copyright: Copyright © 2026 Open Cut
+
+# package.json's description explains the module to a developer; this one is what Windows shows
+# in Task Manager and in the exe's tooltip, where a sentence about the PlatformBridge is noise.
+extraMetadata:
+  description: Professional non-linear video and photo editor
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  - package.json
+  - '!node_modules/**'
+  - '!electron/**'
+  - '!src/**'
+  - '!**/*.map'
+
+# No native modules anywhere in the tree; skipping the rebuild pass saves a minute per build.
+npmRebuild: false
+
+# Double-clicking a .opencut project launches the app with it. Main reads the path off argv
+# (Windows/Linux) or the `open-file` event (macOS) — see electron/main.ts `projectFromArgv`.
+fileAssociations:
+  - ext: opencut
+    name: Open Cut Project
+    description: Open Cut Project
+    role: Editor
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Open Cut
+  # The installer and uninstaller wear the app's icon too — the first thing a user sees is the
+  # setup .exe, and a generic installer icon undoes the work the app icon is doing.
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  # Leaving projects and preferences behind on uninstall would be a data-loss trap dressed up
+  # as tidiness; the user's own files are never ours to delete.
+  deleteAppDataOnUninstall: false
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+mac:
+  icon: build/icon.icns
+  target:
+    - dmg
+    - zip
+  category: public.app-category.video
+  darkModeSupport: true
+
+linux:
+  # A DIRECTORY, not a file: electron-builder reads every NxN.png in it and installs the whole
+  # set into the icon theme, which is how a Linux desktop picks a size per context.
+  icon: build/icons
+  target:
+    - AppImage
+    - deb
+  category: AudioVideo;Video;AudioVideoEditing
+  synopsis: Professional non-linear video and photo editor

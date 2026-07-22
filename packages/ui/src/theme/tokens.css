@@ -26,12 +26,33 @@
   --text-tertiary: #6b7280;
   --text-disabled: #4b5563;
 
-  /* ── Brand / accent (electric indigo → violet) ── */
-  --accent: #6d5efc;
-  --accent-hover: #7d70ff;
-  --accent-active: #5b4de0;
-  --accent-soft: rgba(109, 94, 252, 0.16);
-  --accent-glow: rgba(109, 94, 252, 0.45);
+  /*
+   * ── Brand ──
+   * The three stops of the logo's gradient, verbatim from assets/OpenCut.svg. If that file's
+   * stops change, these change with them — they are the same three numbers, and the mark and the
+   * UI around it must not be able to disagree about what the brand colour is.
+   */
+  --brand-deep: #071b5c;
+  --brand-blue: #1565ff;
+  --brand-cyan: #3edcff;
+  --brand-glow: rgba(62, 220, 255, 0.45);
+
+  /*
+   * ── Accent ──
+   *
+   * The logo's own mid-blue, which happens to also be the right UI accent: --accent is the
+   * background of every primary button and those carry WHITE text, so the value is constrained
+   * by contrast, and #1565FF lands at ~4.8:1. The cyan end of the gradient is far too light to
+   * take white text — which is why --accent-far exists as a separate token for gradients only,
+   * and is never used as a fill behind type.
+   */
+  --accent: var(--brand-blue);
+  --accent-hover: #3d82ff;
+  --accent-active: #0c4fd1;
+  --accent-soft: rgba(21, 101, 255, 0.16);
+  --accent-glow: rgba(21, 101, 255, 0.45);
+  /* The far end of every brand gradient — the cyan the logo's own gradient resolves to. */
+  --accent-far: var(--brand-cyan);
 
   /* ── Semantic ── */
   --success: #34d399;
@@ -100,9 +121,14 @@
   --surface-1: #0c1120;
   --surface-2: #121a2e;
   --surface-3: #1a2540;
+  /* A brighter, cooler accent for the darker surfaces. The full set is overridden, not just
+     three of them: leaving --accent-active and --accent-glow to fall through to :root left this
+     theme pressing a button into the default theme's blue. */
   --accent: #4f8cff;
   --accent-hover: #6a9cff;
+  --accent-active: #3a72e0;
   --accent-soft: rgba(79, 140, 255, 0.16);
+  --accent-glow: rgba(79, 140, 255, 0.45);
 }
 
 /* Light theme — provided so the toggle is real, not decorative. */

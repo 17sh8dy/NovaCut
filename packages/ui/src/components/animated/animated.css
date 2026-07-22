@@ -48,9 +48,9 @@
   background: linear-gradient(
     100deg,
     var(--accent) 0%,
-    #b06dff 25%,
+    var(--accent-far) 25%,
     var(--accent-hover) 50%,
-    #b06dff 75%,
+    var(--accent-far) 75%,
     var(--accent) 100%
   );
   background-size: 220% auto;
@@ -162,7 +162,7 @@
   inset: 0;
   background:
     radial-gradient(40% 55% at 25% 30%, color-mix(in srgb, var(--accent) 55%, transparent), transparent 70%),
-    radial-gradient(38% 50% at 75% 40%, color-mix(in srgb, #b06dff 50%, transparent), transparent 70%);
+    radial-gradient(38% 50% at 75% 40%, color-mix(in srgb, var(--accent-far) 50%, transparent), transparent 70%);
   animation: oc-aurora-drift 18s var(--ease-in-out) infinite alternate;
 }
 .oc-aurora::after {
@@ -253,15 +253,23 @@
 }
 
 /* ── Pulse glow — a gentle breathing halo for brand marks ─────────────────────── */
+/*
+ * `drop-shadow`, not `box-shadow`, and `--brand-glow`, not `--accent-glow`.
+ *
+ * The only thing wearing this is the logo, which is artwork with transparent rounded corners: a
+ * box-shadow traces the element's square BOX, so the halo would glow through those corners as
+ * four bright triangles. drop-shadow follows the artwork's alpha. The colour follows the logo for
+ * the reason given on --brand-glow in tokens.css.
+ */
 .oc-pulse-glow {
   animation: oc-pulse-glow-kf 3.6s var(--ease-in-out) infinite;
 }
 @keyframes oc-pulse-glow-kf {
   0%,
   100% {
-    box-shadow: 0 0 14px var(--accent-glow);
+    filter: drop-shadow(0 0 6px var(--brand-glow));
   }
   50% {
-    box-shadow: 0 0 26px var(--accent-glow), 0 0 4px var(--accent-glow);
+    filter: drop-shadow(0 0 12px var(--brand-glow));
   }
 }

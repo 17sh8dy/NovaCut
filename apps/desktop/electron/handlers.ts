@@ -3,12 +3,26 @@
  * here and nowhere else, so the trust boundary is easy to audit.
  */
 
-import { app, dialog, ipcMain, Notification } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron';
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, extname, join } from 'node:path';
-import { CH, type ExportJobDTO, type ImportedFileDTO, type RecentProjectDTO } from './ipc-types.js';
+import {
+  CH,
+  type ExportJobDTO,
+  type ImportedFileDTO,
+  type MenuId,
+  type RecentProjectDTO,
+  type WindowAction,
+} from './ipc-types.js';
 import { ffmpegThumbnail, ffprobeMedia, FfmpegEncoder } from './ffmpeg.js';
+import { popupMenu } from './menu.js';
+
+/** Callbacks main provides so shell-level state (dirty flag, quit guard) stays in one place. */
+export interface HandlerHooks {
+  onDirtyChanged(dirty: boolean, projectName: string): void;
+  onSaveComplete(saved: boolean): void;
+}
 
 /**
  * Extensions grouped by kind, so a caller can ask for only what it can use.
@@ -78,7 +92,7 @@ async function pushRecent(path: string): Promise<void> {
   await writeFile(recentsPath(), JSON.stringify(next), 'utf8').catch(() => {});
 }
 
-export function registerHandlers(): void {
+export function registerHandlers(hooks: HandlerHooks): void {
   // ── Project persistence ──
   ipcMain.handle(CH.openProject, async () => {
     const res = await dialog.showOpenDialog({
@@ -202,4 +216,42 @@ export function registerHandlers(): void {
   ipcMain.on(CH.notify, (_e, title: string, body: string) => {
     if (Notification.isSupported()) new Notification({ title, body }).show();
   });
+
+  // ── Shell integration ──
+  ipcMain.on(CH.setDirty, (_e, dirty: boolean, projectName: string) => hooks.onDirtyChanged(dirty, projectName));
+  ipcMain.on(CH.saveComplete, (_e, saved: boolean) => hooks.onSaveComplete(saved));
+
+  ipcMain.on(CH.popupMenu, (e, id: MenuId, x: number, y: number) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (win) popupMenu(win, id, x, y);
+  });
+
+  // Only ever hand the OS an http(s) URL. `shell.openExternal` will happily run a `file:` path
+  // or, on Windows, a registered protocol handler — so an unfiltered call is a way for anything
+  // that can reach the renderer to launch a program.
+  ipcMain.on(CH.openExternal, (_e, url: string) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  });
+
+  ipcMain.on(CH.windowAction, (e, action: WindowAction) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win) return;
+    if (action === 'minimize') win.minimize();
+    // `close`, not `destroy`: the unsaved-changes guard lives on the close event, and a button
+    // that bypassed it would be the one path in the app that can silently discard work.
+    else if (action === 'close') win.close();
+    else if (action === 'toggleMaximize') win.isMaximized() ? win.unmaximize() : win.maximize();
+  });
+}
+
+/**
+ * Shut down anything that outlives the window.
+ *
+ * Only ffmpeg matters: a child process holding a half-written output file keeps running after
+ * the app is gone, so the user is left with an orphan encoder and a corrupt export.
+ */
+export async function disposeHandlers(): Promise<void> {
+  const running = [...encoders.values()];
+  encoders.clear();
+  await Promise.all(running.map((e) => e.abort().catch(() => {})));
 }

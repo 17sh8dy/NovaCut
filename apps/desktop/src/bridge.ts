@@ -17,6 +17,8 @@ import {
   type PlatformBridge,
   type Project,
   type RecentProject,
+  type WindowAction,
+  type WindowMenuId,
 } from '@opencut/core';
 
 export class ElectronBridge implements PlatformBridge {
@@ -97,5 +99,21 @@ export class ElectronBridge implements PlatformBridge {
 
   notify(title: string, body: string): void {
     this.api.notify(title, body);
+  }
+
+  popupMenu(id: WindowMenuId, x: number, y: number): void {
+    this.api.popupMenu(id, x, y);
+  }
+
+  openExternal(url: string): void {
+    this.api.openExternal(url);
+  }
+
+  windowAction(action: WindowAction): void {
+    this.api.windowAction(action);
+  }
+
+  onWindowState(handler: (state: { maximized: boolean }) => void): () => void {
+    return this.api.onWindowState(handler);
   }
 }

@@ -22,7 +22,14 @@ import { Button, Segmented } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
 import { SHORTCUT_DEFS, comboFromEvent, conflicts, formatCombo, type ShortcutId } from '../state/shortcuts.js';
 
-type Category = 'General' | 'Appearance' | 'Editing' | 'Playback' | 'Keyboard Shortcuts' | 'Performance' | 'About';
+export type Category =
+  | 'General'
+  | 'Appearance'
+  | 'Editing'
+  | 'Playback'
+  | 'Keyboard Shortcuts'
+  | 'Performance'
+  | 'About';
 
 const CATEGORIES: { id: Category; icon: typeof GeneralIcon }[] = [
   { id: 'General', icon: GeneralIcon },
@@ -34,9 +41,13 @@ const CATEGORIES: { id: Category; icon: typeof GeneralIcon }[] = [
   { id: 'About', icon: Info },
 ];
 
-export function SettingsDialog() {
+/**
+ * `initialCategory` is what makes "Help → Keyboard Shortcuts" land on the shortcut editor rather
+ * than on General with the user left to find it.
+ */
+export function SettingsDialog({ initialCategory = 'General' }: { initialCategory?: Category }) {
   const store = useAppStore();
-  const [category, setCategory] = useState<Category>('General');
+  const [category, setCategory] = useState<Category>(initialCategory);
 
   const close = () => store.getState().openDialog(null);
   useEffect(() => {

@@ -59,6 +59,53 @@ npm run build      # production build (out/)
 npm run typecheck  # type-check every package
 ```
 
+## Packaging the desktop app
+
+```bash
+npm run pack       # unpacked app in apps/desktop/release/win-unpacked (fast, for testing)
+npm run dist       # installers for the current OS, in apps/desktop/release
+npm run icon       # re-render every icon from assets/OpenCut.svg
+```
+
+`npm run dist` produces an NSIS installer **and** a portable `.exe` on Windows, a DMG on macOS,
+and an AppImage + deb on Linux. Configuration lives in `apps/desktop/electron-builder.yml`.
+
+## The logo
+
+**`assets/OpenCut.svg` is the single source of truth** — a 540-byte hand-authored vector: two
+paths, one gradient, no metadata, no filters, no embedded rasters, transparent everywhere the
+mark isn't. `npm run icon` (`scripts/make-icons.cjs`) rasterises it through Chromium and writes:
+
+| Output | Contents |
+| --- | --- |
+| `apps/desktop/build/icon.ico` | 16 · 24 · 32 · 48 · 64 as 32-bit DIBs, 128 · 256 as PNG |
+| `apps/desktop/build/icon.icns` | the ten types `iconutil` emits, 16 → 1024 |
+| `apps/desktop/build/icons/NxN.png` | the Linux icon-theme set, 16 → 1024 |
+| `apps/desktop/build/icon.png` | 1024², the generic fallback |
+| `packages/ui/src/assets/logo.svg` | the vector itself, bundled by the renderer |
+
+`electron-builder.yml` points `win.icon` / `mac.icon` / `linux.icon` at those files explicitly, so
+a build never silently re-derives them. **Change the logo in the SVG and re-run — never hand-edit
+an output**, or the taskbar icon and the in-app mark drift apart with nothing to say which is right.
+
+The geometry was measured off the reference artwork (`assets/logo-reference.png`), not eyeballed;
+`scripts/make-icons.cjs` documents the three alignment corrections that were applied. The brand
+tokens in `packages/ui/src/theme/tokens.css` are the SVG's three gradient stops verbatim, so the
+mark and the UI around it cannot disagree about what the brand colour is.
+
+Builds are unsigned, so Windows SmartScreen warns on first run until a code-signing certificate
+is configured (`CSC_LINK` / `CSC_KEY_PASSWORD`).
+
+FFmpeg is resolved at runtime from `OPENCUT_FFMPEG` / `OPENCUT_FFPROBE`, then from
+`resources/ffmpeg/` inside the installed app, then from `PATH`. Dropping `ffmpeg.exe` and
+`ffprobe.exe` into that folder makes one installation self-sufficient without adding 80 MB to the
+installer for everyone else.
+
+> **Windows, once per machine:** electron-builder unpacks a signing toolchain that contains macOS
+> symlinks, which a standard Windows account may not create — the build then fails with *"Cannot
+> create symbolic link: A required privilege is not held by the client"*. Enable **Developer
+> Mode** (Settings → System → For developers), or run the packaging step from an elevated shell.
+
 ## How the pieces fit
 
 - **Editing** — every change is a `Command` (`packages/core/commands`). The `History` gives

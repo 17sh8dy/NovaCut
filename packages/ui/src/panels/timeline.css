@@ -364,11 +364,13 @@
   padding: 0 4px;
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
+  /* Derived from --accent, not literals: the border above already IS --accent, so hardcoding the
+     fill made this badge the one element that ignored a theme change. */
   background: linear-gradient(
     90deg,
-    rgba(109, 94, 252, 0.15),
-    rgba(109, 94, 252, 0.45),
-    rgba(109, 94, 252, 0.15)
+    color-mix(in srgb, var(--accent) 15%, transparent),
+    color-mix(in srgb, var(--accent) 45%, transparent),
+    color-mix(in srgb, var(--accent) 15%, transparent)
   );
   backdrop-filter: blur(2px);
   color: var(--text-primary);
