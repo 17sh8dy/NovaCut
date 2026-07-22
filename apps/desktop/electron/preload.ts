@@ -13,7 +13,7 @@ const api: OpenCutApi = {
   saveProject: (json, path) => ipcRenderer.invoke(CH.saveProject, json, path),
   loadProject: (path) => ipcRenderer.invoke(CH.loadProject, path),
   recentProjects: () => ipcRenderer.invoke(CH.recentProjects),
-  importFiles: () => ipcRenderer.invoke(CH.importFiles),
+  importFiles: (kinds) => ipcRenderer.invoke(CH.importFiles, kinds),
   probeMedia: (src) => ipcRenderer.invoke(CH.probeMedia, src),
   generateThumbnail: (src, atSeconds) => ipcRenderer.invoke(CH.generateThumbnail, src, atSeconds),
   // Custom protocol so <video>/<img> can load local files under a strict CSP.

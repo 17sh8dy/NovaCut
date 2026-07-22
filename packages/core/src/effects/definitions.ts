@@ -168,27 +168,88 @@ const EFFECTS: EffectDefinition[] = [
     params: [p('amount', 'Amount', 0, 30, 4, 0.5, 'px'), p('angle', 'Angle', 0, 360, 0, 1, '°')] },
   { type: 'lens-distortion', label: 'Lens Distortion', category: 'distort', render: 'lensDistort',
     params: [p('k1', 'Distortion', -1, 1, 0.2, 0.01), p('scale', 'Scale', 0.5, 1.5, 1, 0.01)] },
-  { type: 'shake', label: 'Shake', category: 'distort', render: 'passthrough',
-    params: [p('amount', 'Amount', 0, 100, 10, 1, 'px'), p('frequency', 'Frequency', 0.1, 30, 8, 0.1, 'Hz')] },
+  { type: 'shake', label: 'Camera Shake', category: 'distort', render: 'shake',
+    params: [p('amount', 'Amount', 0, 200, 40, 1, 'px'), p('frequency', 'Frequency', 0.1, 30, 6, 0.1, 'Hz')] },
   { type: 'rgb-split', label: 'RGB Split', category: 'distort', render: 'chromatic',
     params: [p('amount', 'Amount', 0, 40, 8, 0.5, 'px'), p('angle', 'Angle', 0, 360, 90, 1, '°')] },
 
-  // ── Time ──
-  { type: 'speed-ramp', label: 'Speed Ramp', category: 'time', render: 'passthrough',
-    params: [p('start', 'Start Rate', 0.1, 8, 1, 0.05, 'x'), p('end', 'End Rate', 0.1, 8, 2, 0.05, 'x')] },
+  // ── Camera & motion ──
+  { type: 'radial-blur', label: 'Zoom Blur', category: 'blur', render: 'radialBlur',
+    params: [
+      p('amount', 'Amount', 0, 2, 0.6, 0.01),
+      p('centerX', 'Centre X', 0, 1, 0.5, 0.01),
+      p('centerY', 'Centre Y', 0, 1, 0.5, 0.01),
+    ] },
+  { type: 'pulse', label: 'Beat Pulse', category: 'distort', render: 'pulse',
+    params: [p('amount', 'Amount', 0, 2, 0.7, 0.01), p('bpm', 'Tempo', 40, 220, 120, 1, 'BPM')] },
+
+  // ── Looks ──
+  { type: 'glitch-fx', label: 'Glitch', category: 'glitch', render: 'glitch',
+    params: [p('amount', 'Amount', 0, 1, 0.5, 0.01), p('speed', 'Speed', 0.1, 4, 1, 0.05)] },
+  { type: 'vhs', label: 'VHS', category: 'glitch', render: 'vhs',
+    params: [p('amount', 'Amount', 0, 1, 0.6, 0.01)] },
+  { type: 'old-film', label: 'Old Film', category: 'stylize', render: 'oldFilm',
+    params: [p('amount', 'Amount', 0, 1, 0.6, 0.01), p('sepia', 'Sepia', 0, 1, 0.5, 0.01)] },
+  { type: 'light-leak', label: 'Light Leak', category: 'stylize', render: 'lightLeak',
+    params: [
+      p('amount', 'Amount', 0, 2, 0.8, 0.01),
+      p('angle', 'Angle', 0, 360, 20, 1, '°'),
+      p('speed', 'Drift', 0, 4, 1, 0.05),
+      color('color', 'Colour', '#ff9a3c'),
+    ] },
+  { type: 'dreamy', label: 'Dreamy Glow', category: 'stylize', render: 'dreamy',
+    params: [p('amount', 'Amount', 0, 1, 0.5, 0.01), p('radius', 'Radius', 1, 80, 22, 1, 'px')] },
+  { type: 'neon', label: 'Neon Edges', category: 'stylize', render: 'neon',
+    params: [
+      p('intensity', 'Intensity', 0, 4, 1.4, 0.05),
+      p('darken', 'Darken', 0, 1, 0.75, 0.01),
+      color('color', 'Colour', '#31d7ff'),
+    ] },
+  { type: 'halftone', label: 'Halftone', category: 'stylize', render: 'halftone',
+    params: [
+      p('size', 'Dot Size', 2, 40, 8, 1, 'px'),
+      p('angle', 'Angle', 0, 90, 25, 1, '°'),
+      p('amount', 'Amount', 0, 1, 1, 0.01),
+    ] },
+  { type: 'tilt-shift', label: 'Tilt Shift', category: 'blur', render: 'tiltShift',
+    params: [
+      p('focus', 'Focus', 0, 1, 0.5, 0.01),
+      p('width', 'Band Width', 0.01, 0.5, 0.12, 0.01),
+      p('amount', 'Amount', 0, 12, 5, 0.1),
+    ] },
+  { type: 'kaleidoscope', label: 'Kaleidoscope', category: 'distort', render: 'kaleidoscope',
+    params: [p('segments', 'Segments', 2, 24, 6, 1), p('angle', 'Angle', 0, 360, 0, 1, '°')] },
+  { type: 'prism', label: 'Prism', category: 'distort', render: 'prism',
+    params: [p('amount', 'Amount', 0, 4, 1, 0.05)] },
 ];
 
 const TRANSITIONS: TransitionDefinition[] = [
-  { type: 'fade', label: 'Fade', render: 'fade', params: [] },
+  // ── Essentials ──
   { type: 'cross-dissolve', label: 'Cross Dissolve', render: 'dissolve', params: [] },
-  { type: 'slide', label: 'Slide', render: 'slide', params: [p('angle', 'Angle', 0, 360, 0, 1, '°')] },
-  { type: 'push', label: 'Push', render: 'push', params: [p('angle', 'Angle', 0, 360, 0, 1, '°')] },
-  { type: 'zoom', label: 'Zoom', render: 'zoom', params: [p('scale', 'Scale', 1, 4, 2, 0.1, 'x')] },
+  { type: 'fade', label: 'Fade Through', render: 'fade',
+    params: [p('color', 'Colour (0=black 1=white)', 0, 1, 0, 0.01)] },
+  { type: 'wipe', label: 'Wipe', render: 'wipe',
+    params: [p('angle', 'Angle', 0, 360, 0, 1, '°'), p('softness', 'Softness', 0.001, 0.4, 0.02, 0.001)] },
+  { type: 'circle', label: 'Circle Reveal', render: 'circle',
+    params: [p('softness', 'Softness', 0.001, 0.3, 0.02, 0.001)] },
+
+  // ── Motion ──
+  { type: 'slide', label: 'Slide', render: 'slide', params: [p('angle', 'Angle', 0, 360, 180, 1, '°')] },
+  { type: 'push', label: 'Push', render: 'push', params: [p('angle', 'Angle', 0, 360, 180, 1, '°')] },
+  { type: 'zoom', label: 'Zoom Punch', render: 'zoom', params: [p('scale', 'Scale', 1.1, 6, 2.4, 0.1, 'x')] },
   { type: 'spin', label: 'Spin', render: 'spin', params: [p('turns', 'Turns', 0.25, 4, 1, 0.25)] },
-  { type: 'blur', label: 'Blur', render: 'blurTransition', params: [p('amount', 'Amount', 0, 100, 40, 1)] },
-  { type: 'flash', label: 'Flash', render: 'flash', params: [p('color', 'Color (0=black 1=white)', 0, 1, 1, 1)] },
   { type: 'whip', label: 'Whip Pan', render: 'whip', params: [p('angle', 'Angle', 0, 360, 0, 1, '°')] },
-  { type: 'glitch', label: 'Glitch', render: 'glitchTransition', params: [p('intensity', 'Intensity', 0, 1, 0.6, 0.01)] },
+  { type: 'shake', label: 'Impact Shake', render: 'shakeTransition',
+    params: [p('amount', 'Amount', 0, 2, 0.8, 0.01)] },
+
+  // ── Stylised ──
+  { type: 'blur', label: 'Blur Dissolve', render: 'blurTransition', params: [p('amount', 'Amount', 0, 160, 60, 1)] },
+  { type: 'flash', label: 'Flash', render: 'flash', params: [p('color', 'Colour (0=black 1=white)', 0, 1, 1, 0.01)] },
+  { type: 'glitch', label: 'Glitch', render: 'glitchTransition', params: [p('intensity', 'Intensity', 0, 1, 0.7, 0.01)] },
+  { type: 'burn', label: 'Luma Burn', render: 'burn', params: [p('softness', 'Softness', 0.02, 0.5, 0.14, 0.01)] },
+  { type: 'pixelize', label: 'Pixelize', render: 'pixelize', params: [p('size', 'Block Size', 4, 120, 40, 1, 'px')] },
+
+  // ── Dimensional ──
   { type: '3d-flip', label: '3D Flip', render: 'flip3d', params: [p('axis', 'Axis (0=X 1=Y)', 0, 1, 1, 1)] },
   { type: 'cube', label: 'Cube', render: 'cube', params: [p('axis', 'Axis (0=X 1=Y)', 0, 1, 1, 1)] },
   { type: 'page-turn', label: 'Page Turn', render: 'pageTurn', params: [] },

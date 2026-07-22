@@ -345,3 +345,63 @@
   margin: 4px 6px;
   background: var(--border);
 }
+
+/* ── Transitions on the timeline ──────────────────────────────────────────── */
+
+/*
+ * The badge sits ON the cut, spanning the transition's real window, so its width is the
+ * feedback for how long the transition lasts. A fixed-size icon would leave duration invisible
+ * until playback.
+ */
+.oc-transition {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    rgba(109, 94, 252, 0.15),
+    rgba(109, 94, 252, 0.45),
+    rgba(109, 94, 252, 0.15)
+  );
+  backdrop-filter: blur(2px);
+  color: var(--text-primary);
+  font-size: 9px;
+  overflow: hidden;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.oc-transition:hover {
+  border-color: var(--accent-hover);
+}
+
+.oc-transition--selected {
+  border-color: #fff;
+  box-shadow: 0 0 0 1px #fff inset;
+}
+
+/* The hourglass pinch, drawn with two triangles meeting at the centre — the universal
+   "two things exchanging" glyph, and legible down to about 14px wide. */
+.oc-transition__glyph {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 100%, 0 100%, 100% 0);
+  opacity: 0.85;
+}
+
+.oc-transition__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}

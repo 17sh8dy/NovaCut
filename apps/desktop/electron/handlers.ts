@@ -10,7 +10,48 @@ import { basename, extname, join } from 'node:path';
 import { CH, type ExportJobDTO, type ImportedFileDTO, type RecentProjectDTO } from './ipc-types.js';
 import { ffmpegThumbnail, ffprobeMedia, FfmpegEncoder } from './ffmpeg.js';
 
-const MEDIA_EXTS = ['mp4', 'mov', 'mkv', 'avi', 'webm', 'mp3', 'wav', 'aac', 'flac', 'm4a', 'ogg', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'];
+/**
+ * Extensions grouped by kind, so a caller can ask for only what it can use.
+ *
+ * The video editor asks for video + audio; the photo editor asks for images. Without the
+ * split, the picker offers a PNG to the video editor and the editor has to refuse it after
+ * the fact — which is a worse interaction than never showing it.
+ */
+const EXTS_BY_KIND = {
+  video: ['mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v'],
+  audio: ['mp3', 'wav', 'aac', 'flac', 'm4a', 'ogg'],
+  image: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'avif'],
+} as const;
+
+const MEDIA_EXTS = [...EXTS_BY_KIND.video, ...EXTS_BY_KIND.audio, ...EXTS_BY_KIND.image];
+/**
+ * Dialog filters for the requested kinds.
+ *
+ * The "All Files" escape hatch is deliberately NOT offered when kinds are narrowed: it exists
+ * so an unusual container can still be opened, and offering it beside a deliberate restriction
+ * would just be a second door into the case the restriction is there to prevent.
+ */
+function buildFilters(kinds?: readonly string[]): { name: string; extensions: string[] }[] {
+  if (!kinds || kinds.length === 0) {
+    return [{ name: 'Media', extensions: MEDIA_EXTS }, { name: 'All Files', extensions: ['*'] }];
+  }
+  const wanted = kinds.filter((k): k is keyof typeof EXTS_BY_KIND => k in EXTS_BY_KIND);
+  if (wanted.length === 0) return [{ name: 'Media', extensions: MEDIA_EXTS }];
+  const exts = wanted.flatMap((k) => [...EXTS_BY_KIND[k]]);
+  const label = wanted.length === 1
+    ? { video: 'Video', audio: 'Audio', image: 'Images' }[wanted[0]!]
+    : wanted.map((k) => ({ video: 'Video', audio: 'Audio', image: 'Images' }[k])).join(' & ');
+  const filters = [{ name: label, extensions: exts }];
+  // Sub-filters let the user narrow further inside the picker when more than one kind is on
+  // offer, which is how every native picker behaves.
+  if (wanted.length > 1) {
+    for (const k of wanted) {
+      filters.push({ name: { video: 'Video', audio: 'Audio', image: 'Images' }[k], extensions: [...EXTS_BY_KIND[k]] });
+    }
+  }
+  return filters;
+}
+
 const MIME: Record<string, string> = {
   mp4: 'video/mp4', mov: 'video/quicktime', mkv: 'video/x-matroska', avi: 'video/x-msvideo', webm: 'video/webm',
   mp3: 'audio/mpeg', wav: 'audio/wav', aac: 'audio/aac', flac: 'audio/flac', m4a: 'audio/mp4', ogg: 'audio/ogg',
@@ -72,10 +113,10 @@ export function registerHandlers(): void {
   ipcMain.handle(CH.recentProjects, () => readRecents());
 
   // ── Media import ──
-  ipcMain.handle(CH.importFiles, async (): Promise<ImportedFileDTO[]> => {
+  ipcMain.handle(CH.importFiles, async (_e, kinds?: readonly string[]): Promise<ImportedFileDTO[]> => {
     const res = await dialog.showOpenDialog({
       title: 'Import Media',
-      filters: [{ name: 'Media', extensions: MEDIA_EXTS }, { name: 'All Files', extensions: ['*'] }],
+      filters: buildFilters(kinds),
       properties: ['openFile', 'multiSelections'],
     });
     if (res.canceled) return [];

@@ -49,7 +49,7 @@ export interface OpenCutApi {
   saveProject(json: string, path?: string): Promise<{ path: string } | null>;
   loadProject(path: string): Promise<string>;
   recentProjects(): Promise<RecentProjectDTO[]>;
-  importFiles(): Promise<ImportedFileDTO[]>;
+  importFiles(kinds?: readonly string[]): Promise<ImportedFileDTO[]>;
   probeMedia(src: string): Promise<ProbeResult>;
   generateThumbnail(src: string, atSeconds: number): Promise<string>;
   mediaUrl(src: string): string;

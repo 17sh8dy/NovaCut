@@ -66,17 +66,27 @@ const WORKSPACES: Workspace[] = [
     id: 'video',
     icon: Film,
     title: 'Video Editor',
-    desc: 'Edit videos with a professional timeline.',
+    desc: 'Cut, trim and arrange video and audio on a timeline.',
     accent: 'var(--accent)',
     status: 'live',
+    features: ['Multi-track timeline', 'Effects & transitions', 'Keyframe animation', 'Export to MP4'],
   },
   {
     id: 'photo',
+    // The old line read "Stack GPU filters on layered images, non-destructively" — three pieces
+    // of jargon and no mention of what you would actually MAKE. A workspace card has one job:
+    // tell someone whether this is the room they want. Say the job, then list the tools.
     icon: Image,
     title: 'Photo Editor',
-    desc: 'Stack GPU filters on layered images, non-destructively.',
+    desc: 'Edit photos and design thumbnails, banners and social posts.',
     accent: 'var(--label-blue)',
     status: 'live',
+    features: [
+      'Layers, masks & selections',
+      'Text, shapes & ready-made presets',
+      'Brushes, filters & adjustments',
+      'Export PNG, JPG & WebP',
+    ],
   },
   {
     id: 'gif',

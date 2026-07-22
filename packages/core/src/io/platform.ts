@@ -34,6 +34,16 @@ export interface ImportedFile {
   size: number;
 }
 
+/**
+ * What an editor is willing to import.
+ *
+ * The two workspaces want genuinely different things — the video editor takes footage and
+ * audio, the photo editor takes stills — and the file picker should say so rather than
+ * offering everything and rejecting half of it afterwards. Filtering at the DIALOG is the
+ * difference between "these are your options" and "wrong, try again".
+ */
+export type ImportKind = 'video' | 'audio' | 'image';
+
 export interface RecentProject {
   path: string;
   name: string;
@@ -50,7 +60,14 @@ export interface PlatformBridge {
   recentProjects(): Promise<RecentProject[]>;
 
   // ── Media import ──
-  importDialog(): Promise<ImportedFile[]>;
+  /**
+   * Open the host's file picker. `kinds` narrows the filter; omitted means everything.
+   *
+   * Optional so existing callers keep working, and so a host that cannot filter (a web
+   * implementation behind a plain `<input type=file>`) may ignore it — callers must still
+   * validate what comes back, because a user can always type a filename past any filter.
+   */
+  importDialog(kinds?: readonly ImportKind[]): Promise<ImportedFile[]>;
   /** Probe a media file for duration/dimensions/fps/audio. */
   probeMedia(src: string): Promise<{
     duration: number; // seconds

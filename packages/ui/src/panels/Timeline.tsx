@@ -15,9 +15,14 @@ import {
 } from 'lucide-react';
 import {
   addTrack,
+  addTransition,
   formatTimecode,
+  getTransitionDef,
   moveClip,
+  nextClipOnTrack,
+  removeTransition,
   renameTrack,
+  resolvedTransitions,
   seconds,
   snapTargets,
   toSeconds,
@@ -344,9 +349,26 @@ const Lane = memo(function Lane({
 }) {
   const store = useAppStore();
 
+  // Transitions drawn for this lane, resolved against their clips. A transition whose clips
+  // are gone simply does not appear — `resolvedTransitions` applies that rule in one place.
+  const joins = resolvedTransitions(track);
+
   // Accept media dropped from the library onto this lane.
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
+
+    // A transition dropped from the browser attaches to the nearest CUT, not to wherever the
+    // cursor happened to land: a transition belongs to a join, and asking the user to hit a
+    // zero-width boundary with a drop would be a precision game with no purpose.
+    const transitionType = e.dataTransfer.getData('application/x-opencut-transition');
+    if (transitionType) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const scroller = (e.currentTarget as HTMLElement).closest('.oc-timeline__scroll');
+      const x = e.clientX - rect.left + (scroller?.scrollLeft ?? 0);
+      applyTransitionAtTime(store, track, toTicks(x), transitionType);
+      return;
+    }
+
     const mediaId = e.dataTransfer.getData('application/x-opencut-media');
     if (!mediaId) return;
     const media = store.getState().project.media.find((m) => m.id === mediaId);
@@ -372,9 +394,92 @@ const Lane = memo(function Lane({
       {track.clips.map((clip) => (
         <TimelineClip key={clip.id} clip={clip} track={track} snap={snap} toPx={toPx} toTicks={toTicks} />
       ))}
+      {joins.map((j) => (
+        <TransitionMarker key={j.transition.id} track={track} join={j} toPx={toPx} />
+      ))}
     </div>
   );
 });
+
+/**
+ * The badge drawn over a cut that carries a transition.
+ *
+ * Sized to the transition's REAL window rather than to a fixed pill, so its width is the
+ * feedback for how long it lasts — dragging the duration slider visibly grows it. A fixed-size
+ * icon would leave the duration invisible until playback.
+ */
+function TransitionMarker({
+  track,
+  join,
+  toPx,
+}: {
+  track: Track;
+  join: ReturnType<typeof resolvedTransitions>[number];
+  toPx: (t: Ticks) => number;
+}) {
+  const store = useAppStore();
+  const selected = useStore(
+    (s) => s.selectedTransition?.id === join.transition.id && s.selectedTransition?.trackId === track.id,
+  );
+  const def = getTransitionDef(join.transition.type);
+  const left = toPx(join.start);
+  const width = Math.max(14, toPx(join.end) - left);
+
+  return (
+    <div
+      className={`oc-transition${selected ? ' oc-transition--selected' : ''}`}
+      style={{ left, width }}
+      title={`${def?.label ?? join.transition.type} — click to edit, double-click to remove`}
+      onPointerDown={(e) => {
+        e.stopPropagation(); // or the lane's own handlers move the playhead underneath us
+        store.getState().selectTransition({ trackId: track.id, id: join.transition.id });
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        store.getState().dispatch(removeTransition(track.id, join.transition.id));
+        store.getState().selectTransition(null);
+      }}
+    >
+      <span className="oc-transition__glyph" />
+      {width > 46 && <span className="oc-transition__label">{def?.label ?? join.transition.type}</span>}
+    </div>
+  );
+}
+
+/**
+ * Attach a transition at the cut nearest `time` on this track.
+ *
+ * Shared by the lane's drop handler and the browser's click-to-apply, so both land a transition
+ * in exactly the same place. Reports why nothing happened when there is no usable join —
+ * silence here reads as a broken drag.
+ */
+export function applyTransitionAtTime(
+  store: ReturnType<typeof useAppStore>,
+  track: Track,
+  time: Ticks,
+  type: string,
+): void {
+  const notify = store.getState().notify;
+  if (track.clips.length < 2) {
+    notify('Transitions need two clips', 'info', 'Place a second clip on this track first.');
+    return;
+  }
+  // Candidate joins: every clip that has an adjacent neighbour after it.
+  const joins = track.clips
+    .map((clip) => ({ clip, next: nextClipOnTrack(track, clip) }))
+    .filter((j): j is { clip: Clip; next: Clip } => !!j.next)
+    .map((j) => ({ ...j, cut: Math.min(j.clip.start + j.clip.duration, j.next.start) }));
+  if (joins.length === 0) {
+    notify('No cut to attach to', 'info', 'Transitions go between two touching clips.');
+    return;
+  }
+  const best = joins.reduce((a, b) => (Math.abs(b.cut - time) < Math.abs(a.cut - time) ? b : a));
+  // A default of one second, clamped by `transitionWindow` against the clips it joins — so a
+  // drop onto two very short clips still produces something that fits.
+  const duration = seconds(1);
+  store.getState().dispatch(addTransition(track.id, best.clip.id, best.next.id, type, duration));
+  notify(`${getTransitionDef(type)?.label ?? type} added`, 'success');
+}
 
 /**
  * PERF: memoized. It no longer takes the whole `sequence` (which changes reference on every

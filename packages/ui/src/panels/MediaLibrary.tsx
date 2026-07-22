@@ -40,7 +40,10 @@ export function MediaLibrary() {
 
   const runImport = async () => {
     try {
-      const files = await store.getState().bridge.importDialog();
+      // Ask the picker for footage and audio only. Stills belong to the Photo Editor, which
+      // has layers, masks and text — everything that makes a still worth editing — while this
+      // timeline could only stretch one across five seconds.
+      const files = await store.getState().bridge.importDialog(['video', 'audio']);
       if (files.length === 0) return; // user canceled
       await ingest(files.map((f) => ({ src: f.src, name: f.name, mime: f.mime, size: f.size })));
     } catch (err) {
@@ -58,9 +61,26 @@ export function MediaLibrary() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingImport]);
 
-  /** Turn imported file descriptors into probed MediaAssets, streaming progress. */
+  /**
+   * Turn imported file descriptors into probed MediaAssets, streaming progress.
+   *
+   * Stills are refused HERE as well as at the picker, because drag-and-drop never goes near a
+   * picker and a user can type any filename past any filter. The message names the Photo
+   * Editor rather than just saying no — a refusal that does not say where to go is a dead end.
+   */
   const ingest = async (files: { src: string; name: string; mime: string; size: number }[]) => {
     if (files.length === 0) return;
+    const stills = files.filter((f) => isStill(f.mime, f.name));
+    if (stills.length > 0) {
+      files = files.filter((f) => !isStill(f.mime, f.name));
+      const names = stills.slice(0, 3).map((f) => f.name).join(', ');
+      store.getState().notify(
+        stills.length === 1 ? 'Images open in the Photo Editor' : `${stills.length} images skipped`,
+        'info',
+        `${names}${stills.length > 3 ? '…' : ''} — use Home → Photo Editor for stills and GIFs.`,
+      );
+      if (files.length === 0) return;
+    }
     const bridge = store.getState().bridge;
     const assets: MediaAsset[] = [];
     for (let i = 0; i < files.length; i++) {
@@ -227,6 +247,18 @@ export function MediaLibrary() {
       </div>
     </div>
   );
+}
+
+/**
+ * Is this a still (or an animated GIF)?
+ *
+ * GIFs count as stills for this purpose even though they move: they are the Photo Editor's
+ * territory by the user's own division, and a GIF on a video timeline decodes as a single
+ * frame through the `<img>` path anyway.
+ */
+function isStill(mime: string, name: string): boolean {
+  const lower = name.toLowerCase();
+  return mime.startsWith('image/') || /\.(png|jpe?g|webp|bmp|tiff?|gif|avif|heic)$/.test(lower);
 }
 
 function mimeToKind(mime: string, name: string): MediaKind {

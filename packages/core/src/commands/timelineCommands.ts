@@ -6,10 +6,11 @@
  * UI or platform APIs.
  */
 
-import { newClipId, newTrackId, type ClipId, type SequenceId, type TrackId } from '../model/ids.js';
+import { newClipId, newId, newTrackId, type ClipId, type SequenceId, type TrackId } from '../model/ids.js';
 import { getActiveSequence } from '../model/queries.js';
 import { clampTicks, type Ticks } from '../model/time.js';
-import type { Clip, MediaAsset, Track } from '../model/types.js';
+import { getTransitionDef } from '../effects/registry.js';
+import type { Clip, MediaAsset, Track, Transition } from '../model/types.js';
 import type { Command } from './history.js';
 import { insertClip, removeClip, updateClip, updateSequence, updateTrack } from './mutations.js';
 
@@ -298,6 +299,155 @@ export function addTrack(kind: Track['kind']): Command {
         const audios = seq.tracks.filter((t) => t.kind === 'audio');
         const tracks = kind === 'video' ? [...videos, track, ...audios] : [...videos, ...audios, track];
         return { ...seq, tracks };
+      }),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Transitions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Attach a transition to the cut between two adjacent clips.
+ *
+ * The clips are NOT trimmed. A transition here is centred on the cut and borrows time from both
+ * sides at render time (see `transitionWindow`), so adding one never changes the edit — which is
+ * what makes it safe to try five of them in a row and undo back to where you started.
+ *
+ * Replaces any existing transition at the same cut rather than stacking a second one: two
+ * transitions on one boundary have no defined meaning, and the renderer would silently pick
+ * whichever came first.
+ */
+export function addTransition(
+  trackId: TrackId,
+  fromClipId: ClipId,
+  toClipId: ClipId,
+  type: string,
+  duration: Ticks,
+): Command {
+  return {
+    label: 'Add Transition',
+    apply: (project) =>
+      updateTrack(project, activeSeqId(project), trackId, (track) => {
+        const from = track.clips.find((c) => c.id === fromClipId);
+        const to = track.clips.find((c) => c.id === toClipId);
+        if (!from || !to) return track;
+        const def = getTransitionDef(type);
+        if (!def) return track; // unknown key: a no-op beats a transition that renders nothing
+        const params: Record<string, number> = {};
+        for (const p of def.params) params[p.key] = p.default;
+        const transition: Transition = {
+          id: newId('trn'),
+          type,
+          fromClipId,
+          toClipId,
+          duration,
+          params,
+        };
+        const others = track.transitions.filter(
+          (t) => !(t.fromClipId === fromClipId && t.toClipId === toClipId),
+        );
+        return { ...track, transitions: [...others, transition] };
+      }),
+  };
+}
+
+export function removeTransition(trackId: TrackId, transitionId: string): Command {
+  return {
+    label: 'Remove Transition',
+    apply: (project) =>
+      updateTrack(project, activeSeqId(project), trackId, (track) => {
+        const transitions = track.transitions.filter((t) => t.id !== transitionId);
+        return transitions.length === track.transitions.length ? track : { ...track, transitions };
+      }),
+  };
+}
+
+/** Coalesced so dragging a transition's edge (or its slider) is one undo step. */
+export function setTransitionDuration(
+  trackId: TrackId,
+  transitionId: string,
+  duration: Ticks,
+): Command {
+  const clamped = Math.max(1, Math.round(duration)) as Ticks;
+  return {
+    label: 'Transition Duration',
+    coalesceKey: `trn-dur:${transitionId}`,
+    apply: (project) =>
+      updateTrack(project, activeSeqId(project), trackId, (track) => {
+        let changed = false;
+        const transitions = track.transitions.map((t) => {
+          if (t.id !== transitionId || t.duration === clamped) return t;
+          changed = true;
+          return { ...t, duration: clamped };
+        });
+        return changed ? { ...track, transitions } : track;
+      }),
+  };
+}
+
+export function setTransitionParam(
+  trackId: TrackId,
+  transitionId: string,
+  key: string,
+  value: number,
+): Command {
+  return {
+    label: 'Transition Setting',
+    coalesceKey: `trn-param:${transitionId}:${key}`,
+    apply: (project) =>
+      updateTrack(project, activeSeqId(project), trackId, (track) => {
+        let changed = false;
+        const transitions = track.transitions.map((t) => {
+          if (t.id !== transitionId || t.params[key] === value) return t;
+          changed = true;
+          return { ...t, params: { ...t.params, [key]: value } };
+        });
+        return changed ? { ...track, transitions } : track;
+      }),
+  };
+}
+
+/** Swap a transition's type in place, re-seeding params from the new definition's defaults. */
+export function setTransitionType(trackId: TrackId, transitionId: string, type: string): Command {
+  return {
+    label: 'Transition Type',
+    apply: (project) =>
+      updateTrack(project, activeSeqId(project), trackId, (track) => {
+        const def = getTransitionDef(type);
+        if (!def) return track;
+        let changed = false;
+        const transitions = track.transitions.map((t) => {
+          if (t.id !== transitionId || t.type === type) return t;
+          changed = true;
+          // Params are re-seeded rather than carried over: two transitions rarely share a param
+          // name, and a leftover `turns` on a wipe would be dead weight in the document.
+          const params: Record<string, number> = {};
+          for (const p of def.params) params[p.key] = p.default;
+          return { ...t, type, params };
+        });
+        return changed ? { ...track, transitions } : track;
+      }),
+  };
+}
+
+/**
+ * Drop transitions whose clips are gone.
+ *
+ * Called by delete/split so the document does not accumulate orphans. The renderer already
+ * ignores them, so this is hygiene rather than correctness — but an orphan that survives a
+ * save and then matches a recycled id would stop being harmless.
+ */
+export function pruneTransitions(trackId: TrackId): Command {
+  return {
+    label: 'Prune Transitions',
+    apply: (project) =>
+      updateTrack(project, activeSeqId(project), trackId, (track) => {
+        const ids = new Set(track.clips.map((c) => c.id));
+        const transitions = track.transitions.filter(
+          (t) => ids.has(t.fromClipId) && ids.has(t.toClipId),
+        );
+        return transitions.length === track.transitions.length ? track : { ...track, transitions };
       }),
   };
 }

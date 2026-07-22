@@ -9,6 +9,7 @@ import {
   type EffectCategory,
 } from '@opencut/core';
 import { EmptyState } from '../components/primitives/index.js';
+import { applyTransitionAtTime } from './Timeline.js';
 import { useAppStore, useStore } from '../state/context.js';
 
 const CATEGORY_LABEL: Record<EffectCategory, string> = {
@@ -93,8 +94,26 @@ export function TransitionsPanel() {
   const store = useAppStore();
   const transitions = allTransitions();
 
+  /**
+   * Click-to-apply: attach to the cut nearest the PLAYHEAD on the selected clip's track, or on
+   * the first video track that has a cut at all.
+   *
+   * The old behaviour was a toast telling the user to drag instead — which is a feature
+   * describing itself rather than doing anything. Drag still works and is more precise; this is
+   * the one-click path for the common case where the playhead is already at the cut.
+   */
   const apply = (type: string) => {
-    store.getState().notify(`${type} transition — drop between two clips`, 'info');
+    const state = store.getState();
+    const seq = state.sequence();
+    const selectedId = state.selectedClipIds[0];
+    const track =
+      seq.tracks.find((t) => t.clips.some((c) => c.id === selectedId)) ??
+      seq.tracks.find((t) => t.kind === 'video' && t.clips.length > 1);
+    if (!track) {
+      state.notify('Transitions need two clips', 'info', 'Put two clips on one track first.');
+      return;
+    }
+    applyTransitionAtTime(store, track, state.playhead, type);
   };
 
   return (
@@ -108,7 +127,7 @@ export function TransitionsPanel() {
             draggable
             onDragStart={(e) => e.dataTransfer.setData('application/x-opencut-transition', t.type)}
             onClick={() => apply(t.type)}
-            title={`${t.label} — hover to preview`}
+            title={`${t.label} — click to apply at the playhead, or drag onto a cut`}
           >
             <div className="oc-chip__preview">
               <FxPreview demo={transitionDemo(t.type)} />

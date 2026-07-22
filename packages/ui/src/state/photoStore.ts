@@ -414,7 +414,7 @@ export function createPhotoStore({ bridge, notify }: PhotoHost) {
     },
 
     importImages: async () => {
-      const files = await bridge.importDialog();
+      const files = await bridge.importDialog(['image']);
       const images = files.filter((f) => isImage(f.mime, f.name));
       if (images.length === 0) {
         if (files.length > 0) notify('No images in that selection', 'error');

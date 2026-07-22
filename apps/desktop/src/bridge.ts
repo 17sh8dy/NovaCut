@@ -13,6 +13,7 @@ import {
   type ExportJob,
   type FrameEncoder,
   type ImportedFile,
+  type ImportKind,
   type PlatformBridge,
   type Project,
   type RecentProject,
@@ -40,8 +41,8 @@ export class ElectronBridge implements PlatformBridge {
     return this.api.recentProjects();
   }
 
-  async importDialog(): Promise<ImportedFile[]> {
-    return this.api.importFiles();
+  async importDialog(kinds?: readonly ImportKind[]): Promise<ImportedFile[]> {
+    return this.api.importFiles(kinds);
   }
 
   probeMedia(src: string) {

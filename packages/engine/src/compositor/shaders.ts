@@ -242,6 +242,343 @@ export const EFFECT_FRAGMENTS: Record<string, string> = {
       fragColor = texture(u_texture, uv);
     }`),
 
+  // ── Motion & camera ──────────────────────────────────────────────────────
+
+  /**
+   * Handheld camera shake.
+   *
+   * This effect was previously registered against `passthrough` — it declared an amount and a
+   * frequency and then rendered nothing at all. It is a real shader now.
+   *
+   * Two octaves of value noise rather than one: a single frequency reads as a wobble, while a
+   * slow drift with a fast tremor on top is what a hand actually does. The roll term is small
+   * on purpose — a shaking camera rotates a little, and without it the motion looks like a
+   * sliding window rather than a held object.
+   */
+  shake: frag(/* glsl */ `
+    uniform float u_amount;
+    uniform float u_frequency;
+    float n1(float x) {
+      float i = floor(x), f = fract(x);
+      float a = fract(sin(i * 127.1) * 43758.5453);
+      float b = fract(sin((i + 1.0) * 127.1) * 43758.5453);
+      return mix(a, b, f * f * (3.0 - 2.0 * f)) - 0.5;
+    }
+    void main() {
+      float t = u_time * max(0.01, u_frequency);
+      vec2 drift = vec2(n1(t * 0.5), n1(t * 0.5 + 31.7));
+      vec2 tremor = vec2(n1(t * 2.3 + 11.0), n1(t * 2.3 + 57.0)) * 0.45;
+      vec2 offset = (drift + tremor) * u_amount * u_texel;
+      float roll = n1(t * 0.37 + 90.0) * u_amount * 0.0015;
+      vec2 uv = v_uv - 0.5;
+      uv = vec2(uv.x * cos(roll) - uv.y * sin(roll), uv.x * sin(roll) + uv.y * cos(roll)) + 0.5;
+      fragColor = texture(u_texture, uv + offset);
+    }`),
+
+  /**
+   * Zoom (radial) blur — streaks radiating from a centre point.
+   *
+   * The speed-line look. Samples are taken along the ray toward the centre and weighted so the
+   * centre stays sharp, which is what makes it read as motion rather than as a smear.
+   */
+  radialBlur: frag(/* glsl */ `
+    uniform float u_amount;
+    uniform float u_centerX;
+    uniform float u_centerY;
+    void main() {
+      vec2 centre = vec2(u_centerX, u_centerY);
+      vec2 dir = v_uv - centre;
+      vec4 sum = vec4(0.0);
+      float total = 0.0;
+      for (int i = 0; i < 12; i++) {
+        float k = float(i) / 11.0;
+        float scale = 1.0 - k * u_amount * 0.35;
+        float w = 1.0 - k * 0.6;
+        sum += texture(u_texture, centre + dir * scale) * w;
+        total += w;
+      }
+      fragColor = sum / max(total, 0.001);
+    }`),
+
+  /**
+   * Pulse — a rhythmic punch-in, for cutting to a beat.
+   *
+   * The envelope is a sharp attack with a slow release, not a sine: a sine pulses like
+   * breathing, and a beat hits.
+   */
+  pulse: frag(/* glsl */ `
+    uniform float u_amount;
+    uniform float u_bpm;
+    void main() {
+      float beats = u_time * max(1.0, u_bpm) / 60.0;
+      float env = pow(1.0 - fract(beats), 3.0);
+      float scale = 1.0 + env * u_amount * 0.25;
+      fragColor = texture(u_texture, (v_uv - 0.5) / scale + 0.5);
+    }`),
+
+  // ── Stylised looks ────────────────────────────────────────────────────────
+
+  /**
+   * Digital glitch: banded tearing, RGB split and dropout bars.
+   *
+   * Bands are quantised and re-rolled on a coarse time step, so the corruption holds for a few
+   * frames at a time. Re-rolling every frame gives uniform static, which reads as noise rather
+   * than as a fault.
+   */
+  glitch: frag(/* glsl */ `
+    uniform float u_amount;
+    uniform float u_speed;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+    void main() {
+      float step_ = floor(u_time * max(0.1, u_speed) * 12.0);
+      float band = floor(v_uv.y * 32.0);
+      float roll = hash(vec2(band, step_));
+      // Only some bands tear, and only sometimes — constant tearing stops reading as an error.
+      float torn = step(1.0 - u_amount * 0.55, roll);
+      float shift = (hash(vec2(band, step_ + 5.0)) - 0.5) * u_amount * 0.25 * torn;
+      vec2 uv = clamp(v_uv + vec2(shift, 0.0), 0.0, 1.0);
+      float split = u_amount * 6.0;
+      vec4 c = vec4(
+        texture(u_texture, uv + vec2(split, 0.0) * u_texel).r,
+        texture(u_texture, uv).g,
+        texture(u_texture, uv - vec2(split, 0.0) * u_texel).b,
+        texture(u_texture, uv).a);
+      float bar = step(0.985, hash(vec2(band, step_ + 19.0))) * u_amount;
+      fragColor = vec4(c.rgb + bar * 0.5, c.a);
+    }`),
+
+  /**
+   * VHS: chroma bleed, scanlines, tape wobble and head noise.
+   *
+   * Four cheap artifacts layered, because no single one of them says "VHS" — it is the
+   * combination that does. The wobble is horizontal only, which is how tape actually fails.
+   */
+  vhs: frag(/* glsl */ `
+    uniform float u_amount;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+    void main() {
+      float a = clamp(u_amount, 0.0, 1.0);
+      float wobble = sin(v_uv.y * 90.0 + u_time * 4.0) * 0.0016 * a
+                   + (hash(vec2(floor(v_uv.y * 240.0), floor(u_time * 20.0))) - 0.5) * 0.0035 * a;
+      vec2 uv = clamp(v_uv + vec2(wobble, 0.0), 0.0, 1.0);
+      // Chroma bleeds sideways; luma does not. That asymmetry is the signature of the format.
+      float bleed = a * 3.5;
+      vec3 c = vec3(
+        texture(u_texture, uv + vec2(bleed, 0.0) * u_texel).r,
+        texture(u_texture, uv).g,
+        texture(u_texture, uv - vec2(bleed * 0.6, 0.0) * u_texel).b);
+      // Scanlines, tied to texel height so they stay one line thick at any resolution.
+      float scan = 1.0 - a * 0.22 * (0.5 + 0.5 * sin(v_uv.y / max(u_texel.y, 1e-5) * 3.14159265));
+      c *= scan;
+      // Head-switching noise along the bottom, where a VCR always put it.
+      float headBand = smoothstep(0.06, 0.0, v_uv.y);
+      c += headBand * a * hash(vec2(v_uv.x * 300.0, floor(u_time * 30.0))) * 0.35;
+      c += (hash(v_uv * 500.0 + u_time) - 0.5) * a * 0.06;
+      fragColor = vec4(c, texture(u_texture, uv).a);
+    }`),
+
+  /**
+   * Tilt shift — a sharp band across the frame, blurred above and below.
+   *
+   * The blur ramps with distance from the focus band rather than switching on, or the boundary
+   * shows as a seam.
+   */
+  tiltShift: frag(/* glsl */ `
+    uniform float u_focus;
+    uniform float u_width;
+    uniform float u_amount;
+    void main() {
+      float d = abs(v_uv.y - u_focus);
+      float k = smoothstep(max(0.001, u_width), max(0.002, u_width) + 0.28, d);
+      float r = k * u_amount;
+      if (r < 0.01) { fragColor = texture(u_texture, v_uv); return; }
+      vec4 sum = vec4(0.0);
+      float total = 0.0;
+      for (int x = -3; x <= 3; x++) {
+        for (int y = -3; y <= 3; y++) {
+          vec2 off = vec2(float(x), float(y)) * r;
+          float w = exp(-dot(off, off) / (2.0 * r * r + 1e-4));
+          sum += texture(u_texture, v_uv + off * u_texel) * w;
+          total += w;
+        }
+      }
+      fragColor = sum / max(total, 1e-4);
+    }`),
+
+  /** Kaleidoscope — wedge mirroring around the centre. */
+  kaleidoscope: frag(/* glsl */ `
+    uniform float u_segments;
+    uniform float u_angle;
+    void main() {
+      vec2 p = (v_uv - 0.5) * vec2(u_texel.y / u_texel.x, 1.0);
+      float seg = max(2.0, floor(u_segments));
+      float wedge = 6.2831853 / seg;
+      float a = atan(p.y, p.x) + radians(u_angle);
+      // Fold the angle into one wedge, mirroring alternate wedges so the seams line up.
+      a = mod(a, wedge);
+      a = abs(a - wedge * 0.5);
+      float r = length(p);
+      vec2 uv = vec2(cos(a), sin(a)) * r;
+      uv = uv / vec2(u_texel.y / u_texel.x, 1.0) + 0.5;
+      fragColor = texture(u_texture, clamp(uv, 0.0, 1.0));
+    }`),
+
+  /**
+   * Neon edges — a Sobel edge detect, tinted and laid over a darkened frame.
+   *
+   * Keeping some of the original underneath (rather than edges on pure black) is what stops it
+   * looking like a debug visualisation.
+   */
+  neon: frag(/* glsl */ `
+    uniform float u_intensity;
+    uniform float u_color;
+    uniform float u_darken;
+    vec3 unpackColor(float v) {
+      float r = floor(v / 65536.0);
+      float g = floor(mod(v, 65536.0) / 256.0);
+      float b = mod(v, 256.0);
+      return vec3(r, g, b) / 255.0;
+    }
+    float luma(vec2 uv) { return dot(texture(u_texture, uv).rgb, vec3(0.2126, 0.7152, 0.0722)); }
+    void main() {
+      vec2 t = u_texel;
+      float gx =
+        -luma(v_uv + vec2(-t.x, -t.y)) - 2.0 * luma(v_uv + vec2(-t.x, 0.0)) - luma(v_uv + vec2(-t.x, t.y))
+        + luma(v_uv + vec2(t.x, -t.y)) + 2.0 * luma(v_uv + vec2(t.x, 0.0)) + luma(v_uv + vec2(t.x, t.y));
+      float gy =
+        -luma(v_uv + vec2(-t.x, -t.y)) - 2.0 * luma(v_uv + vec2(0.0, -t.y)) - luma(v_uv + vec2(t.x, -t.y))
+        + luma(v_uv + vec2(-t.x, t.y)) + 2.0 * luma(v_uv + vec2(0.0, t.y)) + luma(v_uv + vec2(t.x, t.y));
+      float edge = clamp(length(vec2(gx, gy)) * u_intensity, 0.0, 1.0);
+      vec4 base = texture(u_texture, v_uv);
+      vec3 dim = base.rgb * (1.0 - clamp(u_darken, 0.0, 1.0));
+      fragColor = vec4(dim + unpackColor(u_color) * edge, base.a);
+    }`),
+
+  /** Halftone — the frame rebuilt out of dots on a rotated grid. */
+  halftone: frag(/* glsl */ `
+    uniform float u_size;
+    uniform float u_angle;
+    uniform float u_amount;
+    void main() {
+      vec4 base = texture(u_texture, v_uv);
+      float a = radians(u_angle);
+      // Work in PIXELS so the dot grid stays square on a non-square frame.
+      vec2 px = v_uv / u_texel;
+      vec2 rot = vec2(px.x * cos(a) - px.y * sin(a), px.x * sin(a) + px.y * cos(a));
+      float cell = max(2.0, u_size);
+      vec2 grid = mod(rot, cell) - cell * 0.5;
+      float lum = dot(base.rgb, vec3(0.2126, 0.7152, 0.0722));
+      // Dot radius tracks brightness: dark areas get big dots, highlights get none.
+      float radius = (1.0 - lum) * cell * 0.62;
+      float dotMask = smoothstep(radius, radius - 1.5, length(grid));
+      vec3 tone = mix(vec3(1.0), base.rgb * 0.25, dotMask);
+      fragColor = vec4(mix(base.rgb, tone, clamp(u_amount, 0.0, 1.0)), base.a);
+    }`),
+
+  /**
+   * Old film — grain, gate weave, scratches, dust and a heavy vignette.
+   *
+   * The weave (a slow sub-pixel drift of the whole frame) is the part people cannot name but
+   * always notice: without it the artifacts sit on a rock-steady image and read as a filter
+   * rather than as film.
+   */
+  oldFilm: frag(/* glsl */ `
+    uniform float u_amount;
+    uniform float u_sepia;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+    void main() {
+      float a = clamp(u_amount, 0.0, 1.0);
+      float weaveX = (hash(vec2(floor(u_time * 16.0), 3.0)) - 0.5) * a * 4.0;
+      float weaveY = (hash(vec2(floor(u_time * 16.0), 9.0)) - 0.5) * a * 4.0;
+      vec2 uv = clamp(v_uv + vec2(weaveX, weaveY) * u_texel, 0.0, 1.0);
+      vec4 base = texture(u_texture, uv);
+      vec3 c = base.rgb;
+      vec3 sepia = vec3(
+        dot(c, vec3(0.393, 0.769, 0.189)),
+        dot(c, vec3(0.349, 0.686, 0.168)),
+        dot(c, vec3(0.272, 0.534, 0.131)));
+      c = mix(c, sepia, clamp(u_sepia, 0.0, 1.0));
+      c += (hash(uv * 900.0 + u_time * 60.0) - 0.5) * a * 0.22;
+      // Sparse vertical scratches that persist for a few frames.
+      float scratch = step(0.997, hash(vec2(floor(uv.x * 220.0), floor(u_time * 8.0))));
+      c += scratch * a * 0.35;
+      float dust = step(0.9995, hash(uv * 1400.0 + floor(u_time * 12.0)));
+      c -= dust * a * 0.5;
+      float vig = smoothstep(1.05, 0.35, length(v_uv - 0.5) * 1.41421356);
+      c *= mix(1.0, vig, a * 0.85);
+      fragColor = vec4(clamp(c, 0.0, 1.0), base.a);
+    }`),
+
+  /**
+   * Light leak — a warm gradient washing in from one edge, drifting over time.
+   *
+   * Added with `screen` rather than mixed, because light falling on film ADDS: mixing would
+   * darken the very highlights it is supposed to blow out.
+   */
+  lightLeak: frag(/* glsl */ `
+    uniform float u_amount;
+    uniform float u_angle;
+    uniform float u_color;
+    uniform float u_speed;
+    vec3 unpackColor(float v) {
+      float r = floor(v / 65536.0);
+      float g = floor(mod(v, 65536.0) / 256.0);
+      float b = mod(v, 256.0);
+      return vec3(r, g, b) / 255.0;
+    }
+    void main() {
+      vec4 base = texture(u_texture, v_uv);
+      float a = radians(u_angle);
+      vec2 dir = vec2(cos(a), sin(a));
+      float pos = dot(v_uv - 0.5, dir) + 0.5;
+      float drift = sin(u_time * max(0.0, u_speed) * 0.6) * 0.18;
+      float band = smoothstep(1.0, 0.25, abs(pos - (0.9 + drift)));
+      vec3 leak = unpackColor(u_color) * band * clamp(u_amount, 0.0, 2.0);
+      fragColor = vec4(1.0 - (1.0 - base.rgb) * (1.0 - leak), base.a);
+    }`),
+
+  /** Prism — a chromatic ghost fanning out from the centre. */
+  prism: frag(/* glsl */ `
+    uniform float u_amount;
+    void main() {
+      vec2 dir = v_uv - 0.5;
+      float k = u_amount * 0.02;
+      vec4 base = texture(u_texture, v_uv);
+      fragColor = vec4(
+        texture(u_texture, v_uv - dir * k).r,
+        base.g,
+        texture(u_texture, v_uv + dir * k).b,
+        base.a);
+    }`),
+
+  /**
+   * Dreamy glow — a soft bloom mixed back with `screen`, plus a lift in the blacks.
+   *
+   * The lifted blacks are what make it "dreamy" rather than merely bright: a glow over crushed
+   * shadows still reads as contrasty.
+   */
+  dreamy: frag(/* glsl */ `
+    uniform float u_amount;
+    uniform float u_radius;
+    void main() {
+      vec4 base = texture(u_texture, v_uv);
+      vec3 soft = vec3(0.0);
+      float total = 0.0;
+      for (int i = 0; i < 12; i++) {
+        float ang = float(i) * 0.5235988;
+        for (int ring = 1; ring <= 2; ring++) {
+          vec2 off = vec2(cos(ang), sin(ang)) * u_radius * float(ring) * 0.5;
+          float w = 1.0 / float(ring);
+          soft += texture(u_texture, v_uv + off * u_texel).rgb * w;
+          total += w;
+        }
+      }
+      soft /= max(total, 1e-4);
+      float a = clamp(u_amount, 0.0, 1.0);
+      vec3 glow = 1.0 - (1.0 - base.rgb) * (1.0 - soft * a);
+      fragColor = vec4(mix(base.rgb, glow, 0.85) + a * 0.045, base.a);
+    }`),
+
   /**
    * The whole tonal + colour engine, in one pass.
    *

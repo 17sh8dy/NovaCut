@@ -69,6 +69,15 @@ interface AppState {
 
   // Selection
   selectedClipIds: ClipId[];
+  /**
+   * The transition under edit, if any.
+   *
+   * Track AND id, because a transition's id is only unique within its track and every command
+   * that touches one needs the track to find it. Kept separate from the clip selection rather
+   * than folded into it: selecting a transition must not deselect the clips around it, since
+   * the whole point is to adjust the join between them.
+   */
+  selectedTransition: { trackId: TrackId; id: string } | null;
   selectedMediaIds: string[];
 
   // Playback (mirrors the engine clock)
@@ -112,6 +121,7 @@ interface AppState {
   splitAtPlayhead: () => void;
 
   selectClip: (id: ClipId | null, additive?: boolean) => void;
+  selectTransition: (sel: { trackId: TrackId; id: string } | null) => void;
   selectMedia: (ids: string[]) => void;
 
   setPlaying: (playing: boolean) => void;
@@ -166,6 +176,7 @@ export function createAppStore(bridge: PlatformBridge) {
     dirty: false,
 
     selectedClipIds: [],
+    selectedTransition: null,
     selectedMediaIds: [],
 
     isPlaying: false,
@@ -232,7 +243,13 @@ export function createAppStore(bridge: PlatformBridge) {
       set({ selectedClipIds: specs.map((x) => x.rightId) }); // select the new right halves
     },
 
+    selectTransition: (selectedTransition) =>
+      set({ selectedTransition, ...(selectedTransition ? { inspectorTab: 'effects' as InspectorTab } : {}) }),
+
     selectClip: (id, additive = false) => {
+      // Picking a clip clears any transition selection: the inspector shows one thing at a
+      // time, and leaving both selected makes it ambiguous which one a slider is editing.
+      set({ selectedTransition: null });
       if (id === null) return set({ selectedClipIds: [] });
       const cur = get().selectedClipIds;
       if (additive) {

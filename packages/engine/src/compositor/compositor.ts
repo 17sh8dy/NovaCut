@@ -24,9 +24,12 @@
  */
 
 import {
+  getTransitionDef,
   sample,
   toSeconds,
+  transitionAtTime,
   videoTracksTopDown,
+  type ActiveTransition,
   type Clip,
   type MediaAsset,
   type Sequence,
@@ -34,9 +37,10 @@ import {
 } from '@opencut/core';
 import type { FrameSourcePool } from '../media/frameSource.js';
 import { COMPOSITE_FRAGMENT, VERTEX_SHADER } from './shaders.js';
-import { GLContext } from '../gl/glContext.js';
+import { GLContext, type Fbo } from '../gl/glContext.js';
 import { FboPool } from '../gl/fboPool.js';
 import { runEffectChain } from '../gl/effectChain.js';
+import { getTransitionFragment, TRANSITION_VERTEX_SHADER } from './transitions.js';
 import { dthrottle } from '../debug.js';
 
 export interface RenderContext {
@@ -105,12 +109,21 @@ export class Compositor {
     let active = 0;
     for (const track of tracks) {
       if (track.hidden) continue;
+      // A transition wins over the plain clip lookup: while the playhead is inside its window
+      // BOTH clips are on screen, and each of them is outside its own time range for part of
+      // that window — which is precisely why this cannot be expressed as a clip search.
+      const crossing = transitionAtTime(track, ctx.time);
+      if (crossing) {
+        active += 2;
+        this.renderTransition(ctx, crossing);
+        continue;
+      }
       const clip = track.clips.find(
         (c) => c.enabled && ctx.time >= c.start && ctx.time < c.start + c.duration,
       );
       if (!clip) continue;
       active++;
-      this.renderClip(ctx, clip);
+      this.renderClip(ctx, clip, null);
     }
     dthrottle('render', 400, 'render', () => [
       'render()',
@@ -124,8 +137,74 @@ export class Compositor {
     ]);
   }
 
-  /** Render a single clip: raw frame → effect chain → composite onto the canvas. */
-  private renderClip(ctx: RenderContext, clip: Clip): void {
+  /**
+   * Render one transition: both clips to their own buffers, then blended by its shader.
+   *
+   * The two clips have to be rendered OFF-SCREEN rather than painted over each other, because a
+   * transition is not a composite — a wipe has to read the incoming clip's colour at a pixel
+   * the outgoing clip also covers, and there is no blend mode that expresses that. Two textures
+   * in, one out.
+   *
+   * The result is drawn to the canvas with ordinary source-over, so a transition on an upper
+   * track still composites correctly over the tracks beneath it.
+   */
+  private renderTransition(ctx: RenderContext, crossing: ActiveTransition): void {
+    const { transition, from, to, progress } = crossing;
+    const def = getTransitionDef(transition.type);
+
+    const fromBuf = this.fbos.acquire(this.width, this.height);
+    const toBuf = this.fbos.acquire(this.width, this.height);
+    try {
+      // Each buffer is cleared to TRANSPARENT, not to the sequence background: these are layers
+      // to be blended, and a background baked into them would make every transition composite
+      // an opaque rectangle over the tracks below.
+      this.ctx.bindTarget(fromBuf, this.width, this.height);
+      this.ctx.clear(0, 0, 0, 0);
+      this.renderClip(ctx, from, fromBuf);
+
+      this.ctx.bindTarget(toBuf, this.width, this.height);
+      this.ctx.clear(0, 0, 0, 0);
+      this.renderClip(ctx, to, toBuf);
+
+      const render = def?.render ?? 'cut';
+      const prog = this.ctx.getProgram(
+        `__transition:${render}`,
+        TRANSITION_VERTEX_SHADER,
+        getTransitionFragment(render),
+      );
+      this.ctx.bindTarget(null, this.width, this.height);
+      this.ctx.enableSourceOver();
+      this.ctx.useProgram(prog);
+      // The transition draws a plain fullscreen quad; the clip transforms were already applied
+      // when each clip was rendered into its buffer.
+      this.ctx.setUniformMat3(prog, 'u_model', IDENTITY_MAT3);
+      this.ctx.setUniform1f(prog, 'u_progress', progress);
+      this.ctx.setUniform2f(prog, 'u_texel', 1 / this.width, 1 / this.height);
+      // Params come from the instance, falling back to the definition's defaults so a
+      // transition saved before a param existed still renders with a sane value.
+      for (const p of def?.params ?? []) {
+        this.ctx.setUniform1f(prog, `u_${p.key}`, transition.params[p.key] ?? p.default);
+      }
+      this.ctx.bindTexture(prog, 'u_from', fromBuf.tex, 0);
+      this.ctx.bindTexture(prog, 'u_to', toBuf.tex, 1);
+      this.ctx.drawQuad();
+    } finally {
+      // Released in a finally: a shader compile error inside the try would otherwise strand
+      // both buffers, and every later frame would fail the pool's balance check instead —
+      // burying the real error under its own aftermath.
+      this.fbos.release(fromBuf);
+      this.fbos.release(toBuf);
+    }
+  }
+
+  /**
+   * Render a single clip: raw frame → effect chain → composite onto `target`.
+   *
+   * `target` is null for the canvas. It exists so a transition can render each of its clips
+   * into a buffer; without it the composite step would hard-code the canvas and there would be
+   * no way to get a clip's pixels anywhere else.
+   */
+  private renderClip(ctx: RenderContext, clip: Clip, target: Fbo | null): void {
     const media = clip.mediaId ? ctx.getMedia(clip.mediaId) : undefined;
 
     // 1. Get the source frame and upload it to the dedicated source texture.
@@ -167,8 +246,8 @@ export class Compositor {
       localTicks,
     );
 
-    // 3. Composite the processed texture to the canvas with the clip transform + opacity.
-    this.composite(ctx.sequence, clip, chain.tex, localTicks, media);
+    // 3. Composite the processed texture with the clip transform + opacity.
+    this.composite(ctx.sequence, clip, chain.tex, localTicks, target, media);
     if (chain.owned) this.fbos.release(chain.owned);
   }
 
@@ -177,10 +256,11 @@ export class Compositor {
     clip: Clip,
     tex: WebGLTexture,
     localTicks: Ticks,
+    target: Fbo | null,
     media?: MediaAsset,
   ): void {
     const prog = this.ctx.getProgram('__composite', VERTEX_SHADER, COMPOSITE_FRAGMENT);
-    this.ctx.bindTarget(null, this.width, this.height);
+    this.ctx.bindTarget(target, this.width, this.height);
     this.ctx.enableSourceOver();
     this.ctx.useProgram(prog);
 
@@ -243,6 +323,9 @@ export class Compositor {
     this.ctx.dispose();
   }
 }
+
+/** Identity model matrix, for passes that draw a plain fullscreen quad. */
+const IDENTITY_MAT3 = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
 
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '');

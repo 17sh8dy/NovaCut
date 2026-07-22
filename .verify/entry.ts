@@ -19,8 +19,21 @@
  * than a judgement call about a photo looking "about right".
  */
 
-import { PhotoRenderer, type PhotoRenderContext } from '@opencut/engine';
-import { instantiateEffect, registerBuiltins, type MediaAsset, type MediaId } from '@opencut/core';
+import { Compositor, FrameSourcePool, PhotoRenderer, type PhotoRenderContext } from '@opencut/engine';
+import {
+  instantiateEffect,
+  newClipId,
+  newTrackId,
+  registerBuiltins,
+  seconds,
+  TICKS_PER_SECOND,
+  type Clip,
+  type MediaAsset,
+  type MediaId,
+  type Sequence,
+  type Ticks,
+  type Track,
+} from '@opencut/core';
 import {
   IDENTITY_TRANSFORM,
   type BlendMode,
@@ -156,6 +169,66 @@ const contextFor = (doc: PhotoDocument): PhotoRenderContext => ({
   getMedia: (id) => doc.media.find((m) => m.id === id),
   getFrame: (id) => frames.get(id) ?? null,
 });
+
+// ── Video fixtures ──────────────────────────────────────────────────────────
+
+/** One second in ticks, and the boundary the two test clips are cut at. */
+const HALF_SECOND = (TICKS_PER_SECOND / 2) as Ticks;
+const CUT = (TICKS_PER_SECOND * 2) as Ticks;
+const TICK = 1 as Ticks;
+
+/** Two butt-joined clips on one video track — the minimum shape a transition needs. */
+function makeSequence(a: MediaAsset, b: MediaAsset): Sequence {
+  const clip = (media: MediaAsset, start: number): Clip => ({
+    id: newClipId(),
+    kind: 'video',
+    name: media.name,
+    mediaId: media.id,
+    start: start as Ticks,
+    duration: CUT,
+    sourceIn: 0 as Ticks,
+    sourceOut: CUT,
+    enabled: true,
+    locked: false,
+    speed: { rate: 1, reverse: false, preservePitch: true },
+    transform: {
+      x: { static: 0, keyframes: [] },
+      y: { static: 0, keyframes: [] },
+      scaleX: { static: 1, keyframes: [] },
+      scaleY: { static: 1, keyframes: [] },
+      rotation: { static: 0, keyframes: [] },
+      opacity: { static: 1, keyframes: [] },
+      anchorX: 0.5,
+      anchorY: 0.5,
+    },
+    effects: [],
+    blendMode: 'normal',
+  });
+  const track: Track = {
+    id: newTrackId(),
+    kind: 'video',
+    name: 'V1',
+    clips: [clip(a, 0), clip(b, CUT)],
+    transitions: [],
+    muted: false,
+    hidden: false,
+    locked: false,
+    solo: false,
+    height: 72,
+  };
+  return {
+    id: 'seq' as Sequence['id'],
+    name: 'test',
+    width: SIZE,
+    height: SIZE,
+    fps: 30,
+    duration: (CUT * 2) as Ticks,
+    background: '#000000',
+    tracks: [track],
+    playhead: 0 as Ticks,
+    captions: [],
+  };
+}
 
 // ── Reading pixels back ──────────────────────────────────────────────────────
 
@@ -437,6 +510,103 @@ async function main() {
         threw = String(e);
       }
       check('fbo_pool_balanced_over_25_frames', threw === null, { threw });
+    }
+
+    // ── Transitions (the VIDEO compositor) ─────────────────────────────────
+    //
+    // Transitions were model-only fiction until now: thirteen of them sat in the registry, the
+    // browser let you drag them, and the compositor never read `track.transitions` at all. So
+    // these cases assert the thing that was missing — that the playhead being inside a
+    // transition window actually blends TWO clips — rather than that a shader compiles.
+    //
+    // The fixtures are a solid-red clip cut to a solid-blue clip, because the midpoint of a
+    // crossfade between them has one arithmetically correct answer and no room for opinion.
+    {
+      const red = asset(await paint((c) => {
+        c.fillStyle = '#ff0000';
+        c.fillRect(0, 0, SIZE, SIZE);
+      }));
+      const blue = asset(await paint((c) => {
+        c.fillStyle = '#0000ff';
+        c.fillRect(0, 0, SIZE, SIZE);
+      }));
+
+      const vcanvas = document.createElement('canvas');
+      vcanvas.width = SIZE;
+      vcanvas.height = SIZE;
+      const pool = new FrameSourcePool((src) => src);
+      // The pool resolves through FrameSource, which needs a real element; the harness already
+      // registers its bitmaps by id, so hand the compositor the same map the photo cases use.
+      const compositor = new Compositor(vcanvas, pool as never);
+      const sourceStub = {
+        get: (media: MediaAsset) => ({
+          sync: () => {},
+          getFrame: () => frames.get(media.id) ?? null,
+        }),
+      };
+      // Swap in the stub: the real pool would create <video>/<img> elements and decode
+      // asynchronously, which a synchronous pixel assertion cannot wait on.
+      (compositor as unknown as { sources: unknown }).sources = sourceStub;
+
+      const seq = makeSequence(red, blue);
+      const track = seq.tracks[0]!;
+      /** Render at `time` and return an accessor for the frame's pixels. */
+      const frameAt = (time: number) => {
+        compositor.render({
+          sequence: seq,
+          time: time as Ticks,
+          getMedia: (id: string) => [red, blue].find((m) => m.id === id),
+        });
+        return readback(vcanvas);
+      };
+      /** The centre pixel at `time` — what every colour assertion below reads. */
+      const drawAt = (time: number): [number, number, number] => frameAt(time)(SIZE / 2, SIZE / 2);
+
+      // Baseline: no transition yet. A hard cut means red before the boundary, blue after.
+      check('video_hard_cut_before', hue(drawAt(CUT - TICK)) === 'red', { got: drawAt(CUT - TICK) });
+      check('video_hard_cut_after', hue(drawAt(CUT + TICK)) === 'blue', { got: drawAt(CUT + TICK) });
+
+      // Now attach a crossfade centred on the cut.
+      track.transitions = [{
+        id: 'trn1',
+        type: 'cross-dissolve',
+        fromClipId: track.clips[0]!.id,
+        toClipId: track.clips[1]!.id,
+        duration: HALF_SECOND * 2,
+        params: {},
+      }];
+
+      // At the exact midpoint the eased progress is 0.5, so the result is half of each. This is
+      // the case that would still pass on a hard cut if the assertion were merely "it changed",
+      // which is why it names the colour.
+      const mid = drawAt(CUT);
+      check('video_transition_midpoint_blends', near(mid, [128, 0, 128]), { got: mid, want: [128, 0, 128] });
+
+      // Inside the window but off-centre it must lean toward the clip it is closer to — proof
+      // that progress is actually driving the blend rather than a fixed 50/50 mix.
+      const early = drawAt(CUT - HALF_SECOND / 2);
+      const late = drawAt(CUT + HALF_SECOND / 2);
+      check('video_transition_progresses', early[0]! > mid[0]! && late[2]! > mid[2]!, {
+        early, mid, late,
+      });
+
+      // Outside the window nothing changes: a transition must not leak past its own duration.
+      const before = drawAt(CUT - HALF_SECOND * 2);
+      check('video_transition_bounded', hue(before) === 'red', { got: before });
+
+      // A directional transition proves the two clips reach the shader as SEPARATE textures —
+      // a wipe reads `to` at pixels `from` also covers, which no single-texture path can do.
+      track.transitions[0]!.type = 'wipe';
+      track.transitions[0]!.params = { angle: 0, softness: 0.001 };
+      const wipe = frameAt(CUT);
+      // Halfway through a left-to-right wipe: the left half has already turned over to `to`.
+      const leftPx = wipe(1, 4);
+      const rightPx = wipe(SIZE - 2, 4);
+      check('video_wipe_splits_frame', hue(leftPx) === 'blue' && hue(rightPx) === 'red', {
+        left: leftPx, right: rightPx,
+      });
+
+      compositor.dispose();
     }
 
     results.ok = failures.length === 0;

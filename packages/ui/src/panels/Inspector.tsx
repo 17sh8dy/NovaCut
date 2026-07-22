@@ -1,6 +1,16 @@
 import {
+  allTransitions,
   getEffectDef,
+  getTransitionDef,
+  packColor,
+  removeTransition,
   sample,
+  seconds,
+  setTransitionDuration,
+  setTransitionParam,
+  setTransitionType,
+  toSeconds,
+  unpackColor,
   updateClip,
   upsertKeyframe,
   newKeyframeId,
@@ -8,6 +18,7 @@ import {
   type AnimatedValue,
   type Clip,
   type EffectInstance,
+  type TrackId,
   type Transform,
 } from '@opencut/core';
 import { Diamond, Trash2, Power, ArrowLeftRight } from 'lucide-react';
@@ -23,6 +34,100 @@ const TABS: { id: InspectorTab; label: string }[] = [
   { id: 'text', label: 'Text' },
 ];
 
+/**
+ * Everything about the transition sitting on a cut.
+ *
+ * Type, length and the type's own params, plus a way to remove it. Changing the type re-seeds
+ * the params from the new definition's defaults — see `setTransitionType` for why carrying them
+ * over would be worse.
+ */
+function TransitionInspector({ selection }: { selection: { trackId: TrackId; id: string } }) {
+  const store = useAppStore();
+  const found = useStore((s) => {
+    const track = s.sequence().tracks.find((t) => t.id === selection.trackId);
+    const transition = track?.transitions.find((t) => t.id === selection.id);
+    return track && transition ? { track, transition } : null;
+  });
+
+  // The transition can vanish under the panel — an undo, or a clip deleted from beneath it.
+  if (!found) {
+    return <EmptyState title="Transition gone" hint="It was removed, or the clips it joined were." />;
+  }
+  const { track, transition } = found;
+  const def = getTransitionDef(transition.type);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div className="oc-inspector__tabs">
+        <button className="oc-inspector__tab" data-active>Transition</button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <div className="oc-field">
+          <label>Type</label>
+          <select
+            className="oc-select"
+            value={transition.type}
+            onChange={(e) =>
+              store.getState().dispatch(setTransitionType(track.id, transition.id, e.target.value))
+            }
+          >
+            {allTransitions().map((t) => (
+              <option key={t.type} value={t.type}>{t.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="oc-field" style={{ borderBottom: 'none' }}>
+          <Slider
+            label="Duration"
+            value={toSeconds(transition.duration)}
+            min={0.1}
+            max={4}
+            step={0.05}
+            unit="s"
+            onChange={(v) =>
+              store.getState().dispatch(setTransitionDuration(track.id, transition.id, seconds(v)))
+            }
+          />
+        </div>
+
+        {(def?.params ?? []).map((param) => (
+          <div className="oc-field" key={param.key} style={{ borderBottom: 'none', paddingTop: 4, paddingBottom: 4 }}>
+            <Slider
+              label={param.label}
+              value={transition.params[param.key] ?? param.default}
+              min={param.min}
+              max={param.max}
+              step={param.step}
+              unit={param.unit ?? ''}
+              onChange={(v) =>
+                store.getState().dispatch(setTransitionParam(track.id, transition.id, param.key, v))
+              }
+            />
+          </div>
+        ))}
+
+        <div className="oc-field">
+          <button
+            className="oc-btn oc-btn--danger"
+            onClick={() => {
+              store.getState().dispatch(removeTransition(track.id, transition.id));
+              store.getState().selectTransition(null);
+            }}
+          >
+            <Trash2 size={14} /> Remove Transition
+          </button>
+        </div>
+
+        <p className="oc-hint" style={{ padding: '0 var(--space-3)' }}>
+          The transition is centred on the cut and borrows time from both clips — it never
+          shortens the edit.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /** Quick-pick text colors (the full picker is still available alongside these). */
 const TEXT_COLORS = [
   '#ffffff', '#000000', '#f5624d', '#ff9f43', '#ffd93d', '#4cd97b',
@@ -33,9 +138,15 @@ export function Inspector() {
   const store = useAppStore();
   const tab = useStore((s) => s.inspectorTab);
   const clip = useStore((s) => s.selectedClip());
+  const selectedTransition = useStore((s) => s.selectedTransition);
+
+  // A selected transition takes the whole panel. It is not a property OF a clip — it is the
+  // join between two — so nesting it under a clip's tabs would put it somewhere it does not
+  // belong and make it unreachable whenever neither clip happened to be selected.
+  if (selectedTransition) return <TransitionInspector selection={selectedTransition} />;
 
   if (!clip) {
-    return <EmptyState title="No clip selected" hint="Select a clip to edit its properties" />;
+    return <EmptyState title="No clip selected" hint="Select a clip, or a transition, to edit it" />;
   }
 
   return (
@@ -215,7 +326,22 @@ function EffectsTab({ clip }: { clip: Clip }) {
     <>
       {clip.effects.map((fx) => {
         const def = getEffectDef(fx.type);
-        if (!def) return null;
+        // An effect whose registry entry is gone — an unloaded plugin, or a built-in that was
+        // retired (`speed-ramp` was, once it turned out to be a no-op) — used to render as
+        // NOTHING here while staying in the document. Invisible-but-present is the worst of
+        // both: the user cannot see it and cannot remove it. Say what it is and offer the bin.
+        if (!def) {
+          return (
+            <div key={fx.id} style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8 }}>
+              <div className="oc-section-title" style={{ textTransform: 'none' }}>
+                <span style={{ color: 'var(--text-disabled)' }}>Unknown effect “{fx.type}”</span>
+                <button className="oc-tt" onClick={() => removeEffect(fx.id)} title="Remove">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          );
+        }
         return (
           <div key={fx.id} style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8 }}>
             <div className="oc-section-title" style={{ textTransform: 'none' }}>
@@ -230,7 +356,20 @@ function EffectsTab({ clip }: { clip: Clip }) {
               </span>
             </div>
             {fx.enabled &&
-              def.params.map((param) => (
+              def.params.map((param) =>
+                // Colour params ride the numeric path packed into one float (see `packColor` in
+                // core); this is the only place in the video UI that unpacks them.
+                param.kind === 'color' ? (
+                  <div className="oc-field" key={param.key} style={{ borderBottom: 'none', paddingTop: 4, paddingBottom: 4 }}>
+                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>{param.label}</label>
+                    <input
+                      type="color"
+                      value={unpackColor(fx.params[param.key]?.static ?? param.default)}
+                      onChange={(e) => setParam(fx, param.key, packColor(e.target.value))}
+                      style={{ width: 34, height: 22, padding: 0, background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-xs)', cursor: 'pointer' }}
+                    />
+                  </div>
+                ) : (
                 <div className="oc-field" key={param.key} style={{ borderBottom: 'none', paddingTop: 4, paddingBottom: 4 }}>
                   <Slider
                     label={param.label}
@@ -242,7 +381,8 @@ function EffectsTab({ clip }: { clip: Clip }) {
                     onChange={(v) => setParam(fx, param.key, v)}
                   />
                 </div>
-              ))}
+                ),
+              )}
           </div>
         );
       })}
