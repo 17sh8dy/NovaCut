@@ -113,7 +113,7 @@ export const SETTINGS: SettingDef[] = [
   {
     id: 'accentColor', category: 'General', group: 'Appearance', control: 'accent', status: 'live',
     label: 'Accent colour',
-    desc: 'Primary buttons, active tools, selection, sliders and focus rings. The Open Cut logo always stays Deep Navy → Blue → Cyan.',
+    desc: 'Primary buttons, active tools, selection, sliders and focus rings. The Open Cut logo always keeps its own blue.',
     keywords: 'accent colour color highlight brand blue purple green orange red pink gray theme',
   },
   {

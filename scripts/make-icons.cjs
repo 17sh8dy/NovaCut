@@ -1,18 +1,36 @@
 /**
- * Builds every application icon from the one vector source.
+ * Builds every application icon from the vector sources.
  *
  *   npm run icon        (→ electron scripts/make-icons.cjs)
  *
- * SOURCE OF TRUTH: `assets/OpenCut.svg`. Nothing else is authored; everything below is a
- * derivation. Change the logo there and re-run — never hand-edit an output, or the taskbar icon
- * and the in-app mark drift apart with nothing to say which one is right.
+ * SOURCE OF TRUTH: `assets/OpenCut.svg` and `assets/OpenCut-small.svg`. Nothing else is
+ * authored; everything below is a derivation. Change the logo there and re-run — never hand-edit
+ * an output, or the taskbar icon and the in-app mark drift apart with nothing to say which one
+ * is right.
  *
  * Outputs
- *   apps/desktop/build/icon.png     1024²   electron-builder's generic source
- *   apps/desktop/build/icon.ico             Windows: 16→256, multi-image
- *   apps/desktop/build/icon.icns            macOS: the full iconutil type set
- *   apps/desktop/build/icons/NxN.png        Linux: the png set electron-builder expects
- *   packages/ui/src/assets/logo.svg         the vector itself, for the renderer to bundle
+ *   apps/desktop/build/icon.png       1024²   electron-builder's generic source
+ *   apps/desktop/build/icon.ico               Windows: 16→256, multi-image
+ *   apps/desktop/build/icon.icns              macOS: the full iconutil type set
+ *   apps/desktop/build/icons/NxN.png          Linux: the png set electron-builder expects
+ *   packages/ui/src/assets/logo.svg           the full vector, for the renderer to bundle
+ *   packages/ui/src/assets/logo-small.svg     the small-size vector, ditto
+ *
+ * ── WHY THERE ARE TWO SOURCES ────────────────────────────────────────────────
+ *
+ * The mark is two translucent overlapping frames, a play triangle and four corner brackets.
+ * That reads beautifully at 128px and collapses into a blue smudge at 16px: the 0.25/0.35
+ * opacities converge on the background, the 12px bracket strokes fall below one pixel, and the
+ * triangle merges with the frame behind it. Rendered and compared before this was written — at
+ * 16px the full artwork carries almost no information.
+ *
+ * So the small sizes get their own drawing (`OpenCut-small.svg`): one frame at full opacity, a
+ * knocked-out triangle, no brackets, no rotation. Same idea, same colour, two shapes instead of
+ * seven. This is ordinary practice for an icon set and the reason .ico is a multi-image format
+ * in the first place — an icon is not one drawing scaled, it is a family drawn per size.
+ *
+ * SMALL_MAX is the cut. It is deliberately generous: 32px is where the brackets start landing on
+ * whole pixels, and anything at or below it takes the simplified art.
  *
  * HOW THE VECTOR IS RASTERISED: an offscreen Electron window draws the SVG into a <canvas> at
  * each size. Chromium is already here and is a better SVG rasteriser than anything that could be
@@ -20,14 +38,6 @@
  * guarantees a real alpha channel instead of a window background composited behind the art.
  * PNG encoding is left to `canvas.toDataURL`, which also keeps the IPC payload to a data URL
  * rather than the ~4M-element pixel array a 1024² frame would otherwise have to cross as JSON.
- *
- * WHY THE GEOMETRY IS WHAT IT IS — the SVG was traced from `assets/logo-reference.png` by
- * measurement, not by eye. Three deliberate corrections were made, all alignment, not design:
- *   - the wedge apex sat at (0.5042, 0.4907) of the body; it is now exactly the centre
- *   - the wedge's upper edge met the top at 0.83787 of the width while the corner arc begins at
- *     0.82431; it now terminates exactly on that junction, so the cut reads as intentional
- *   - the four corner radii measured 37.7 / 38.2 / 40.7 / 41.5 px on a 225px body; all four are
- *     now 145 on an 824px body (0.17569, the measured average)
  */
 
 const { app, BrowserWindow } = require('electron');
@@ -36,12 +46,16 @@ const { join, dirname } = require('node:path');
 
 const ROOT = join(__dirname, '..');
 const SVG = join(ROOT, 'assets', 'OpenCut.svg');
+const SVG_SMALL = join(ROOT, 'assets', 'OpenCut-small.svg');
 const BUILD = join(ROOT, 'apps', 'desktop', 'build');
 const ICONS = join(BUILD, 'icons');
 const UI_ASSET = join(ROOT, 'packages', 'ui', 'src', 'assets', 'logo.svg');
+const UI_ASSET_SMALL = join(ROOT, 'packages', 'ui', 'src', 'assets', 'logo-small.svg');
 
 /** Every size anything downstream asks for. */
 const SIZES = [16, 24, 32, 48, 64, 128, 256, 512, 1024];
+/** At or below this, use the simplified drawing. See the header for why. */
+const SMALL_MAX = 32;
 /**
  * Windows shell sizes. ≤64 ship as uncompressed DIBs, which every Windows version can draw;
  * 128 and 256 ship as PNG, which is how large icons have been stored since Vista.
@@ -117,35 +131,49 @@ function buildICNS(entries) {
 }
 
 // ── Rasterise ─────────────────────────────────────────────────────────────────
-async function rasterise(svg) {
+/**
+ * Draw every size, taking each from whichever source suits it.
+ *
+ * Both SVGs are decoded up front into `__img.full` / `__img.small`, then each size picks one.
+ * The choice is made HERE rather than by the caller so that there is exactly one place in the
+ * build that knows which drawing a given pixel size gets — every output below (ico, icns, the
+ * Linux set, the generic png) then inherits that decision for free and cannot disagree with the
+ * others about what a 32px Open Cut icon looks like.
+ */
+async function rasterise(full, small) {
   const win = new BrowserWindow({ show: false, width: 64, height: 64 });
   await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<body></body>'));
 
   // Decode once, then draw at each size. Sizes are fetched one at a time so no single IPC
   // response has to carry a whole large frame.
   await win.webContents.executeJavaScript(`window.__ready = (async () => {
-    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(${JSON.stringify(svg)});
-    window.__img = new Image();
-    await new Promise((res, rej) => {
-      window.__img.onload = res;
-      window.__img.onerror = () => rej(new Error('the SVG failed to decode'));
-      window.__img.src = url;
+    const load = (svg) => new Promise((res, rej) => {
+      const img = new Image();
+      img.onload = () => res(img);
+      img.onerror = () => rej(new Error('the SVG failed to decode'));
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     });
+    window.__img = {
+      full: await load(${JSON.stringify(full)}),
+      small: await load(${JSON.stringify(small)}),
+    };
     return true;
   })()`);
 
   const frames = {};
   for (const size of SIZES) {
+    const variant = size <= SMALL_MAX ? 'small' : 'full';
     const res = await win.webContents.executeJavaScript(`(async () => {
       await window.__ready;
       const size = ${size};
+      const img = window.__img[${JSON.stringify(variant)}];
       const c = document.createElement('canvas');
       c.width = c.height = size;
       const g = c.getContext('2d');
       g.imageSmoothingEnabled = true;
       g.imageSmoothingQuality = 'high';
       g.clearRect(0, 0, size, size);              // start fully transparent, never white
-      g.drawImage(window.__img, 0, 0, size, size);
+      g.drawImage(img, 0, 0, size, size);
       const out = { png: c.toDataURL('image/png').slice('data:image/png;base64,'.length) };
       if (${NEEDS_RGBA.has(size)}) out.rgba = Array.from(g.getImageData(0, 0, size, size).data);
       // Corner alpha, so the caller can prove the canvas stayed transparent.
@@ -164,7 +192,8 @@ async function rasterise(svg) {
 
 app.whenReady().then(async () => {
   const svg = readFileSync(SVG, 'utf8');
-  const frames = await rasterise(svg);
+  const svgSmall = readFileSync(SVG_SMALL, 'utf8');
+  const frames = await rasterise(svg, svgSmall);
 
   // A transparent canvas is a hard requirement, so assert it rather than trust it.
   const opaque = SIZES.filter((s) => frames[s].cornerAlpha !== 0);
@@ -182,16 +211,23 @@ app.whenReady().then(async () => {
   ));
   writeFileSync(join(BUILD, 'icon.icns'), buildICNS(ICNS.map(([type, size]) => [type, frames[size].png])));
 
-  // The renderer bundles the vector, not a raster: the title-bar mark and the Home hero are
-  // different sizes, and one scalable file beats two PNGs that can fall out of step.
+  // The renderer bundles the vectors, not rasters: the Home hero (88px), the About mark (56px)
+  // and the title-bar mark (22px) are all different sizes, and scalable files beat PNGs that can
+  // fall out of step. Both go across, because the same size threshold applies in the UI: the
+  // title bar is well under SMALL_MAX and gets the simplified drawing for the same reason the
+  // 16px taskbar icon does.
   writeFileSync(UI_ASSET, svg);
+  writeFileSync(UI_ASSET_SMALL, svgSmall);
 
   const kb = (n) => `${(n / 1024).toFixed(1)} kB`;
-  console.log(`source   assets/OpenCut.svg (${svg.length} bytes)`);
+  const smalls = SIZES.filter((s) => s <= SMALL_MAX);
+  const fulls = SIZES.filter((s) => s > SMALL_MAX);
+  console.log(`source   assets/OpenCut.svg (${svg.length} B) · assets/OpenCut-small.svg (${svgSmall.length} B)`);
+  console.log(`variant  small → ${smalls.join(', ')}   ·   full → ${fulls.join(', ')}`);
   console.log(`png      ${SIZES.join(', ')} → build/icons/  ·  build/icon.png ${kb(frames[1024].png.length)}`);
   console.log(`ico      ${ICO.map((i) => i.size).join(', ')} → build/icon.ico`);
   console.log(`icns     ${ICNS.length} entries → build/icon.icns`);
-  console.log(`ui       → packages/ui/src/assets/logo.svg`);
+  console.log(`ui       → packages/ui/src/assets/logo.svg + logo-small.svg`);
   console.log(`alpha    every size has a transparent corner ✓`);
   app.quit();
 });

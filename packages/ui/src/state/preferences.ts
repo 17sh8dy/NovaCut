@@ -25,9 +25,13 @@ export interface AppPreferences {
   // ── General ──
   theme: ThemePreference;
   /**
-   * The accent, as a CSS colour. Empty string means "Ocean Blue" — the brand blue from the
+   * The accent, as a CSS colour. Empty string means "Ocean Blue" — the default --accent from the
    * design tokens, and the reason it is stored as empty rather than as '#1565ff' is that
-   * tokens.css must stay the single definition of the brand colour. See useAppliedPreferences.
+   * tokens.css must stay the single definition of it. See useAppliedPreferences.
+   *
+   * Note this is the ACCENT default, not the brand colour: since the logo changed they are
+   * different values on purpose, because the mark's blue is too light to carry white button
+   * text. tokens.css explains the split.
    */
   accentColor: string;
   launchOnStartup: boolean;
@@ -157,10 +161,13 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
 /**
  * The accent presets offered in Settings.
  *
- * `value: ''` is Ocean Blue and is deliberately NOT the literal '#1565ff': storing the brand
- * colour here would make this file a second definition of it, free to drift from the one in
- * tokens.css that the logo is measured against. Empty means "whatever tokens.css says --accent
- * is", which is the brand blue, which is the logo's own middle gradient stop.
+ * `value: ''` is Ocean Blue and is deliberately NOT the literal '#1565ff': storing the colour
+ * here would make this file a second definition of it, free to drift from the one in tokens.css.
+ * Empty means "whatever tokens.css says --accent is".
+ *
+ * That is NOT the logo's blue, and has not been since the mark changed: #0A84FF measures 3.65:1
+ * under white text and cannot be a button fill. `swatch` below is the only literal, and it is
+ * only ever painted into a preview circle.
  *
  * Every value must be a colour that can carry white text at ~4.5:1, because that is what
  * --accent is used for. The custom picker in the Settings dialog is not held to that, which is

@@ -17,10 +17,15 @@
  *    If a rule uses --accent for something that is neither interactive nor active, that rule is
  *    wrong.
  *
- * 3. THE BRAND IS NOT THE ACCENT. --brand-* are the logo's own three gradient stops and are
- *    fixed forever; --accent is a user preference that defaults to the brand blue. They are
- *    separate tokens precisely so that choosing a green accent recolours the buttons and leaves
- *    the mark alone. Never use --accent on a brand asset, and never use --brand-* for a control.
+ * 3. THE BRAND IS NOT THE ACCENT. --brand-* are the logo's colour and are fixed forever;
+ *    --accent is a user preference for controls. They are separate tokens precisely so that
+ *    choosing a green accent recolours the buttons and leaves the mark alone. Never use --accent
+ *    on a brand asset, and never use --brand-* for a control.
+ *
+ *    They used to be the same value by default (`--accent: var(--brand-blue)`), which held only
+ *    for as long as the logo's blue happened to be legible under white text. It stopped holding
+ *    when the mark changed: #0A84FF is 3.65:1 against white, below the 4.5:1 a button label
+ *    needs. The accent is now written out independently — see below.
  *
  * Structure: :root holds everything theme-independent PLUS the dark palette (dark is the base);
  * :root[data-theme='light'] overrides only what changes. `data-theme` is written by
@@ -30,17 +35,23 @@
 :root {
   /*
    * ── Brand ──
-   * The three stops of the logo's gradient, verbatim from assets/OpenCut.svg. If that file's
-   * stops change, these change with them — they are the same three numbers, and the mark and the
-   * UI around it must not be able to disagree about what the brand colour is.
+   * --brand-blue is the logo's fill, verbatim from assets/OpenCut.svg. If that file's colour
+   * changes, this changes with it — it is the same number, and the mark and the UI around it
+   * must not be able to disagree about what the brand colour is.
    *
-   * These are theme- AND accent-independent. Deep Navy → Blue → Cyan is Open Cut, whatever the
-   * user has set their accent to and whichever theme they are in.
+   * The mark is a SINGLE FLAT BLUE. --brand-deep and --brand-sky are not in the artwork; they
+   * are a shade and a tint of --brand-blue at the same hue (210°), and they exist for exactly
+   * one purpose: giving --brand-gradient somewhere to travel for large brand TYPE, where a flat
+   * fill reads as dead. Nothing that is meant to match the icon may use them — match the icon
+   * with --brand-blue.
+   *
+   * These are theme- AND accent-independent. This blue is Open Cut whatever the user has set
+   * their accent to and whichever theme they are in.
    */
-  --brand-deep: #071b5c;
-  --brand-blue: #1565ff;
-  --brand-cyan: #3edcff;
-  --brand-gradient: linear-gradient(135deg, var(--brand-deep) 0%, var(--brand-blue) 52%, var(--brand-cyan) 100%);
+  --brand-deep: #0059b3;
+  --brand-blue: #0a84ff;
+  --brand-sky: #70b8ff;
+  --brand-gradient: linear-gradient(135deg, var(--brand-deep) 0%, var(--brand-blue) 52%, var(--brand-sky) 100%);
 
   /*
    * ── Accent ──
@@ -52,10 +63,15 @@
    * white — the same mix in both themes reads as a bug in one of them.
    *
    * --accent carries WHITE text (--on-accent) as a button fill, so the value is contrast-
-   * constrained: the default #1565FF lands at ~4.8:1. The logo's cyan end is far too light for
-   * that, which is why it is never an accent — only ever part of --brand-gradient.
+   * constrained: this default lands at 4.84:1, clear of the 4.5:1 minimum.
+   *
+   * IT IS DELIBERATELY NOT var(--brand-blue). The brand blue is #0A84FF, which measures 3.65:1
+   * under white and would fail on every primary button in the app. The two were the same value
+   * until the logo changed, and the accent stayed put precisely because rule 3 above says it is
+   * allowed to. If the brand blue ever moves again, check its contrast before considering
+   * pointing this at it — do not assume they should match.
    */
-  --accent: var(--brand-blue);
+  --accent: #1565ff;
   --on-accent: #ffffff;
 
   /* ── Radius ── */

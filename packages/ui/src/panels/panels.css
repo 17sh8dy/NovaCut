@@ -108,7 +108,11 @@
 .oc-brand__mark {
   width: 22px;
   height: 22px;
-  background: url('../assets/logo.svg') center / contain no-repeat;
+  /* logo-small, not logo. At 22px the full mark's two translucent frames and its 12px bracket
+     strokes collapse into a blue smudge — the same reason the 16/24/32 icon sizes take the
+     simplified drawing (see scripts/make-icons.cjs). Home at 88px and About at 56px are both
+     comfortably above that threshold and use the full artwork. */
+  background: url('../assets/logo-small.svg') center / contain no-repeat;
   /* No halo, and no animation. The mark used to breathe on a 3.6s loop; a logo in the title bar
      is a label, and a label that pulses forever is the most distracting thing on a screen whose
      whole job is to not be distracting. */

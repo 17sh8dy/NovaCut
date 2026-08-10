@@ -73,9 +73,9 @@ and an AppImage + deb on Linux. Configuration lives in `apps/desktop/electron-bu
 
 ## The logo
 
-**`assets/OpenCut.svg` is the single source of truth** — a 540-byte hand-authored vector: two
-paths, one gradient, no metadata, no filters, no embedded rasters, transparent everywhere the
-mark isn't. `npm run icon` (`scripts/make-icons.cjs`) rasterises it through Chromium and writes:
+**`assets/OpenCut.svg` and `assets/OpenCut-small.svg` are the single source of truth** — small
+hand-authored vectors: no metadata, no filters, no embedded rasters, transparent everywhere the
+mark isn't. `npm run icon` (`scripts/make-icons.cjs`) rasterises them through Chromium and writes:
 
 | Output | Contents |
 | --- | --- |
@@ -83,16 +83,25 @@ mark isn't. `npm run icon` (`scripts/make-icons.cjs`) rasterises it through Chro
 | `apps/desktop/build/icon.icns` | the ten types `iconutil` emits, 16 → 1024 |
 | `apps/desktop/build/icons/NxN.png` | the Linux icon-theme set, 16 → 1024 |
 | `apps/desktop/build/icon.png` | 1024², the generic fallback |
-| `packages/ui/src/assets/logo.svg` | the vector itself, bundled by the renderer |
+| `packages/ui/src/assets/logo.svg` | the full vector, bundled by the renderer |
+| `packages/ui/src/assets/logo-small.svg` | the small-size vector, ditto |
 
 `electron-builder.yml` points `win.icon` / `mac.icon` / `linux.icon` at those files explicitly, so
 a build never silently re-derives them. **Change the logo in the SVG and re-run — never hand-edit
 an output**, or the taskbar icon and the in-app mark drift apart with nothing to say which is right.
 
-The geometry was measured off the reference artwork (`assets/logo-reference.png`), not eyeballed;
-`scripts/make-icons.cjs` documents the three alignment corrections that were applied. The brand
-tokens in `packages/ui/src/theme/tokens.css` are the SVG's three gradient stops verbatim, so the
-mark and the UI around it cannot disagree about what the brand colour is.
+**There are two drawings on purpose.** The mark — two overlapping translucent frames, a play
+triangle and a pair of corner brackets — reads at 128px and collapses into a plain blue square at
+16px, where the opacities converge on the background and the 12px bracket strokes fall below one
+pixel. So **32px and below take a simplified drawing**: one solid frame, a knocked-out triangle,
+no brackets. `make-icons.cjs` applies that threshold to the icon files and the CSS applies it
+again to the 22px title-bar mark. An icon is not one drawing scaled, it is a family drawn per
+size — which is why `.ico` is a multi-image format in the first place.
+
+`--brand-blue` in `packages/ui/src/theme/tokens.css` is the SVG's fill verbatim, so the mark and
+the UI around it cannot disagree about the brand colour. **`--accent` is deliberately a different
+value**: the mark's `#0A84FF` measures 3.65:1 under white text and cannot carry a button label.
+That file explains the split.
 
 Builds are unsigned, so Windows SmartScreen warns on first run until a code-signing certificate
 is configured (`CSC_LINK` / `CSC_KEY_PASSWORD`).

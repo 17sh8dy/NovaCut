@@ -93,10 +93,12 @@
   margin: 0 auto 22px;
   background: url('../assets/logo.svg') center / contain no-repeat;
 }
-/* Only on light. A navy shadow under a navy mark on a charcoal page is not depth, it is a smudge
-   — dark themes get their separation from the artwork's own brightness instead. */
+/* Only on light. A blue shadow under a blue mark on a charcoal page is not depth, it is a smudge
+   — dark themes get their separation from the artwork's own brightness instead.
+   Tinted with the mark's own blue (#0A84FF) rather than neutral grey, so the shadow reads as
+   light falling through the artwork instead of a drop shadow bolted underneath it. */
 :root[data-theme='light'] .oc-home__logo {
-  filter: drop-shadow(0 12px 24px rgba(7, 27, 92, 0.22));
+  filter: drop-shadow(0 12px 24px rgba(10, 132, 255, 0.28));
 }
 .oc-home__title {
   margin: 0;

@@ -56,9 +56,11 @@
 
 /* ── BrandText: the wordmark ───────────────────────────────────────────────────
    --brand-gradient, not --accent: this is branding. Someone running a green accent still sees
-   "Open Cut" in Deep Navy → Blue → Cyan, because the accent preference recolours the controls
-   and never the mark. Static, too — a wordmark that animates forever is a logo that never
-   settles. */
+   "Open Cut" in the brand blue, because the accent preference recolours the controls and never
+   the mark. Static, too — a wordmark that animates forever is a logo that never settles.
+
+   The ramp is a shade and a tint of the mark's single blue, not three colours of its own; see
+   the Brand block in tokens.css. It travels just far enough to stop large type reading flat. */
 .oc-brand-text {
   background: var(--brand-gradient);
   background-size: 100% 100%;
@@ -67,12 +69,12 @@
   color: transparent;
 }
 /*
- * In the dark theme the gradient's navy end is nearly invisible against a charcoal panel, so the
- * mark is drawn from the readable half of the same gradient rather than being lightened into a
- * different colour. Same three stops, one of them skipped.
+ * On charcoal the ramp's dark end sinks into the panel, so the wordmark is drawn from the
+ * readable half of the same ramp rather than being lightened into a different colour. Same
+ * stops, the bottom one skipped.
  */
 :root:not([data-theme='light']) .oc-brand-text {
-  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-cyan) 100%);
+  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-sky) 100%);
   -webkit-background-clip: text;
   background-clip: text;
 }
