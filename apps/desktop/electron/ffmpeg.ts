@@ -200,9 +200,54 @@ export class FfmpegEncoder {
     const hasAudio = !!audioPath && !isGif;
     if (hasAudio) args.push('-i', audioPath!);
 
-    // WebGL readPixels is bottom-up (vflip); scale only when the output size differs.
+    /*
+     * ── COLOUR: STATE THE MATRIX, AND TAG WHAT WAS WRITTEN ───────────────────────────────
+     *
+     * The compositor hands over full-range RGBA. Turning that into YUV needs a matrix, and this
+     * used to specify neither the matrix nor the tags — so swscale picked a default, the file
+     * was written with every colour field `unknown`, and each player then guessed for itself.
+     * Measured against SMPTE bars through the real export path: white came back pixel-identical
+     * while saturated colours were out by up to 29/255. Untouched neutrals with rotated chroma
+     * is the signature of a matrix mismatch, and it is why the same export could look right in
+     * one player and wrong in another.
+     *
+     * Both halves are needed and they must agree:
+     *   out_color_matrix / out_range  tell swscale how to CONVERT
+     *   -colorspace / -color_*        tell the container what was WRITTEN
+     * Doing only the second is worse than doing neither: correctly-tagged wrong pixels.
+     *
+     * BT.709 limited-range for everything, including 480p and 576p. The old SD convention is
+     * BT.601, but a mixed rule means an export's colour depends on its resolution, and every
+     * modern delivery target expects 709. What matters most is that the file says what it is.
+     */
+    const COLOUR = { matrix: 'bt709', range: 'tv' };
+
+    // WebGL readPixels is bottom-up, hence vflip. The scale step also carries the colour
+    // conversion, so it runs even at native size — swscale skips the resample when the
+    // dimensions match and does only the pixel-format work, which has to happen regardless.
     const filters = ['vflip'];
-    if (inWidth !== outWidth || inHeight !== outHeight) filters.push(`scale=${outWidth}:${outHeight}:flags=lanczos`);
+    const resizing = inWidth !== outWidth || inHeight !== outHeight;
+    if (isGif) {
+      // GIF is paletted RGB: no YUV conversion to direct, so only resize when asked.
+      if (resizing) filters.push(`scale=${outWidth}:${outHeight}:flags=lanczos`);
+    } else {
+      filters.push(
+        `scale=${outWidth}:${outHeight}:flags=lanczos` +
+          `:out_color_matrix=${COLOUR.matrix}:out_range=${COLOUR.range}`,
+        /*
+         * `setparams` stamps the colour properties onto the frames themselves.
+         *
+         * The `-color_*` output options alone are not enough, and this was measured rather than
+         * assumed: with only those flags the file came out `color_space=bt709` and
+         * `color_range=tv` but `color_transfer=unknown` and `color_primaries=unknown` — half
+         * described, which still leaves a player guessing about the other half. Frames arriving
+         * from rawvideo carry no colour properties, and the encoder takes primaries and transfer
+         * from the frame. Stamping them here fills in all four.
+         */
+        `setparams=colorspace=${COLOUR.matrix}:color_primaries=${COLOUR.matrix}` +
+          `:color_trc=${COLOUR.matrix}:range=${COLOUR.range}`,
+      );
+    }
     args.push('-vf', filters.join(','));
 
     if (isGif) {
@@ -212,6 +257,11 @@ export class FfmpegEncoder {
         '-c:v', videoEncoder(s.videoCodec, s.hardwareAcceleration),
         '-b:v', bitrate,
         '-pix_fmt', 'yuv420p',
+        // Tag the stream to match the conversion above.
+        '-colorspace', COLOUR.matrix,
+        '-color_primaries', COLOUR.matrix,
+        '-color_trc', COLOUR.matrix,
+        '-color_range', COLOUR.range,
       );
       if (hasAudio) {
         args.push('-c:a', 'aac', '-b:a', `${s.audioBitrateKbps || 192}k`, '-map', '0:v:0', '-map', '1:a:0', '-shortest');

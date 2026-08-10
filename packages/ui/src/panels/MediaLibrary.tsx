@@ -83,6 +83,8 @@ export function MediaLibrary() {
     }
     const bridge = store.getState().bridge;
     const assets: MediaAsset[] = [];
+    /** Files whose probe failed — almost always "no ffprobe on PATH". Reported at the end. */
+    const unreadable: string[] = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i]!;
       store.getState().setImportProgress({ total: files.length, done: i, currentFile: f.name });
@@ -114,7 +116,20 @@ export function MediaLibrary() {
           importedAt: Date.now() + i,
         });
       } catch {
-        // Probe failed (missing ffprobe?): still add the asset so the user sees it.
+        /*
+         * The probe failed, which on a clean machine means one thing: no ffprobe on PATH.
+         *
+         * The asset is still added — a file the user just chose vanishing without trace is worse,
+         * and the preview does not actually need FFmpeg since Chromium decodes H.264 itself. What
+         * we cannot know is the duration or the real dimensions, so those are placeholders and
+         * the clip will behave oddly on the timeline.
+         *
+         * The failure is now COLLECTED rather than swallowed. It used to be silent, and the toast
+         * below still said "Imported 1 file" in success green — so a first run without FFmpeg
+         * looked like it had worked, produced a zero-length clip with invented dimensions, and
+         * put nothing on screen connecting the two.
+         */
+        unreadable.push(f.name);
         assets.push({
           id: newMediaId(),
           kind,
@@ -131,7 +146,22 @@ export function MediaLibrary() {
     }
     store.getState().addMedia(assets);
     store.getState().setImportProgress(null);
-    store.getState().notify(`Imported ${assets.length} file${assets.length > 1 ? 's' : ''}`, 'success');
+
+    if (unreadable.length === 0) {
+      store.getState().notify(`Imported ${assets.length} file${assets.length > 1 ? 's' : ''}`, 'success');
+      return;
+    }
+
+    // Name the cause and the fix. "Import failed" alone sends the user to inspect their file.
+    const names = unreadable.slice(0, 3).join(', ') + (unreadable.length > 3 ? '…' : '');
+    store.getState().notify(
+      unreadable.length === assets.length
+        ? `Could not read ${unreadable.length === 1 ? 'that file' : 'those files'}`
+        : `${unreadable.length} of ${assets.length} files could not be read`,
+      'error',
+      `${names} — Open Cut needs FFmpeg to read duration and dimensions, to make thumbnails, and ` +
+        'to export. Install it and make sure ffmpeg and ffprobe are on your PATH, then re-import.',
+    );
   };
 
   const onDrop = async (e: React.DragEvent) => {
