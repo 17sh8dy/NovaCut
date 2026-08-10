@@ -263,8 +263,17 @@ export class Compositor {
     );
 
     // 3. Composite the processed texture with the clip transform + opacity.
-    this.composite(ctx.sequence, clip, chain.tex, localTicks, target, media, fit);
-    if (chain.owned) this.fbos.release(chain.owned);
+    //
+    // Released in a `finally`, for the same reason the transition path above is: an exception in
+    // composite — a shader that fails to compile, a context that was lost mid-frame — would
+    // otherwise strand this buffer in the pool. The difference is rate. That path runs once per
+    // transition; this one runs for every clip of every frame, so a throw here leaks at frame
+    // rate until the pool has consumed the GPU.
+    try {
+      this.composite(ctx.sequence, clip, chain.tex, localTicks, target, media, fit);
+    } finally {
+      if (chain.owned) this.fbos.release(chain.owned);
+    }
   }
 
   private composite(

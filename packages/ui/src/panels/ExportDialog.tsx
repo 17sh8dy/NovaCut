@@ -98,6 +98,15 @@ export function ExportDialog() {
       createdAt: Date.now(),
     };
     setProgress({ jobId: job.id, status: 'rendering', progress: 0 });
+    /*
+     * Held outside the try so the catch can still reach it. An encoder is a live FFmpeg child
+     * process with the output file open: if the render throws part-way, nothing else will ever
+     * shut it down. `OfflineExporter.run` disposes the compositor and the frame pool in its own
+     * finally, but it does not own the encoder and cannot close it. Without the abort below, a
+     * failed export left ffmpeg.exe running until the app quit, still holding a truncated file
+     * the user could not delete or overwrite.
+     */
+    let encoder: Awaited<ReturnType<typeof bridge.createEncoder>> | null = null;
     try {
       // Frame production (shared) → encoder (platform-specific). Same compositor as preview.
       const { OfflineExporter, renderSequenceAudioWav } = await import('@opencut/engine');
@@ -108,7 +117,7 @@ export function ExportDialog() {
         () => null,
       );
       // Render + encode at the sequence resolution; ffmpeg scales to the chosen output size.
-      const encoder = await bridge.createEncoder(job, { width: seq.width, height: seq.height, audioWav });
+      encoder = await bridge.createEncoder(job, { width: seq.width, height: seq.height, audioWav });
       const exporter = new OfflineExporter(project, seq, resolveUrl, seq.width, seq.height);
       await exporter.run(encoder, settings.fps, (info) => {
         setProgress({
@@ -128,6 +137,10 @@ export function ExportDialog() {
       if (s2.preferences.notifyExport) s2.bridge.notify('Export complete', job.filename);
       if (s2.preferences.rememberExportSettings) writeLastExport({ ...settings, videoCodec: activeCodec });
     } catch (err) {
+      // Kill the encoder before reporting, so the process is gone by the time the user reads the
+      // message and goes to look at the file. Its own failure is swallowed: the export has
+      // already failed, and "abort failed" on top of that tells the user nothing they can act on.
+      await encoder?.abort().catch(() => {});
       setProgress({ jobId: job.id, status: 'error', progress: 0, message: String(err) });
       store.getState().notify('Export failed', 'error');
     }

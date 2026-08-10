@@ -164,6 +164,20 @@ interface AppState {
   addMediaToTimeline: (media: MediaAsset, trackId?: TrackId, at?: Ticks) => void;
 }
 
+/**
+ * The readable part of an error, for a toast.
+ *
+ * An IPC rejection arrives as "Error invoking remote method 'oc:saveProject': Error: EPERM:
+ * operation not permitted, open 'C:\…'". The prefix is an implementation detail of how the
+ * renderer talks to main; the tail is the only part that tells the user what went wrong, so
+ * everything up to the last "Error: " is dropped.
+ */
+function errorText(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const stripped = raw.replace(/^.*?Error invoking remote method '[^']*':\s*/, '').replace(/^Error:\s*/, '');
+  return stripped.trim() || 'unknown error';
+}
+
 export function createAppStore(bridge: PlatformBridge) {
   const initial = createProject();
   const history = new History(initial);
@@ -341,20 +355,44 @@ export function createAppStore(bridge: PlatformBridge) {
       get().history.reset(project, 'Open');
       set({ project, projectPath: path, dirty: false, selectedClipIds: [], playhead: 0 });
     },
+    /**
+     * Write the project to disk.
+     *
+     * Two rules both save paths follow, and the reasons they exist:
+     *
+     * 1. CLEAR `dirty` ONLY IF THE SAVED PROJECT IS STILL THE CURRENT ONE. The write is async and
+     *    the user keeps editing during it. Clearing unconditionally marks edits made *while
+     *    saving* as already on disk — and the quit guard reads this same flag, so the window
+     *    would then close without prompting. Identity is the exact test: every command yields a
+     *    new project object, so `!==` means "edited since this write began".
+     *
+     * 2. REPORT A FAILURE. `saveProject` rejects on a real write error (locked file, full disk, a
+     *    path that has gone away). Letting that escape produces an unhandled rejection and a user
+     *    who pressed Ctrl+S, saw nothing at all, and reasonably concluded it had worked.
+     *
+     * `res` is null when the user cancels the save dialog — not an error and not a save, so the
+     * flag stays as it was and nothing is announced.
+     */
     save: async () => {
       const { project, projectPath, bridge } = get();
-      const res = await bridge.saveProject(project, projectPath ?? undefined);
-      if (res) {
-        set({ projectPath: res.path, dirty: false });
+      try {
+        const res = await bridge.saveProject(project, projectPath ?? undefined);
+        if (!res) return; // dialog cancelled
+        set({ projectPath: res.path, ...(get().project === project ? { dirty: false } : {}) });
         get().notify('Project saved', 'success');
+      } catch (err) {
+        get().notify(`Could not save project: ${errorText(err)}`, 'error');
       }
     },
     saveAs: async () => {
       const { project, bridge } = get();
-      const res = await bridge.saveProject(project);
-      if (res) {
-        set({ projectPath: res.path, dirty: false });
+      try {
+        const res = await bridge.saveProject(project);
+        if (!res) return; // dialog cancelled
+        set({ projectPath: res.path, ...(get().project === project ? { dirty: false } : {}) });
         get().notify('Project saved', 'success');
+      } catch (err) {
+        get().notify(`Could not save project: ${errorText(err)}`, 'error');
       }
     },
 

@@ -19,6 +19,7 @@
     "verify:orientation": "vite build --config .verify/vite.config.ts && electron .verify/main.cjs run.html",
     "verify:photo": "vite build --config .verify/ui.config.ts && electron .verify/main.cjs ui.html",
     "verify:canvas": "esbuild .verify/canvas-orientation.mjs --bundle --platform=node --format=esm --alias:@opencut/photo=./packages/photo/src/index.ts --alias:@opencut/core=./packages/core/src/index.ts --outfile=.verify/dist/canvas-orientation.js && node .verify/dist/canvas-orientation.js",
+    "verify:timeline": "esbuild .verify/timeline-invariants.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --outfile=.verify/dist/timeline-invariants.js && node .verify/dist/timeline-invariants.js",
     "lint": "eslint . --ext .ts,.tsx",
     "clean": "node -e \"const fs=require('fs');['packages/core','packages/engine','packages/ui','apps/desktop'].forEach(p=>{try{fs.rmSync(p+'/dist',{recursive:true,force:true})}catch{}})\""
   },
