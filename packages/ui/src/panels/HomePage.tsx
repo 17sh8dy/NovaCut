@@ -13,9 +13,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Film,
   Image,
-  Images,
-  Music,
-  Palette,
+  SlidersHorizontal,
   Sparkles,
   Check,
   FolderOpen,
@@ -29,7 +27,7 @@ import {
 } from 'lucide-react';
 import type { RecentProject } from '@opencut/core';
 import { useAppStore, useStore } from '../state/context.js';
-import { AnimatedContent, GradientText, ShinyText, SpotlightCard } from '../components/animated/index.js';
+import { AnimatedContent, BrandText, CardButton } from '../components/animated/index.js';
 import { AppMenuBar } from './AppMenuBar.js';
 import { WindowControls } from './WindowControls.js';
 import './home.css';
@@ -55,7 +53,7 @@ interface Workspace {
   icon: LucideIcon;
   title: string;
   desc: string;
-  /** A token color var used to tint the card's icon, glow, and accents. */
+  /** A token colour var used to tint the card's icon tile — and nothing else on the card. */
   accent: string;
   status: WsStatus;
   /** Capability bullets (used by the AI Tools card). */
@@ -90,30 +88,10 @@ const WORKSPACES: Workspace[] = [
       'Export PNG, JPG & WebP',
     ],
   },
-  {
-    id: 'gif',
-    icon: Images,
-    title: 'GIF Editor',
-    desc: 'Create and optimize animated GIFs.',
-    accent: 'var(--label-teal)',
-    status: 'soon',
-  },
-  {
-    id: 'audio',
-    icon: Music,
-    title: 'Audio Editor',
-    desc: 'Trim audio, remove noise, and mix tracks.',
-    accent: 'var(--label-pink)',
-    status: 'soon',
-  },
-  {
-    id: 'design',
-    icon: Palette,
-    title: 'Design Studio',
-    desc: 'Create thumbnails, banners, and social graphics.',
-    accent: 'var(--label-orange)',
-    status: 'future',
-  },
+  // GIF Editor, Audio Editor and Design Studio were removed from the launcher on 2026-07-22.
+  // A chooser that is mostly placeholders reads as an unfinished app, not an ambitious one — the
+  // two workspaces that exist now carry the screen better on their own. Their `AppView` ids were
+  // never wired to anything, so nothing was lost but the cards.
   {
     id: 'ai',
     icon: Sparkles,
@@ -121,7 +99,6 @@ const WORKSPACES: Workspace[] = [
     desc: 'A growing suite of AI-assisted editing.',
     accent: 'var(--label-purple)',
     status: 'future',
-    features: ['Background removal', 'Auto captions', 'Object removal', 'Image generation', 'Voice enhancement'],
   },
 ];
 
@@ -186,7 +163,6 @@ export function HomePage() {
 
   return (
     <div className="oc-home" data-theme-scope>
-      <div className="oc-aurora" aria-hidden />
       {/*
         Home has no title bar of its own, but the window is frameless — without a drag strip here
         the app cannot be moved from its own start screen. It is a real row above the scroller
@@ -194,6 +170,15 @@ export function HomePage() {
       */}
       <div className="oc-home__chrome">
         <AppMenuBar />
+        <div className="oc-home__chrome-spacer" />
+        <button
+          className="oc-home__chrome-btn"
+          onClick={() => store.getState().openDialog('settings')}
+          title="Settings"
+          aria-label="Settings"
+        >
+          <SlidersHorizontal size={16} />
+        </button>
         <WindowControls />
       </div>
       <div className="oc-home__scroll">
@@ -204,13 +189,11 @@ export function HomePage() {
           </AnimatedContent>
           <AnimatedContent delay={70}>
             <h1 className="oc-home__title">
-              <GradientText>Open&nbsp;Cut</GradientText>
+              <BrandText>Open&nbsp;Cut</BrandText>
             </h1>
           </AnimatedContent>
           <AnimatedContent delay={130}>
-            <p className="oc-home__tagline">
-              <ShinyText>Choose a workspace</ShinyText>
-            </p>
+            <p className="oc-home__tagline">Choose a workspace</p>
           </AnimatedContent>
 
           <AnimatedContent delay={190}>
@@ -247,7 +230,7 @@ export function HomePage() {
                   “{recovery.projectName}” from {new Date(recovery.savedAt).toLocaleString()} can be restored.
                 </span>
               </div>
-              <button className="oc-home__btn oc-home__btn--primary oc-shine" onClick={recover}>
+              <button className="oc-home__btn oc-home__btn--primary" onClick={recover}>
                 Restore <ArrowRight size={16} />
               </button>
             </section>
@@ -262,7 +245,7 @@ export function HomePage() {
             ) : (
               <div className="oc-home__grid">
                 {recents.map((r) => (
-                  <SpotlightCard
+                  <CardButton
                     key={r.path}
                     className="oc-home__card"
                     onClick={() => openRecent(r.path)}
@@ -273,7 +256,7 @@ export function HomePage() {
                     </div>
                     <div className="oc-home__card-name">{r.name}</div>
                     <div className="oc-home__card-meta">{new Date(r.modifiedAt).toLocaleDateString()}</div>
-                  </SpotlightCard>
+                  </CardButton>
                 ))}
               </div>
             )}
@@ -303,8 +286,8 @@ export function HomePage() {
   );
 }
 
-/** A single workspace tile. The live one is an interactive, spotlit button; staged ones are
- *  muted cards with a status badge. */
+/** A single workspace tile. The live one is a real button; staged ones are muted cards with a
+ *  status badge. */
 function WorkspaceCard({ ws, onSelect }: { ws: Workspace; onSelect: () => void }) {
   const Icon = ws.icon;
   const style = { ['--ws-accent' as string]: ws.accent } as React.CSSProperties;
@@ -335,10 +318,14 @@ function WorkspaceCard({ ws, onSelect }: { ws: Workspace; onSelect: () => void }
   );
 
   if (ws.status === 'live') {
+    // `oc-borderglow` goes on the button itself rather than a wrapper: wrapping would put a div
+    // between the card and its own :hover/:focus-visible state, and the ring is meant to track
+    // exactly those. Only live cards get it — a moving highlight on a "Coming soon" tile would
+    // advertise something that does not open.
     return (
-      <SpotlightCard className="oc-ws-card oc-ws-card--live oc-shine" style={style} onClick={onSelect}>
+      <CardButton className="oc-ws-card oc-ws-card--live oc-borderglow" style={style} onClick={onSelect}>
         {inner}
-      </SpotlightCard>
+      </CardButton>
     );
   }
 

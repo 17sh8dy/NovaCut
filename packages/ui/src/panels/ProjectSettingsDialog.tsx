@@ -1,5 +1,5 @@
-import { updateSequence, type Project } from '@opencut/core';
-import { Button, Modal, Segmented } from '../components/primitives/index.js';
+import { updateSequence } from '@opencut/core';
+import { Button, Modal } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
 
 const RES_PRESETS = [
@@ -9,11 +9,17 @@ const RES_PRESETS = [
   { label: '1:1', width: 1080, height: 1080 },
 ];
 
-/** Project + sequence settings: resolution, fps, theme, autosave, editing behavior. */
+/**
+ * Project + sequence settings: resolution, fps, autosave, editing behaviour.
+ *
+ * Theme used to live here too, and it was the wrong place twice over: it is an application
+ * preference, not a property of a video (open a colleague's project and it would repaint your
+ * editor), and it wrote `data-theme` directly, so it silently fought useAppliedPreferences and
+ * lost the moment any other preference changed. It now lives only in Settings → General.
+ */
 export function ProjectSettingsDialog() {
   const store = useAppStore();
   const seq = useStore((s) => s.sequence());
-  const theme = useStore((s) => s.project.settings.theme);
 
   const setRes = (width: number, height: number) => {
     store.getState().dispatch({
@@ -25,13 +31,6 @@ export function ProjectSettingsDialog() {
     store.getState().dispatch({
       label: 'Frame Rate',
       apply: (p) => updateSequence(p, p.activeSequenceId, (s) => ({ ...s, fps })),
-    });
-  };
-  const setTheme = (t: Project['settings']['theme']) => {
-    document.documentElement.setAttribute('data-theme', t);
-    store.getState().dispatch({
-      label: 'Theme',
-      apply: (p) => ({ ...p, settings: { ...p.settings, theme: t } }),
     });
   };
 
@@ -49,7 +48,7 @@ export function ProjectSettingsDialog() {
         </div>
       </div>
 
-      <div className="oc-export-field" style={{ marginBottom: 20 }}>
+      <div className="oc-export-field">
         <label>Frame Rate</label>
         <div className="oc-pills">
           {[24, 25, 30, 50, 60].map((f) => (
@@ -58,19 +57,6 @@ export function ProjectSettingsDialog() {
             </button>
           ))}
         </div>
-      </div>
-
-      <div className="oc-export-field">
-        <label>Theme</label>
-        <Segmented
-          options={[
-            { value: 'dark', label: 'Dark' },
-            { value: 'midnight', label: 'Midnight' },
-            { value: 'light', label: 'Light' },
-          ]}
-          value={theme}
-          onChange={(v) => setTheme(v as Project['settings']['theme'])}
-        />
       </div>
     </Modal>
   );

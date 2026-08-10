@@ -9,6 +9,7 @@ import {
   estimateFileSize,
   estimateRenderTime,
   findMedia,
+  formatExportFilename,
   formatBytes,
   formatDuration,
   toSeconds,
@@ -21,6 +22,7 @@ import {
 } from '@opencut/core';
 import { Button, Modal } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
+import { readLastExport, writeLastExport } from '../state/exportMemory.js';
 
 const QUALITIES: QualityPreset[] = ['low', 'medium', 'high', 'ultra'];
 const CONTAINERS: Container[] = ['mp4', 'mov', 'mkv', 'avi', 'gif'];
@@ -29,8 +31,36 @@ const CONTAINERS: Container[] = ['mp4', 'mov', 'mkv', 'avi', 'gif'];
 export function ExportDialog() {
   const store = useAppStore();
   const seq = useStore((s) => s.sequence());
-  const [settings, setSettings] = useState<ExportSettings>(() => defaultExportSettings(seq.fps));
-  const [filename, setFilename] = useState(seq.name.replace(/\s+/g, '_'));
+
+  /*
+   * Opening state, in precedence order: the library default, then the user's Export preferences,
+   * then — only if "Remember last export settings" is on — whatever they actually ran last.
+   *
+   * Resolution and frame rate deliberately come from the SEQUENCE, not from either source: they
+   * describe the thing being exported, and a remembered 4K would quietly upscale a 720p project.
+   */
+  const [settings, setSettings] = useState<ExportSettings>(() => {
+    const p = store.getState().preferences;
+    const base: ExportSettings = {
+      ...defaultExportSettings(seq.fps),
+      videoCodec: p.exportCodec as VideoCodec,
+      hardwareAcceleration: p.exportHardware,
+      bitrateMbps: p.exportVideoBitrate,
+      audioBitrateKbps: Number(p.exportAudioBitrate) || 192,
+    };
+    return p.rememberExportSettings ? { ...base, ...readLastExport() } : base;
+  });
+
+  const [filename, setFilename] = useState(() => {
+    const p = store.getState().preferences;
+    // {resolution} and {fps} describe THIS export, so they come from the settings resolved just
+    // above — not from the "default resolution" preference, which may not be what is being used.
+    return formatExportFilename(p.exportFilenamePattern, {
+      project: store.getState().project.name,
+      resolution: settings.resolution,
+      fps: settings.fps,
+    });
+  });
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
 
@@ -91,7 +121,12 @@ export function ExportDialog() {
         });
       });
       setProgress({ jobId: job.id, status: 'done', progress: 1 });
-      store.getState().notify('Export complete', 'success');
+      const s2 = store.getState();
+      s2.notify('Export complete', 'success');
+      // A system notification as well as the in-app toast: a render can take minutes and the
+      // whole point is to be told while you are in another window.
+      if (s2.preferences.notifyExport) s2.bridge.notify('Export complete', job.filename);
+      if (s2.preferences.rememberExportSettings) writeLastExport({ ...settings, videoCodec: activeCodec });
     } catch (err) {
       setProgress({ jobId: job.id, status: 'error', progress: 0, message: String(err) });
       store.getState().notify('Export failed', 'error');

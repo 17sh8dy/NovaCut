@@ -192,10 +192,16 @@ export function ExportPhotoDialog({ engine }: { engine: PhotoEngine }) {
   const store = usePhotoStore();
   const app = useAppStore();
   const doc = usePhoto((s) => s.doc);
-  const [format, setFormat] = useState<ExportFormat>('png');
+  // Seeded from the Photo preference. JPEG has no alpha, so `transparent` below starts off for
+  // it — the dialog already enforces that on change, and the initial state has to agree.
+  const [format, setFormat] = useState<ExportFormat>(
+    () => app.getState().preferences.photoExportFormat,
+  );
   const [quality, setQuality] = useState(0.92);
   const [scale, setScale] = useState(1);
-  const [transparent, setTransparent] = useState(true);
+  const [transparent, setTransparent] = useState(
+    () => app.getState().preferences.photoExportFormat !== 'jpeg',
+  );
   const [matte, setMatte] = useState('#ffffff');
   const [busy, setBusy] = useState(false);
 

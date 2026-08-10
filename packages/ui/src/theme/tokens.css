@@ -1,82 +1,69 @@
 /*
  * Open Cut design tokens.
  *
- * One source of truth for color, spacing, radius, type, motion, and elevation. Panels and
- * primitives reference these variables only — never hard-coded hex — so theming (dark /
- * midnight / light) is a matter of swapping this palette. Dark-first.
+ * ── THE DESIGN SYSTEM IN ONE FILE ────────────────────────────────────────────────
+ * One source of truth for colour, spacing, radius, type, motion and elevation. Panels and
+ * primitives reference these variables only — never a hard-coded hex — so a theme is a swap of
+ * this palette rather than an edit spread across ten stylesheets.
+ *
+ * Three rules this file exists to enforce:
+ *
+ * 1. SURFACES ARE NEUTRAL. White / light grey in Light, charcoal in Dark. The interface is the
+ *    room, not the picture: the user's photos and video are the only saturated things on screen
+ *    by default. Nothing here paints a large area in the accent.
+ *
+ * 2. THE ACCENT IS A SIGNAL, NOT A DECORATION. It marks what is interactive or active — primary
+ *    buttons, the selected tool, selection outlines, focus rings, sliders, progress, switches.
+ *    If a rule uses --accent for something that is neither interactive nor active, that rule is
+ *    wrong.
+ *
+ * 3. THE BRAND IS NOT THE ACCENT. --brand-* are the logo's own three gradient stops and are
+ *    fixed forever; --accent is a user preference that defaults to the brand blue. They are
+ *    separate tokens precisely so that choosing a green accent recolours the buttons and leaves
+ *    the mark alone. Never use --accent on a brand asset, and never use --brand-* for a control.
+ *
+ * Structure: :root holds everything theme-independent PLUS the dark palette (dark is the base);
+ * :root[data-theme='light'] overrides only what changes. `data-theme` is written by
+ * useAppliedPreferences, and by applyTheme() before the first render so there is no flash.
  */
 
 :root {
-  /* ── Surfaces (near-black, layered for depth) ── */
-  --surface-0: #0a0b0e; /* app background */
-  --surface-1: #101216; /* panels */
-  --surface-2: #16181d; /* raised panels, headers */
-  --surface-3: #1e2127; /* controls, hover */
-  --surface-4: #272b33; /* active, selected */
-  --surface-float: rgba(22, 24, 29, 0.72); /* glass overlays (with backdrop blur) */
-
-  /* ── Borders & dividers ── */
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.16);
-
-  /* ── Text ── */
-  --text-primary: #f2f4f8;
-  --text-secondary: #a4abb8;
-  --text-tertiary: #6b7280;
-  --text-disabled: #4b5563;
-
   /*
    * ── Brand ──
    * The three stops of the logo's gradient, verbatim from assets/OpenCut.svg. If that file's
    * stops change, these change with them — they are the same three numbers, and the mark and the
    * UI around it must not be able to disagree about what the brand colour is.
+   *
+   * These are theme- AND accent-independent. Deep Navy → Blue → Cyan is Open Cut, whatever the
+   * user has set their accent to and whichever theme they are in.
    */
   --brand-deep: #071b5c;
   --brand-blue: #1565ff;
   --brand-cyan: #3edcff;
-  --brand-glow: rgba(62, 220, 255, 0.45);
+  --brand-gradient: linear-gradient(135deg, var(--brand-deep) 0%, var(--brand-blue) 52%, var(--brand-cyan) 100%);
 
   /*
    * ── Accent ──
    *
-   * The logo's own mid-blue, which happens to also be the right UI accent: --accent is the
-   * background of every primary button and those carry WHITE text, so the value is constrained
-   * by contrast, and #1565FF lands at ~4.8:1. The cyan end of the gradient is far too light to
-   * take white text — which is why --accent-far exists as a separate token for gradients only,
-   * and is never used as a fill behind type.
+   * ONE input. Everything else on this line is derived from it with color-mix, which is what
+   * makes the Accent Colour preference a single inline `--accent` on <html> rather than six
+   * properties the hook has to keep in sync (and get wrong for custom colours). The derivations
+   * live in the theme blocks below because "hover" means lighter on charcoal and darker on
+   * white — the same mix in both themes reads as a bug in one of them.
+   *
+   * --accent carries WHITE text (--on-accent) as a button fill, so the value is contrast-
+   * constrained: the default #1565FF lands at ~4.8:1. The logo's cyan end is far too light for
+   * that, which is why it is never an accent — only ever part of --brand-gradient.
    */
   --accent: var(--brand-blue);
-  --accent-hover: #3d82ff;
-  --accent-active: #0c4fd1;
-  --accent-soft: rgba(21, 101, 255, 0.16);
-  --accent-glow: rgba(21, 101, 255, 0.45);
-  /* The far end of every brand gradient — the cyan the logo's own gradient resolves to. */
-  --accent-far: var(--brand-cyan);
-
-  /* ── Semantic ── */
-  --success: #34d399;
-  --warning: #fbbf24;
-  --danger: #f87171;
-  --info: #60a5fa;
-
-  /* ── Timeline clip label palette ── */
-  --label-red: #f87171;
-  --label-orange: #fb923c;
-  --label-yellow: #fbbf24;
-  --label-green: #34d399;
-  --label-teal: #2dd4bf;
-  --label-blue: #60a5fa;
-  --label-purple: #a78bfa;
-  --label-pink: #f472b6;
-  --label-gray: #94a3b8;
+  --on-accent: #ffffff;
 
   /* ── Radius ── */
   --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius-md: 9px;
-  --radius-lg: 13px;
-  --radius-xl: 18px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-full: 999px;
 
   /* ── Spacing scale (4px base) ── */
@@ -89,7 +76,7 @@
   --space-8: 32px;
 
   /* ── Typography ── */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Code', monospace;
   --text-xs: 11px;
   --text-sm: 12px;
@@ -98,51 +85,158 @@
   --text-lg: 16px;
   --text-xl: 20px;
   --text-2xl: 28px;
+  --leading: 1.5;
+  /* Large type is set tight; small type is not. Negative tracking on a 12px label makes it
+     muddy, which is the opposite of what it does to a 32px heading. */
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.04em;
 
-  /* ── Elevation ── */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 0 1px var(--accent), 0 0 20px var(--accent-glow);
+  /*
+   * ── Motion ──
+   * Fast, smooth, and out of the way. --ease-out is a decelerate curve with no overshoot: things
+   * arrive and settle rather than bounce. Anything longer than --dur-slow is either a progress
+   * indicator or a mistake.
+   */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 100ms;
+  --dur: 160ms;
+  --dur-slow: 240ms;
 
-  /* ── Motion ── */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --dur-fast: 120ms;
-  --dur: 180ms;
-  --dur-slow: 280ms;
+  --blur: 24px;
 
-  --blur: 20px;
-}
+  /* ── Semantic ── */
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #3b82f6;
 
-/* Midnight theme — deeper blues, same structure. */
-:root[data-theme='midnight'] {
-  --surface-0: #070a14;
-  --surface-1: #0c1120;
-  --surface-2: #121a2e;
-  --surface-3: #1a2540;
-  /* A brighter, cooler accent for the darker surfaces. The full set is overridden, not just
-     three of them: leaving --accent-active and --accent-glow to fall through to :root left this
-     theme pressing a button into the default theme's blue. */
-  --accent: #4f8cff;
-  --accent-hover: #6a9cff;
-  --accent-active: #3a72e0;
-  --accent-soft: rgba(79, 140, 255, 0.16);
-  --accent-glow: rgba(79, 140, 255, 0.45);
-}
+  /*
+   * ── Timeline clip label palette ──
+   * Content colours, not chrome: the user assigns these to clips, so they stay a fixed, evenly
+   * spaced hue wheel and do not follow the accent.
+   */
+  --label-red: #ef4444;
+  --label-orange: #f97316;
+  --label-yellow: #f59e0b;
+  --label-green: #10b981;
+  --label-teal: #14b8a6;
+  --label-blue: #3b82f6;
+  --label-purple: #8b5cf6;
+  --label-pink: #ec4899;
+  --label-gray: #94a3b8;
 
-/* Light theme — provided so the toggle is real, not decorative. */
-:root[data-theme='light'] {
-  --surface-0: #f5f6f8;
-  --surface-1: #ffffff;
-  --surface-2: #f0f1f4;
-  --surface-3: #e6e8ec;
-  --surface-4: #dcdfe4;
-  --surface-float: rgba(255, 255, 255, 0.8);
-  --border-subtle: rgba(0, 0, 0, 0.06);
-  --border: rgba(0, 0, 0, 0.1);
-  --border-strong: rgba(0, 0, 0, 0.16);
-  --text-primary: #14161a;
-  --text-secondary: #4b5563;
+  /* ═══ DARK PALETTE (the base) ═══════════════════════════════════════════════ */
+  color-scheme: dark;
+
+  /* Surfaces — charcoal, layered. -0 is the app background, -1 panels, and -2..-4 are the
+     progressively raised steps used by headers, controls, and active states. */
+  --surface-0: #0f1115;
+  --surface-1: #171a21;
+  --surface-2: #1c2029;
+  --surface-3: #232833;
+  --surface-4: #2c323e;
+  --surface-float: rgba(23, 26, 33, 0.88);
+  /*
+   * "The chip that sits on top of a recessed control" — the selected segment of a segmented
+   * control, an active tab. It is a separate token because raised means the OPPOSITE direction
+   * in the two themes: lighter than its container on charcoal, white on grey. Using --surface-4
+   * for both would give the light theme a grey chip on a lighter grey track.
+   */
+  --surface-raised: var(--surface-4);
+  /*
+   * The backdrop the user's media sits on — the preview stage, the photo canvas surround. It is
+   * a step away from the app background on purpose: content should read as the lit object in the
+   * room, and a frame that matches its surroundings exactly makes the edges of a dark photo
+   * disappear.
+   */
+  --canvas: #0a0c0f;
+
+  /* Borders — flat greys rather than white-alphas, so a border over a raised surface and one
+     over the app background are the same colour instead of drifting apart. */
+  --border-subtle: #242832;
+  --border: #2a2f3a;
+  --border-strong: #3a4150;
+
+  /* Text */
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
   --text-tertiary: #6b7280;
+  --text-disabled: #4b5563;
+
+  /* Accent derivations. Hover LIGHTENS on charcoal. --accent-text is the readable-on-surface
+     variant: --accent itself is a fill colour and sits at ~3.5:1 as text on --surface-1, which
+     is not enough for a 12px label. */
+  --accent-hover: color-mix(in srgb, var(--accent) 82%, white);
+  --accent-active: color-mix(in srgb, var(--accent) 84%, black);
+  --accent-text: color-mix(in srgb, var(--accent) 66%, white);
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 42%, transparent);
+
+  /* The white circle on a switch/slider. A token, because on white surfaces it needs a hairline
+     to exist at all. */
+  --knob: #ffffff;
+  --knob-border: transparent;
+  /* The sheen that travels along an active progress bar — the one motion that means "still
+     working", so it is tuned per theme rather than being white in both. */
+  --sheen: rgba(255, 255, 255, 0.28);
+  /* Photo transparency checkerboard. Content, not chrome, but it still has to be legible in
+     both themes: a dark checker behind a white cut-out reads as the artwork. */
+  --checker-a: #2a2d34;
+  --checker-b: #34383f;
+
+  /*
+   * ── Elevation ──
+   * Soft, wide, and low-opacity. A -Ypx spread pulls the shadow under the element instead of
+   * ringing it, which is what keeps a dialog from looking like it has a halo.
+   */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 16px -6px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 24px 48px -24px rgba(0, 0, 0, 0.7);
+}
+
+/* ═══ LIGHT PALETTE ══════════════════════════════════════════════════════════════
+   Only what changes. Everything above — brand, accent input, radius, space, type, motion,
+   semantics — is shared, so the two themes can never drift in anything but colour. */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --surface-0: #ffffff;
+  --surface-1: #f7f8fa;
+  --surface-2: #f2f4f7;
+  --surface-3: #e9ecf1;
+  --surface-4: #dee2e9;
+  --surface-float: rgba(255, 255, 255, 0.92);
+  --surface-raised: var(--surface-0);
+  /* Light's canvas goes the other way from dark's: a step DARKER than the app background, for
+     the same reason — a white photo on a white page has no edge. */
+  --canvas: #eceef2;
+
+  --border-subtle: #edeff3;
+  --border: #e5e7eb;
+  --border-strong: #d3d8e0;
+
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --text-disabled: #c3c8d1;
+
+  /* Hover DARKENS on white — the mirror of the dark theme, not a copy of it. */
+  --accent-hover: color-mix(in srgb, var(--accent) 88%, black);
+  --accent-active: color-mix(in srgb, var(--accent) 74%, black);
+  --accent-text: color-mix(in srgb, var(--accent) 90%, black);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 34%, transparent);
+
+  --knob: #ffffff;
+  --knob-border: var(--border-strong);
+  --sheen: rgba(255, 255, 255, 0.55);
+  --checker-a: #ffffff;
+  --checker-b: #e8eaee;
+
+  /* Shadows on white are a cool grey, never black: pure black at low alpha over a light surface
+     reads as dirty rather than as depth. */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 6px 16px -6px rgba(16, 24, 40, 0.14);
+  --shadow-lg: 0 24px 48px -24px rgba(16, 24, 40, 0.28);
 }

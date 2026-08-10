@@ -24,6 +24,8 @@ import {
   Droplet,
   FlipHorizontal,
   FlipVertical,
+  FlipVertical2,
+  Frame,
   Move,
   Search,
   Shapes,
@@ -38,6 +40,7 @@ import {
   ChevronUp,
   ChevronDown,
   RotateCcw,
+  RotateCw,
 } from 'lucide-react';
 import {
   allEffects,
@@ -60,12 +63,14 @@ import {
   clearPaint,
   applyTextPreset,
   deleteLayerEffect,
+  flipCanvas,
   flipLayer,
   isAdjustmentLayer,
   isShapeLayer,
   isTextLayer,
   moveLayerEffect,
   resetLayerTransform,
+  rotateCanvas,
   setAdjustmentParam,
   setEffectEnabled,
   setEffectParam,
@@ -106,11 +111,12 @@ export function InspectorPanel() {
   if (!layer) {
     return (
       <div className="oc-inspector">
-        {/* The brush and the selection belong to the DOCUMENT, not to a layer, so they stay
-            reachable even with nothing selected — which is exactly when a user is most likely
-            to be building a selection. */}
+        {/* The brush, the selection and the canvas belong to the DOCUMENT, not to a layer, so
+            they stay reachable even with nothing selected — which is exactly when a user is most
+            likely to be building a selection or squaring up the frame. */}
         <BrushSection />
         <SelectionSection />
+        <CanvasSection />
         <EmptyState icon={<Wand2 size={22} />} title="No layer selected" hint="Pick a layer to edit it." />
       </div>
     );
@@ -127,9 +133,60 @@ export function InspectorPanel() {
       <SelectionSection />
       <MaskSection layer={layer} />
       <TransformSection layer={layer} />
+      <CanvasSection />
       <BlendSection layer={layer} />
       {!isAdjustmentLayer(layer) && <FilterRack layer={layer} />}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canvas orientation
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Rotate and flip the whole canvas.
+ *
+ * It sits directly under Transform, and that adjacency is the point: Transform turns the
+ * SELECTED LAYER inside a fixed frame, this turns the FRAME and everything in it. Those are the
+ * two things a person means by "rotate", they are one row apart, and each says which it is —
+ * which is cheaper than explaining the difference after someone has rotated the wrong one.
+ *
+ * Collapsed by default when a layer is selected would hide it; it stays open because the reason
+ * this section exists at all is that canvas rotation was previously unreachable.
+ */
+function CanvasSection() {
+  const store = usePhotoStore();
+  const doc = usePhoto((s) => s.doc);
+  const natural = (l: Layer) => naturalSizeOf(l, doc);
+  const turn = (turns: 1 | 2 | 3) => store.getState().dispatch(rotateCanvas(turns, natural));
+  const mirror = (axis: 'h' | 'v') => store.getState().dispatch(flipCanvas(axis, natural));
+
+  return (
+    <Section title="Canvas" icon={<Frame size={14} />}>
+      <p className="oc-hint">
+        {doc.width} × {doc.height} px — rotating turns the frame and everything on it.
+      </p>
+      <ButtonGroup>
+        {/* No accelerators: Ctrl+[ / Ctrl+] already reorder layers, and Photoshop leaves canvas
+            rotation unbound for the same reason — it is a once-per-document action. */}
+        <IconButton title="Rotate canvas 90° left" onClick={() => turn(3)}>
+          <RotateCcw size={15} />
+        </IconButton>
+        <IconButton title="Rotate canvas 90° right" onClick={() => turn(1)}>
+          <RotateCw size={15} />
+        </IconButton>
+        <IconButton title="Rotate canvas 180°" onClick={() => turn(2)}>
+          <FlipVertical2 size={15} />
+        </IconButton>
+        <IconButton title="Flip canvas horizontal" onClick={() => mirror('h')}>
+          <FlipHorizontal size={15} />
+        </IconButton>
+        <IconButton title="Flip canvas vertical" onClick={() => mirror('v')}>
+          <FlipVertical size={15} />
+        </IconButton>
+      </ButtonGroup>
+    </Section>
   );
 }
 
@@ -572,6 +629,17 @@ function TransformSection({ layer }: { layer: Layer }) {
         onChange={(scaleY) => set({ scaleY })} />
       <Slider label="Rotation" value={t.rotation} min={-180} max={180} step={0.5} unit="°"
         onChange={(rotation) => set({ rotation })} />
+      {/* Quarter turns, because the slider is for choosing an angle and these are for the two
+          angles nobody wants to aim at. Snapped to the grid rather than added to the current
+          value, so a layer nudged to 3° squares up instead of landing on 93°. */}
+      <ButtonGroup>
+        <IconButton title="Rotate layer 90° left" onClick={() => set({ rotation: quarterTurn(t.rotation, -1) })}>
+          <RotateCcw size={15} />
+        </IconButton>
+        <IconButton title="Rotate layer 90° right" onClick={() => set({ rotation: quarterTurn(t.rotation, 1) })}>
+          <RotateCw size={15} />
+        </IconButton>
+      </ButtonGroup>
       <ButtonGroup>
         <IconButton title="Centre horizontally on canvas" onClick={() => align('hcenter')}>
           <AlignHorizontalJustifyCenter size={15} />
@@ -584,6 +652,19 @@ function TransformSection({ layer }: { layer: Layer }) {
       </ButtonGroup>
     </Section>
   );
+}
+
+/**
+ * The next multiple of 90° in `dir`, kept inside the slider's −180..180.
+ *
+ * Snapping rather than adding: a layer sitting at 3° from a hand-drag should square up on the
+ * first click, not travel to 93° and need a second one. From an exact multiple it advances a
+ * full quarter turn, which is what makes repeated clicks spin it.
+ */
+function quarterTurn(deg: number, dir: 1 | -1): number {
+  const step = dir > 0 ? Math.floor(deg / 90) + 1 : Math.ceil(deg / 90) - 1;
+  const next = (((step * 90 + 180) % 360) + 360) % 360 - 180;
+  return next === -180 ? 180 : next === 0 ? 0 : next;
 }
 
 function BlendSection({ layer }: { layer: Layer }) {

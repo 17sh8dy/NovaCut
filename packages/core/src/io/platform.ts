@@ -128,6 +128,63 @@ export interface PlatformBridge {
   windowAction?(action: WindowAction): void;
   /** Subscribe to host window state, so a maximise button can show the right icon. */
   onWindowState?(handler: (state: { maximized: boolean }) => void): () => void;
+
+  // ── Settings support (desktop only) ──
+  /** Pick a directory, for the "default project / export folder" settings. */
+  chooseDirectory?(): Promise<string | null>;
+  /** Versions, GPU and paths, for About and the Performance/Privacy panes. */
+  systemInfo?(): Promise<SystemInfo>;
+  /** Real on-disk byte totals for the Storage pane. Measured, never estimated. */
+  storageUsage?(projectDir: string): Promise<StorageUsage>;
+  /** Delete regenerable caches. Resolves with the number of bytes freed. */
+  clearCache?(): Promise<number>;
+  /** Forget the recent-projects list without touching the files themselves. */
+  clearRecentProjects?(): Promise<void>;
+  /** Reveal the app's data directory in the OS file browser. */
+  openDataFolder?(): Promise<void>;
+  /** Start Open Cut when the user signs in. */
+  setLaunchOnStartup?(enabled: boolean): Promise<void>;
+  /** Zoom the whole window, for the interface-scale setting. */
+  setZoomFactor?(factor: number): void;
+  /** Mirror the preferences the host acts on (folders, recents cap, encoder threads, GPU). */
+  setHostPrefs?(prefs: HostPrefs): void;
+}
+
+export interface HostPrefs {
+  maxRecentProjects: number;
+  defaultProjectDir: string;
+  exportDir: string;
+  cpuThreads: number;
+  gpuAcceleration: boolean;
+  /**
+   * Appearance. The host needs it only to choose the window's background colour, which is
+   * painted before the renderer has drawn anything — so it must be known one launch ahead of the
+   * renderer that owns the preference.
+   */
+  theme: 'system' | 'light' | 'dark';
+}
+
+export interface SystemInfo {
+  appVersion: string;
+  platform: string;
+  electron: string;
+  chrome: string;
+  node: string;
+  /** Renderer/adapter description, or '' when it can't be determined. */
+  gpu: string;
+  /** ffmpeg's reported version, or '' when it isn't installed. */
+  ffmpeg: string;
+  dataDir: string;
+}
+
+export interface StorageUsage {
+  dataDir: string;
+  buckets: {
+    cache: number;
+    projects: number;
+    autosaves: number;
+    logs: number;
+  };
 }
 
 /** The top-level menus a host may expose through `PlatformBridge.popupMenu`. */

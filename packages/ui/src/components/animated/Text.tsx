@@ -7,18 +7,17 @@ interface TextFxProps {
 }
 
 /**
- * GradientText (React Bits "Gradient Text") — clips a slowly flowing accent gradient to the
- * text. Reserved for hero-scale headings; the flow stops under reduced motion, leaving a
- * static gradient.
+ * BrandText — the "Open Cut" wordmark, clipped to the brand gradient.
+ *
+ * It reads from --brand-gradient rather than the accent on purpose: the accent is a user
+ * preference and the mark is not, so someone running an orange accent still sees the wordmark in
+ * Deep Navy → Blue → Cyan. The gradient is static; a wordmark that animates forever is a logo
+ * that never settles.
+ *
+ * Reserved for the wordmark. Gradient-filled body text is decoration, not hierarchy — which is
+ * why the old ShinyText (a highlight sweeping across a tagline on a six-second loop) is gone
+ * rather than restyled.
  */
-export function GradientText({ children, as: Tag = 'span', className = '' }: TextFxProps) {
-  return <Tag className={`oc-gradient-text ${className}`.trim()}>{children}</Tag>;
-}
-
-/**
- * ShinyText (React Bits "Shiny Text") — a soft highlight sweeps across muted text on a long,
- * calm loop. Good for taglines and subtle "new" labels.
- */
-export function ShinyText({ children, as: Tag = 'span', className = '' }: TextFxProps) {
-  return <Tag className={`oc-shiny-text ${className}`.trim()}>{children}</Tag>;
+export function BrandText({ children, as: Tag = 'span', className = '' }: TextFxProps) {
+  return <Tag className={`oc-brand-text ${className}`.trim()}>{children}</Tag>;
 }

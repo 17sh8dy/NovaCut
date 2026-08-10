@@ -11,7 +11,7 @@ import { deserializeProject, serializeProject, type Project } from '@opencut/cor
 
 const KEY = 'oc.recovery.v1';
 const SESSION_KEY = 'oc.session.open';
-/** How many recent snapshots to retain (newest last). */
+/** Fallback retention when a caller does not pass one (newest last). */
 const MAX_VERSIONS = 5;
 
 export type RecoveryReason = 'interval' | 'edit' | 'exit';
@@ -58,7 +58,7 @@ function write(list: RecoverySnapshot[]): void {
 }
 
 /** Append a snapshot, trimming to the most recent MAX_VERSIONS. */
-export function writeSnapshot(input: RecoveryInput, reason: RecoveryReason): void {
+export function writeSnapshot(input: RecoveryInput, reason: RecoveryReason, keep = MAX_VERSIONS): void {
   const snap: RecoverySnapshot = {
     savedAt: Date.now(),
     reason,
@@ -70,7 +70,7 @@ export function writeSnapshot(input: RecoveryInput, reason: RecoveryReason): voi
   };
   const list = read();
   list.push(snap);
-  write(list.slice(-MAX_VERSIONS));
+  write(list.slice(-Math.max(1, keep)));
 }
 
 export function listSnapshots(): RecoverySnapshot[] {

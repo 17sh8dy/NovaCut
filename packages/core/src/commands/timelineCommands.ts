@@ -303,6 +303,60 @@ export function addTrack(kind: Track['kind']): Command {
   };
 }
 
+/**
+ * Place `clip` on the topmost visual track that is free for its whole span, creating a new track
+ * above everything if none is.
+ *
+ * This exists for text, and it exists as ONE command rather than an add-track/add-clip pair for
+ * two reasons. The compositor draws at most one clip per track per frame — `render()` does a
+ * `find`, not a filter — so a title dropped onto the track that already holds the footage would
+ * replace it rather than sit over it. And doing it as two dispatches would cost two undo steps
+ * for what the user experienced as one action, which is the kind of history noise that makes
+ * Ctrl+Z untrustworthy.
+ *
+ * Topmost-first because that is where an overlay belongs, and because reusing an empty upper
+ * track keeps a project from growing a new track per caption.
+ */
+export function addClipOnFreeTrack(clip: Clip, kind: Track['kind'] = 'video'): Command {
+  return {
+    label: 'Add Clip',
+    apply: (project) =>
+      updateSequence(project, activeSeqId(project), (seq) => {
+        const end = clip.start + clip.duration;
+        const overlaps = (t: Track): boolean =>
+          t.clips.some((c) => clip.start < c.start + c.duration && end > c.start);
+
+        const sameKind = seq.tracks.filter((t) => t.kind === kind);
+        // Topmost first: video tracks stack upward, so the LAST of them is the top one.
+        const free = [...sameKind].reverse().find((t) => !t.locked && !overlaps(t));
+        if (free) {
+          return {
+            ...seq,
+            tracks: seq.tracks.map((t) => (t.id === free.id ? { ...t, clips: [...t.clips, clip] } : t)),
+          };
+        }
+
+        const prefix = kind === 'video' ? 'V' : 'A';
+        const track: Track = {
+          id: newTrackId(),
+          kind,
+          name: `${prefix}${sameKind.length + 1}`,
+          clips: [clip],
+          transitions: [],
+          muted: false,
+          hidden: false,
+          locked: false,
+          solo: false,
+          height: kind === 'video' ? 72 : 56,
+        };
+        const videos = seq.tracks.filter((t) => t.kind === 'video');
+        const audios = seq.tracks.filter((t) => t.kind === 'audio');
+        const tracks = kind === 'video' ? [...videos, track, ...audios] : [...videos, ...audios, track];
+        return { ...seq, tracks };
+      }),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Transitions
 // ─────────────────────────────────────────────────────────────────────────────

@@ -106,10 +106,56 @@ export interface OpenCutApi {
   windowAction(action: WindowAction): void;
   /** Subscribe to window state so the maximise button's icon matches reality. */
   onWindowState(handler: (state: { maximized: boolean }) => void): () => void;
+
+  // ── Settings support ──
+  chooseDirectory(): Promise<string | null>;
+  systemInfo(): Promise<SystemInfoDTO>;
+  /** `projectDir` is the user's configured project folder; '' falls back to Documents. */
+  storageUsage(projectDir: string): Promise<StorageUsageDTO>;
+  clearCache(): Promise<number>;
+  clearRecentProjects(): Promise<void>;
+  openDataFolder(): Promise<void>;
+  setLaunchOnStartup(enabled: boolean): Promise<void>;
+  setZoomFactor(factor: number): void;
+  /** Mirror the few preferences main needs at IPC time (recents cap, project folder). */
+  setHostPrefs(prefs: HostPrefsDTO): void;
 }
 
 /** What the app-drawn window buttons can ask the window to do. */
 export type WindowAction = 'minimize' | 'toggleMaximize' | 'close';
+
+export interface SystemInfoDTO {
+  appVersion: string;
+  platform: string;
+  electron: string;
+  chrome: string;
+  node: string;
+  gpu: string;
+  ffmpeg: string;
+  dataDir: string;
+}
+
+/** The preferences main acts on. Mirrored from the renderer, which owns the real store. */
+export interface HostPrefsDTO {
+  maxRecentProjects: number;
+  defaultProjectDir: string;
+  exportDir: string;
+  /** ffmpeg `-threads`; 0 lets ffmpeg decide. */
+  cpuThreads: number;
+  /** Applied on the NEXT launch — see main.ts. */
+  gpuAcceleration: boolean;
+  /**
+   * Appearance. Main needs it only to pick the window's `backgroundColor`, which is painted
+   * before the renderer has produced a single frame — get it wrong and every launch starts with
+   * a flash of the opposite theme.
+   */
+  theme: 'system' | 'light' | 'dark';
+}
+
+export interface StorageUsageDTO {
+  dataDir: string;
+  buckets: { cache: number; projects: number; autosaves: number; logs: number };
+}
 
 declare global {
   interface Window {
@@ -141,4 +187,14 @@ export const CH = {
   openExternal: 'app:openExternal',
   windowAction: 'app:windowAction',
   windowState: 'app:windowState',
+  // Settings support
+  chooseDirectory: 'settings:chooseDirectory',
+  systemInfo: 'settings:systemInfo',
+  storageUsage: 'settings:storageUsage',
+  clearCache: 'settings:clearCache',
+  clearRecentProjects: 'settings:clearRecent',
+  openDataFolder: 'settings:openDataFolder',
+  setLaunchOnStartup: 'settings:launchOnStartup',
+  setZoomFactor: 'settings:zoomFactor',
+  hostPrefs: 'settings:hostPrefs',
 } as const;

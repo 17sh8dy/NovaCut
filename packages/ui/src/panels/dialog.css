@@ -1,10 +1,14 @@
 /* Modal / dialog styles. */
 
+/*
+ * The scrim. Black at low alpha in both themes on purpose: a light-grey scrim over a white page
+ * doesn't read as "the page behind is inert", and the blur alone isn't enough of a signal.
+ */
 .oc-backdrop {
   position: fixed;
   inset: 0;
   z-index: 800;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(9, 12, 18, 0.45);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -19,7 +23,7 @@
   max-height: 88vh;
   display: flex;
   flex-direction: column;
-  background: var(--surface-1);
+  background: var(--surface-0);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
@@ -49,8 +53,8 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--border-subtle);
-  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  background: var(--surface-1);
 }
 
 .oc-export-grid {
@@ -72,11 +76,12 @@
 .oc-export-field input {
   height: 34px;
   padding: 0 var(--space-3);
-  background: var(--surface-3);
-  border: 1px solid transparent;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-primary);
   cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
 .oc-export-field select:focus,
 .oc-export-field input:focus {
@@ -90,20 +95,24 @@
 .oc-pill {
   padding: 6px 12px;
   border-radius: var(--radius-full);
-  background: var(--surface-3);
-  border: 1px solid transparent;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
   color: var(--text-secondary);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-out);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 .oc-pill:hover {
-  background: var(--surface-4);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
 }
 .oc-pill[data-active='true'] {
   background: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 .oc-estimate {
   display: flex;
@@ -143,22 +152,27 @@
 .oc-progress {
   height: 6px;
   border-radius: var(--radius-full);
-  background: var(--surface-4);
+  background: var(--surface-3);
   overflow: hidden;
 }
+/* Solid --accent. The old accent→cyan gradient made the bar's own colour change along its
+   length, so "how far along am I" had to be read from the end position alone. */
 .oc-progress__fill {
   position: relative;
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--accent-far));
+  background: var(--accent);
   transition: width var(--dur) var(--ease-out);
   overflow: hidden;
 }
-/* A travelling sheen signals the export is actively working, not stalled. */
+/*
+ * A travelling sheen — kept, unlike the app's other sweeps, because it carries information: it
+ * is the difference between an export that is working and one that has stalled at 40%.
+ */
 .oc-progress__fill::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  background: linear-gradient(90deg, transparent, var(--sheen), transparent);
   transform: translateX(-100%);
   animation: oc-skeleton-sweep 1.3s ease-in-out infinite;
 }
@@ -166,10 +180,13 @@
 /* ── Settings window ─────────────────────────────────────────────────────────── */
 .oc-settings {
   display: grid;
-  grid-template-columns: 210px 1fr;
-  width: min(880px, 92vw);
-  height: min(640px, 88vh);
-  background: var(--surface-1);
+  grid-template-columns: 228px 1fr;
+  /* Wider and taller than before: thirteen categories plus a search box need the room, and a
+     settings window whose own sidebar scrolls feels cramped in a way a full-height one doesn't.
+     Still capped against the viewport, so it can never exceed a small laptop screen. */
+  width: min(960px, 94vw);
+  height: min(720px, 90vh);
+  background: var(--surface-0);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl, 14px);
   box-shadow: var(--shadow-lg);
@@ -180,9 +197,43 @@
   flex-direction: column;
   gap: 2px;
   padding: var(--space-3);
-  background: var(--surface-0, var(--surface-2));
-  border-right: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+  border-right: 1px solid var(--border);
+  min-height: 0;
+}
+/* Only the category list scrolls; the search box stays pinned so it is reachable from any
+   scroll position — a search you have to scroll up to reach is a search people stop using. */
+.oc-settings__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   overflow-y: auto;
+  min-height: 0;
+  margin-top: var(--space-2);
+  /* Positioning context for the sliding indicator. Because the line is absolutely positioned
+     INSIDE the scroller, it travels with the rows instead of floating over them. */
+  position: relative;
+}
+/* The line that follows the selected category. Its offset and height come from the real row
+   (see SettingsDialog's useLayoutEffect), so it cannot drift from a row whose height changed
+   — which happens as soon as a search adds count badges. */
+.oc-settings__navline {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--accent);
+  transition:
+    transform var(--dur) var(--ease-out),
+    height var(--dur) var(--ease-out);
+  pointer-events: none;
+  /* The rows come later in DOM order and the active one is filled, so without this the line
+     would be painted over by the very row it is marking. */
+  z-index: 1;
+}
+:root[data-reduce-motion] .oc-settings__navline {
+  transition: none;
 }
 .oc-settings__brand {
   font-weight: 700;
@@ -208,8 +259,8 @@
   color: var(--text-primary);
 }
 .oc-settings__navitem[data-active='true'] {
-  background: var(--accent-soft, var(--surface-3));
-  color: var(--text-primary);
+  background: var(--accent-soft);
+  color: var(--accent-text);
   font-weight: 600;
 }
 .oc-settings__main {
@@ -226,7 +277,9 @@
 }
 .oc-settings__header h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
   color: var(--text-primary);
 }
 .oc-settings__content {
@@ -270,29 +323,35 @@
   margin-top: var(--space-4);
 }
 
-/* Toggle switch */
+/* Toggle switch. Off is a neutral track with a visible border so it reads as a control rather
+   than as a gap; on is the accent, which is the whole point of the accent. */
 .oc-switch {
   width: 40px;
   height: 22px;
-  border-radius: var(--radius-full, 999px);
-  border: none;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-strong);
   background: var(--surface-3);
   position: relative;
   cursor: pointer;
-  transition: background var(--dur-fast, 0.12s) var(--ease-out);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 .oc-switch[data-on='true'] {
   background: var(--accent);
+  border-color: transparent;
 }
 .oc-switch__knob {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: #fff;
-  transition: transform var(--dur-fast, 0.12s) var(--ease-out);
+  background: var(--knob);
+  border: 1px solid var(--knob-border);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 .oc-switch[data-on='true'] .oc-switch__knob {
   transform: translateX(18px);
@@ -350,7 +409,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--danger, #f5624d);
+  color: var(--danger);
   font-size: 11px;
   font-weight: 600;
 }
@@ -358,8 +417,8 @@
   min-width: 120px;
   padding: 6px 12px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-2);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 12px;
@@ -370,11 +429,11 @@
 }
 .oc-sc-key[data-capturing='true'] {
   border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft, var(--surface-3));
+  color: var(--accent-text);
+  background: var(--accent-soft);
 }
 .oc-sc-key[data-conflict='true'] {
-  border-color: var(--danger, #f5624d);
+  border-color: var(--danger);
 }
 
 /* About */
@@ -382,16 +441,23 @@
   text-align: center;
   padding: var(--space-6) 0;
 }
+/*
+ * The real mark, not an accent-coloured square standing in for one. It used to be
+ * `linear-gradient(--accent, --accent-far)`, which meant the About box showed the user's chosen
+ * accent and called it the Open Cut logo. No border-radius of our own: the artwork already is a
+ * rounded square, and clipping it to a second radius shaves the corners twice.
+ */
 .oc-about__mark {
   width: 56px;
   height: 56px;
   margin: 0 auto var(--space-4);
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-far));
+  background: url('../assets/logo.svg') center / contain no-repeat;
 }
 .oc-about h1 {
   margin: 0;
-  font-size: 26px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
   color: var(--text-primary);
 }
 .oc-about__tag {

@@ -66,6 +66,16 @@ const api: OpenCutApi = {
   openExternal: (url) => ipcRenderer.send(CH.openExternal, url),
   windowAction: (action: WindowAction) => ipcRenderer.send(CH.windowAction, action),
   onWindowState: (handler) => subscribe<{ maximized: boolean }>(CH.windowState, handler),
+
+  chooseDirectory: () => ipcRenderer.invoke(CH.chooseDirectory),
+  systemInfo: () => ipcRenderer.invoke(CH.systemInfo),
+  storageUsage: (projectDir) => ipcRenderer.invoke(CH.storageUsage, projectDir),
+  clearCache: () => ipcRenderer.invoke(CH.clearCache),
+  clearRecentProjects: () => ipcRenderer.invoke(CH.clearRecentProjects),
+  openDataFolder: () => ipcRenderer.invoke(CH.openDataFolder),
+  setLaunchOnStartup: (enabled) => ipcRenderer.invoke(CH.setLaunchOnStartup, enabled),
+  setZoomFactor: (factor) => ipcRenderer.send(CH.setZoomFactor, factor),
+  setHostPrefs: (prefs) => ipcRenderer.send(CH.hostPrefs, prefs),
 };
 
 contextBridge.exposeInMainWorld('opencut', api);

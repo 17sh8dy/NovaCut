@@ -25,7 +25,7 @@ export function TitleBar() {
   return (
     <div className="oc-titlebar">
       <button className="oc-brand" onClick={() => store.getState().setView('home')} title="Back to Home">
-        <div className="oc-brand__mark oc-pulse-glow" />
+        <div className="oc-brand__mark" />
         Open&nbsp;Cut
       </button>
 

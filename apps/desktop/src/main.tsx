@@ -6,9 +6,14 @@
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createAppStore, EditorApp } from '@opencut/ui';
+import { applyTheme, createAppStore, EditorApp, loadPreferences } from '@opencut/ui';
 import { ElectronBridge } from './bridge.js';
 import { connectShell } from './shell.js';
+
+// Paint the correct theme on the FIRST frame. useAppliedPreferences sets the same attribute, but
+// from an effect — which runs after React has already rendered once, so someone on the light
+// theme would see a charcoal flash at every launch.
+applyTheme(loadPreferences().theme);
 
 const store = createAppStore(new ElectronBridge());
 // Menu commands, .opencut file associations and the unsaved-changes quit guard. Connected before

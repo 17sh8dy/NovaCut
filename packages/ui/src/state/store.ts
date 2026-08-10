@@ -29,6 +29,7 @@ import {
   createClipFromMedia,
   createProject,
   newClipId,
+  RESOLUTIONS,
   splitClipsAt,
   getActiveSequence,
   History,
@@ -192,7 +193,7 @@ export function createAppStore(bridge: PlatformBridge) {
     dialog: null,
     pixelsPerSecond: 60,
     snapEnabled: true,
-    rippleEnabled: false,
+    rippleEnabled: preferences.rippleByDefault,
     snapGuide: null,
     search: '',
     importProgress: null,
@@ -323,7 +324,16 @@ export function createAppStore(bridge: PlatformBridge) {
     },
 
     newProject: (name) => {
-      const project = createProject(name ?? 'Untitled Project');
+      // Build the sequence from the Projects preferences rather than the library default, so
+      // "Default resolution" and "Default frame rate" mean something the moment they are set.
+      const p = get().preferences;
+      const size = RESOLUTIONS[p.defaultResolution as keyof typeof RESOLUTIONS] ?? RESOLUTIONS['1080p'];
+      const project = createProject(name ?? 'Untitled Project', {
+        name: `${size.width}×${size.height} · ${p.defaultFrameRate}fps`,
+        width: size.width,
+        height: size.height,
+        fps: Number(p.defaultFrameRate) || 30,
+      });
       get().history.reset(project, 'New Project');
       set({ project, projectPath: null, dirty: false, selectedClipIds: [], playhead: 0 });
     },

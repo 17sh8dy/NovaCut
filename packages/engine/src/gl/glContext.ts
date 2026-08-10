@@ -16,6 +16,7 @@
  */
 
 import { dlog, dthrottle } from '../debug.js';
+import { uploadSize } from './limits.js';
 
 export interface Program {
   program: WebGLProgram;
@@ -196,7 +197,8 @@ export class GLContext {
     // Flip at upload so the texture is bottom-up like every FBO attachment downstream — see
     // this file's header for why the two must agree.
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
+    const source = this.withinLimits(frame);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     setSamplerState(gl);
     dthrottle('upload', 400, 'gl', () => {
@@ -212,6 +214,36 @@ export class GLContext {
         },
       ];
     });
+  }
+
+  /**
+   * The source to actually upload, downscaled if it exceeds the texture cap.
+   *
+   * The hardware limit is the important half. A source wider than MAX_TEXTURE_SIZE does not
+   * raise an error — `texImage2D` quietly produces a black texture — so a 20-megapixel import on
+   * a modest GPU looks like a broken effect chain rather than an oversized image. The configured
+   * limit rides along on the same check.
+   *
+   * Reuses ONE scratch canvas: a photo import can fire this per layer, and allocating a fresh
+   * canvas each time leaves the GC holding several hundred MB of dead bitmaps.
+   */
+  private scratch: HTMLCanvasElement | null = null;
+  private withinLimits(frame: TexImageSource): TexImageSource {
+    const f = frame as { videoWidth?: number; naturalWidth?: number; width?: number };
+    const h = frame as { videoHeight?: number; naturalHeight?: number; height?: number };
+    const srcW = f.videoWidth || f.naturalWidth || f.width || 0;
+    const srcH = h.videoHeight || h.naturalHeight || h.height || 0;
+    if (!srcW || !srcH) return frame; // unknown size: let GL decide
+    const target = uploadSize(srcW, srcH, this.maxTextureSize);
+    if (!target) return frame;
+    const canvas = (this.scratch ??= document.createElement('canvas'));
+    canvas.width = target.width;
+    canvas.height = target.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return frame;
+    ctx.clearRect(0, 0, target.width, target.height);
+    ctx.drawImage(frame as CanvasImageSource, 0, 0, target.width, target.height);
+    return canvas;
   }
 
   /** Read the bound target's pixels. Bottom-up, per GL — callers that write files must vflip. */

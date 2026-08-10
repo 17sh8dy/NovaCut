@@ -40,6 +40,7 @@ export function useRecovery() {
           selectedClipIds: s.selectedClipIds,
         },
         reason,
+        s.preferences.backupVersions,
       );
     };
 

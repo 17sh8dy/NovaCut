@@ -41,6 +41,7 @@ import { GLContext, type Fbo } from '../gl/glContext.js';
 import { FboPool } from '../gl/fboPool.js';
 import { runEffectChain } from '../gl/effectChain.js';
 import { getTransitionFragment, TRANSITION_VERTEX_SHADER } from './transitions.js';
+import { rasterizeText } from './textRaster.js';
 import { dthrottle } from '../debug.js';
 
 export interface RenderContext {
@@ -209,7 +210,20 @@ export class Compositor {
 
     // 1. Get the source frame and upload it to the dedicated source texture.
     let uploaded = false;
-    if (media && media.kind !== 'audio') {
+    /**
+     * Set for text: the quad must be the raster's size in sequence pixels, NOT aspect-fitted to
+     * the frame the way media is. Fitting would blow a short caption up to fill the height.
+     */
+    let fit: { x: number; y: number } | undefined;
+
+    if (clip.kind === 'text' && clip.text) {
+      const raster = rasterizeText(clip.text);
+      if (raster) {
+        this.ctx.uploadFrame(this.source, raster.canvas);
+        uploaded = true;
+        fit = { x: raster.width / ctx.sequence.width, y: raster.height / ctx.sequence.height };
+      }
+    } else if (media && media.kind !== 'audio') {
       const source = this.sources.get(media);
       // Map timeline time → source time honoring trim + speed.
       const localTicks = ctx.time - clip.start;
@@ -231,7 +245,9 @@ export class Compositor {
         { clip: clip.id, mediaId: clip.mediaId, hasMedia: !!media, gotFrame: !!frame, uploaded },
       ]);
     }
-    if (!uploaded) return; // text/shape clips are drawn by the DOM overlay layer for now
+    // Shape clips still have no rasterizer, and a video frame that has not decoded yet has
+    // nothing to show. Both mean "draw nothing this pass" rather than "draw black".
+    if (!uploaded) return;
 
     // 2. Run enabled effects as a chain, starting from the source texture.
     const localTicks = (ctx.time - clip.start) as Ticks;
@@ -247,7 +263,7 @@ export class Compositor {
     );
 
     // 3. Composite the processed texture with the clip transform + opacity.
-    this.composite(ctx.sequence, clip, chain.tex, localTicks, target, media);
+    this.composite(ctx.sequence, clip, chain.tex, localTicks, target, media, fit);
     if (chain.owned) this.fbos.release(chain.owned);
   }
 
@@ -258,6 +274,7 @@ export class Compositor {
     localTicks: Ticks,
     target: Fbo | null,
     media?: MediaAsset,
+    fit?: { x: number; y: number },
   ): void {
     const prog = this.ctx.getProgram('__composite', VERTEX_SHADER, COMPOSITE_FRAGMENT);
     this.ctx.bindTarget(target, this.width, this.height);
@@ -266,7 +283,7 @@ export class Compositor {
 
     const opacity = sample(clip.transform.opacity, localTicks);
     this.ctx.setUniform1f(prog, 'u_opacity', opacity);
-    this.ctx.setUniformMat3(prog, 'u_model', this.buildModelMatrix(sequence, clip, localTicks, media));
+    this.ctx.setUniformMat3(prog, 'u_model', this.buildModelMatrix(sequence, clip, localTicks, media, fit));
     this.ctx.bindTexture(prog, 'u_texture', tex, 0);
     this.ctx.drawQuad();
   }
@@ -277,6 +294,7 @@ export class Compositor {
     clip: Clip,
     localTicks: Ticks,
     media?: MediaAsset,
+    fitOverride?: { x: number; y: number },
   ): Float32Array {
     const t = clip.transform;
     const sx = sample(t.scaleX, localTicks);
@@ -286,9 +304,11 @@ export class Compositor {
     const ty = sample(t.y, localTicks);
 
     // Aspect-fit the media inside the frame so it isn't stretched (default "fit").
-    let fitX = 1;
-    let fitY = 1;
-    if (media && media.width && media.height) {
+    // A caller may override it outright — text passes its raster's own size in frame units,
+    // where "fit to the frame" would be exactly the wrong answer.
+    let fitX = fitOverride?.x ?? 1;
+    let fitY = fitOverride?.y ?? 1;
+    if (!fitOverride && media && media.width && media.height) {
       const seqAspect = sequence.width / sequence.height;
       const mediaAspect = media.width / media.height;
       if (mediaAspect > seqAspect) fitY = seqAspect / mediaAspect;

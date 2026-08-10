@@ -22,11 +22,14 @@ import {
   Layers as LayersIcon,
   Ratio,
   Redo2,
+  RotateCcw,
+  RotateCw,
+  SlidersHorizontal,
   Sparkles,
   Undo2,
 } from 'lucide-react';
-import type { PhotoDocument } from '@opencut/photo';
-import { renameDocument } from '@opencut/photo';
+import type { Layer, PhotoDocument } from '@opencut/photo';
+import { renameDocument, rotateCanvas } from '@opencut/photo';
 import { Button, IconButton, Panel, ResizablePanels } from '../components/primitives/index.js';
 import { useAppStore } from '../state/context.js';
 import { usePhoto, usePhotoStore } from '../state/photoContext.js';
@@ -37,6 +40,7 @@ import { CanvasStage } from './photo/CanvasStage.js';
 import { HistoryPanel } from './photo/HistoryPanel.js';
 import { InspectorPanel } from './photo/InspectorPanel.js';
 import { LayersPanel } from './photo/LayersPanel.js';
+import { naturalSizeOf } from './photo/layerGeometry.js';
 import { CanvasSizeDialog, ExportPhotoDialog, NewCanvasDialog } from './photo/PhotoDialogs.js';
 import { OptionsBar, ToolRail } from './photo/ToolRail.js';
 import { WindowControls } from './WindowControls.js';
@@ -93,6 +97,14 @@ function PhotoTitleBar({ engine }: { engine: PhotoEngine }) {
 
   const [editingName, setEditingName] = useState(false);
 
+  // Read the doc at click time rather than subscribing to it: this bar re-renders on the name and
+  // the history counter, and subscribing to the whole document here would re-render the title bar
+  // on every brush stroke.
+  const turnCanvas = (turns: 1 | 2 | 3) => {
+    const s = store.getState();
+    s.dispatch(rotateCanvas(turns, (l: Layer) => naturalSizeOf(l, s.doc)));
+  };
+
   return (
     <div className="oc-titlebar oc-photobar">
       <button className="oc-btn" onClick={() => app.getState().setView('home')} title="Back to Home">
@@ -133,6 +145,17 @@ function PhotoTitleBar({ engine }: { engine: PhotoEngine }) {
       <IconButton onClick={() => store.getState().setDialog('canvasSize')} title="Canvas size">
         <Ratio size={16} />
       </IconButton>
+      {/*
+        Canvas rotation lives in the bar, not only in the Inspector's Canvas section, because
+        "how do I rotate this" is a question people ask of the toolbar first. The Inspector holds
+        the full set (180°, both flips); these two are the ones reached for.
+      */}
+      <IconButton onClick={() => turnCanvas(3)} title="Rotate canvas 90° left">
+        <RotateCcw size={16} />
+      </IconButton>
+      <IconButton onClick={() => turnCanvas(1)} title="Rotate canvas 90° right">
+        <RotateCw size={16} />
+      </IconButton>
       <Button onClick={() => void store.getState().importImages()} disabled={importing}>
         <ImagePlus size={16} /> {importing ? 'Importing…' : 'Add Image'}
       </Button>
@@ -152,6 +175,18 @@ function PhotoTitleBar({ engine }: { engine: PhotoEngine }) {
         onClick={() => void quickPng(engine, name, app)}
       >
         <Download size={14} />
+      </IconButton>
+
+      {/*
+        App settings, reachable from HERE and not only from Home. SettingsDialog is mounted in
+        AppRoot above the view switch precisely so it can open over this workspace — but until
+        now that capability had no entry point in the photo editor, so the only way to change a
+        preference mid-session was to abandon the document and go back to Home. Same icon and
+        same position as the video title bar's, so "settings is the slider icon on the right"
+        holds in every view.
+      */}
+      <IconButton title="Settings" aria-label="Settings" onClick={() => app.getState().openDialog('settings')}>
+        <SlidersHorizontal size={16} />
       </IconButton>
 
       <WindowControls />

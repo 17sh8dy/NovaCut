@@ -1,12 +1,15 @@
-import { Sparkles, Type as TypeIcon } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import {
-  addClip,
+  addClipOnFreeTrack,
   allEffects,
   allTransitions,
   createTextClip,
   instantiateEffect,
   updateClip,
+  VIDEO_TEXT_PRESET_GROUPS,
+  VIDEO_TEXT_PRESETS,
   type EffectCategory,
+  type VideoTextPreset,
 } from '@opencut/core';
 import { EmptyState } from '../components/primitives/index.js';
 import { applyTransitionAtTime } from './Timeline.js';
@@ -140,52 +143,103 @@ export function TransitionsPanel() {
   );
 }
 
-const TEXT_PRESETS = [
-  { name: 'Title', size: 120, weight: 800 },
-  { name: 'Subtitle', size: 64, weight: 600 },
-  { name: 'Caption', size: 44, weight: 500 },
-  { name: 'Lower Third', size: 52, weight: 700 },
-  { name: 'Callout', size: 72, weight: 800 },
-  { name: 'Minimal', size: 56, weight: 400 },
-];
+/**
+ * The swatch previews a preset by rendering its ACTUAL style in CSS, at a size that fits the
+ * chip — not an icon and not a screenshot. The mapping is deliberately the same set of
+ * properties the rasterizer draws (fill/gradient, stroke, shadow, glow, background), so a chip
+ * that looks wrong is telling the truth about the preset rather than about the preview.
+ *
+ * The one honest divergence: `-webkit-text-stroke` centres its line where the canvas rasterizer
+ * strokes OUTSIDE, so heavy outlines read slightly thinner here than on the canvas.
+ */
+function TextPresetSwatch({ preset }: { preset: VideoTextPreset }) {
+  const s = preset.style;
+  const glow = s.glow ? `0 0 ${Math.round(s.glow.radius * 0.5)}px ${s.glow.color}` : '';
+  const shadow = s.shadow ? `${s.shadow.x * 0.4}px ${s.shadow.y * 0.4}px ${s.shadow.blur * 0.4}px ${s.shadow.color}` : '';
+  const textShadow = [glow, shadow].filter(Boolean).join(', ') || undefined;
 
-/** Text browser: presets that drop a new text clip at the playhead. */
+  const gradientFill = s.gradient
+    ? {
+        backgroundImage: `linear-gradient(${s.gradient.angle}deg, ${s.gradient.from}, ${s.gradient.to})`,
+        WebkitBackgroundClip: 'text' as const,
+        backgroundClip: 'text' as const,
+        color: 'transparent',
+      }
+    : { color: s.color };
+
+  return (
+    <span
+      className="oc-textpreset__swatch"
+      style={{
+        fontFamily: s.fontFamily,
+        fontWeight: s.fontWeight,
+        fontStyle: s.italic ? 'italic' : 'normal',
+        letterSpacing: Math.min(3, (s.letterSpacing ?? 0) * 0.5),
+        ...gradientFill,
+        textShadow,
+        WebkitTextStroke: s.stroke && s.stroke.width > 0
+          ? `${Math.max(0.5, s.stroke.width * 0.16)}px ${s.stroke.color}`
+          : undefined,
+        ...(s.background
+          ? {
+              background: s.background.color,
+              padding: '2px 10px',
+              borderRadius: Math.min(999, s.background.radius),
+            }
+          : null),
+      }}
+    >
+      {preset.defaultContent}
+    </span>
+  );
+}
+
+/** Text browser: presets that drop a styled text clip on a free track at the playhead. */
 export function TextPanel() {
   const store = useAppStore();
 
-  const addText = (preset: (typeof TEXT_PRESETS)[number]) => {
-    const seq = store.getState().sequence();
-    const clip = createTextClip(seq.playhead, preset.name);
-    if (clip.text) {
-      clip.text.fontSize = preset.size;
-      clip.text.fontWeight = preset.weight;
-    }
-    const videoTrack = seq.tracks.find((t) => t.kind === 'video');
-    if (!videoTrack) return;
-    store.getState().dispatch(addClip(videoTrack.id, clip));
+  const addText = (preset: VideoTextPreset) => {
+    // `store.playhead` is the live one. `Sequence.playhead` is a serialized field that nothing
+    // updates during a session, so it reads 0 forever — which is why every text clip used to
+    // land at the start of the timeline no matter where the playhead actually was. It looked
+    // like "add text does nothing" whenever you were more than four seconds in.
+    const clip = createTextClip(store.getState().playhead, preset.defaultContent);
+    // Merge over the factory default rather than replacing it, so any field the preset has no
+    // opinion on (alignment, underline) keeps a sane value instead of becoming undefined.
+    if (clip.text) clip.text = { ...clip.text, ...preset.style, content: preset.defaultContent };
+    clip.name = preset.label;
+    // Never onto the footage track: the compositor draws one clip per track, so text has to
+    // live above the video, not compete with it.
+    store.getState().dispatch(addClipOnFreeTrack(clip));
     store.getState().selectClip(clip.id);
     store.getState().setInspectorTab('text');
   };
 
   return (
     <div style={{ overflow: 'auto', height: '100%' }}>
-      <div className="oc-section-title">Text Presets</div>
-      <div style={{ padding: 'var(--space-2)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        {TEXT_PRESETS.map((p) => (
-          <button
-            key={p.name}
-            className="oc-list-item"
-            style={{ background: 'var(--surface-2)', justifyContent: 'space-between' }}
-            onClick={() => addText(p)}
-          >
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <TypeIcon size={16} />
-              <span style={{ fontWeight: p.weight > 600 ? 700 : 500 }}>{p.name}</span>
-            </span>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{p.size}px</span>
-          </button>
-        ))}
-      </div>
+      {VIDEO_TEXT_PRESET_GROUPS.map((group) => (
+        <div key={group}>
+          <div className="oc-section-title">{group}</div>
+          <div className="oc-textpreset__list">
+            {VIDEO_TEXT_PRESETS.filter((p) => p.group === group).map((p) => (
+              <button
+                key={p.id}
+                className="oc-textpreset"
+                onClick={() => addText(p)}
+                title={`${p.label} — adds a text clip at the playhead`}
+              >
+                <span className="oc-textpreset__stage">
+                  <TextPresetSwatch preset={p} />
+                </span>
+                <span className="oc-textpreset__meta">
+                  <span className="oc-textpreset__label">{p.label}</span>
+                  {p.hint && <span className="oc-textpreset__hint">{p.hint}</span>}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

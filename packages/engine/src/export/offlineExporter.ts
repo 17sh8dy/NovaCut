@@ -78,8 +78,11 @@ export class OfflineExporter {
           time,
           getMedia: (id) => findMedia(this.project, id as never),
         });
-        // Let async video seeks settle before we grab pixels.
-        await settle();
+        // The render above ISSUES the seeks; this waits for them to actually decode. It must be
+        // an event-driven wait, not a sleep — see FrameSource.whenReady. The second render is
+        // what samples the freshly decoded frame.
+        await this.pool.whenAllReady(SEEK_TIMEOUT_MS);
+        await nextFrame();
         this.compositor.render({
           sequence: this.sequence,
           time,
@@ -101,5 +104,29 @@ export class OfflineExporter {
   }
 }
 
-/** Yield to the event loop briefly so pending <video> seeks can resolve. */
-const settle = () => new Promise<void>((r) => setTimeout(r, 24));
+/**
+ * Upper bound on how long one frame may wait for its decode. Generous on purpose: it is a
+ * deadlock guard, not a pacing knob — a healthy seek resolves in a few milliseconds, so this
+ * only costs anything on a source that is genuinely stuck.
+ */
+const SEEK_TIMEOUT_MS = 2000;
+
+/**
+ * Hand the compositor one presentation tick after the decode completes. `seeked` fires when the
+ * frame is decoded; this gives the element the beat it needs to present it, so texImage2D reads
+ * the new frame rather than the outgoing one.
+ *
+ * It races a timer because rAF does not fire in a minimised/occluded window — and an export the
+ * user backgrounded on purpose must not be the one that hangs.
+ */
+const nextFrame = () =>
+  new Promise<void>((resolve) => {
+    let done = false;
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+    setTimeout(finish, 32);
+  });

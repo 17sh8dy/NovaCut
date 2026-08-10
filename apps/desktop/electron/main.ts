@@ -8,12 +8,15 @@
  * instead of hijacking the editor.
  */
 
-import { app, BrowserWindow, dialog, protocol, net, shell } from 'electron';
+import { app, BrowserWindow, dialog, nativeTheme, protocol, shell } from 'electron';
 import { join, extname, resolve as resolvePath } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import { registerHandlers, disposeHandlers } from './handlers.js';
 import { buildMenu } from './menu.js';
 import { loadWindowState, trackWindowState } from './window-state.js';
+import { readStartupPrefs } from './settings-host.js';
 import { CH } from './ipc-types.js';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -29,44 +32,83 @@ const CONTENT_TYPES: Record<string, string> = {
 const TRACE = process.env['OPENCUT_TRACE'] === '1' || !app.isPackaged;
 
 /**
- * Serve a local media file over the custom protocol.
+ * Serve a local media file over the custom protocol, **with real HTTP Range support**.
  *
- * We let Electron's `net.fetch` do the actual file streaming (it handles Range requests
- * so <video> can seek, and its ReadableStream is one Electron's Response accepts), then
- * re-wrap the response to inject `Access-Control-Allow-Origin`. That CORS header is what
- * keeps the decoded frames un-tainted so they can be uploaded to a WebGL texture and so
- * Web Audio's MediaElementSource produces sound — without it, video is black and audio
- * is silent even though the file loads.
+ * This is what makes seeking work, and it has to be done by hand. Electron's `net.fetch`
+ * silently IGNORES a Range header on a `file://` URL: it answers `200` with the whole body.
+ * Chromium reads a `200` reply to a ranged request as "this server cannot do ranges" and
+ * permanently downgrades the element to a non-seekable stream — every `video.currentTime = t`
+ * then snaps back to 0. The symptom is not an error anywhere; it is a preview frozen on the
+ * first frame while the timecode happily advances, and audio that never leaves 0:00.
+ *
+ * So we read the file ourselves and answer `206 Partial Content` with a correct
+ * `Content-Range`. `Accept-Ranges: bytes` on the full response is what tells the element it
+ * may seek at all. `Access-Control-Allow-Origin` keeps decoded frames un-tainted so they can
+ * be uploaded to a WebGL texture and so Web Audio's MediaElementSource produces sound.
  */
 async function serveMedia(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const encoded = url.pathname.replace(/^\/+/, '') || url.hostname;
   const filePath = decodeURIComponent(encoded);
   try {
-    // Forward only Range (so <video> seeking works); other renderer headers can upset
-    // a file:// fetch.
-    const range = request.headers.get('Range');
-    const upstream = await net.fetch(
-      pathToFileURL(filePath).toString(),
-      range ? { headers: { Range: range } } : {},
-    );
-    const headers = new Headers(upstream.headers);
-    headers.set('Access-Control-Allow-Origin', '*');
-    if (!headers.has('Content-Type')) {
-      headers.set('Content-Type', CONTENT_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream');
+    const size = (await stat(filePath)).size;
+    const type = CONTENT_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+    const headers = new Headers({
+      'Content-Type': type,
+      'Access-Control-Allow-Origin': '*',
+      // Must be present on the 200 too — it is the advertisement that seeking is possible.
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'no-cache',
+    });
+
+    // `bytes=START-[END]`. Only the single-range form matters here; multipart ranges are
+    // not something a media element asks for.
+    const match = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('Range') ?? '');
+    let status = 200;
+    let start = 0;
+    let end = size - 1;
+
+    if (match) {
+      const [, rawStart, rawEnd] = match;
+      if (rawStart === '') {
+        // Suffix form `bytes=-N`: the LAST n bytes. MP4 files with the moov atom at the end
+        // are opened exactly this way, so getting it wrong breaks those files specifically.
+        const n = Number(rawEnd);
+        if (!Number.isFinite(n) || n <= 0) return rangeNotSatisfiable(size, headers);
+        start = Math.max(0, size - n);
+      } else {
+        start = Number(rawStart);
+        if (rawEnd !== '') end = Math.min(Number(rawEnd), size - 1);
+      }
+      if (!Number.isFinite(start) || start >= size || start > end) return rangeNotSatisfiable(size, headers);
+      status = 206;
+      headers.set('Content-Range', `bytes ${start}-${end}/${size}`);
     }
-    // Scrubbing a video fires a range request per seek; logging each one turns the terminal
-    // into a firehose and costs real time in a hot path.
+
+    headers.set('Content-Length', String(end - start + 1));
+
     if (TRACE) {
-      console.log(
-        `[oc:serve] status=${upstream.status} type=${headers.get('Content-Type')} range=${range ?? 'none'} path=${filePath}`,
-      );
+      // Scrubbing fires a range request per seek; this is a firehose, hence the trace gate.
+      console.log(`[oc:serve] status=${status} type=${type} range=${request.headers.get('Range') ?? 'none'} bytes=${start}-${end}/${size} path=${filePath}`);
     }
-    return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
+
+    // A HEAD probe wants the headers only — streaming a body for it wastes the read.
+    if (request.method === 'HEAD') return new Response(null, { status, headers });
+
+    const stream = Readable.toWeb(
+      createReadStream(filePath, { start, end }),
+    ) as unknown as ReadableStream<Uint8Array>;
+    return new Response(stream, { status, headers });
   } catch (err) {
     console.error('[opencut] media serve failed:', filePath, err);
     return new Response(String(err), { status: 404 });
   }
+}
+
+/** 416 must carry the real size so the element can re-ask for a valid range. */
+function rangeNotSatisfiable(size: number, headers: Headers): Response {
+  headers.set('Content-Range', `bytes */${size}`);
+  return new Response(null, { status: 416, headers });
 }
 
 // The renderer references media as opencut://media/<encoded-abs-path>. Declaring the scheme
@@ -130,6 +172,24 @@ let unsaved = { dirty: false, name: 'Untitled Project' };
 /** Set once the user has answered the guard, so the follow-up close isn't intercepted again. */
 let allowClose = false;
 
+/**
+ * The window's pre-render background — the colour on screen between the frame appearing and the
+ * renderer's first paint. It must match the theme the renderer is ABOUT to draw, or every launch
+ * opens with a flash of the opposite one.
+ *
+ * The preference lives in the renderer's localStorage, which main cannot read, so it arrives via
+ * startup-prefs.json one launch late — the same mechanism, and the same reason, as the GPU flag.
+ * 'system' is resolved against Electron's own nativeTheme, which is live and needs no file.
+ *
+ * The two literals are --surface-0 from tokens.css. They are duplicated here because main has no
+ * access to the stylesheet; if those surfaces change, change them here too.
+ */
+function windowBackground(): string {
+  const { theme } = readStartupPrefs();
+  const dark = theme === 'system' ? nativeTheme.shouldUseDarkColors : theme === 'dark';
+  return dark ? '#0f1115' : '#ffffff';
+}
+
 function createWindow(): void {
   const state = loadWindowState();
   const win = new BrowserWindow({
@@ -138,7 +198,7 @@ function createWindow(): void {
     height: state.height ?? 960,
     minWidth: 1100,
     minHeight: 680,
-    backgroundColor: '#0a0b0e',
+    backgroundColor: windowBackground(),
     show: false,
     /*
      * The app draws its own title bar, so the native one is hidden. On macOS the traffic lights
@@ -289,6 +349,18 @@ function createWindow(): void {
 }
 
 if (gotLock) {
+  /*
+   * GPU acceleration, decided before anything else happens.
+   *
+   * `disableHardwareAcceleration()` is only legal before the app is ready, which is why this
+   * preference is read from a file main wrote on a previous run rather than from the renderer —
+   * and why the Settings row is labelled "Restart required" instead of pretending otherwise.
+   */
+  if (!readStartupPrefs().gpuAcceleration) {
+    app.disableHardwareAcceleration();
+    console.log('[opencut] GPU acceleration disabled by preference');
+  }
+
   // Windows uses this to group taskbar windows and to attribute notifications; without it,
   // toasts are credited to "electron.app.Electron" and the taskbar icon can detach on pin.
   app.setAppUserModelId('com.opencut.editor');

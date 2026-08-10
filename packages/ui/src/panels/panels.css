@@ -7,8 +7,8 @@
   gap: var(--space-3);
   height: 48px;
   padding: 0 var(--space-3);
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   -webkit-app-region: drag; /* draggable window chrome on desktop */
 }
@@ -72,9 +72,12 @@
   background: var(--surface-3);
   color: var(--text-primary);
 }
+/* The one deliberately un-themed colour in the app: Windows' own close red. A close button that
+   matches the platform is read without being looked at, and matching it matters more here than
+   matching our palette. */
 .oc-wincontrols__btn--close:hover {
   background: #e81123;
-  color: #fff;
+  color: #ffffff;
 }
 .oc-brand {
   display: flex;
@@ -106,8 +109,9 @@
   width: 22px;
   height: 22px;
   background: url('../assets/logo.svg') center / contain no-repeat;
-  /* The halo comes from .oc-pulse-glow, which animates `filter` — setting one here too would be
-     overwritten by the animation and is why this rule has no drop-shadow of its own. */
+  /* No halo, and no animation. The mark used to breathe on a 3.6s loop; a logo in the title bar
+     is a label, and a label that pulses forever is the most distracting thing on a screen whose
+     whole job is to not be distracting. */
 }
 .oc-titlebar__project {
   display: flex;
@@ -155,7 +159,7 @@
   padding: var(--space-2);
   background: var(--surface-1);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   align-items: center;
   flex-shrink: 0;
 }
@@ -180,7 +184,7 @@
 }
 .oc-rail__btn[data-active='true'] {
   background: var(--accent-soft);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 /* ── Media library ── */
@@ -192,9 +196,10 @@
   padding: 0 var(--space-2);
   margin: var(--space-2);
   background: var(--surface-2);
-  border: 1px solid transparent;
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-tertiary);
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
 .oc-search:focus-within {
   border-color: var(--accent);
@@ -229,7 +234,7 @@
 .oc-import-btn[data-drag='true'] {
   border-color: var(--accent);
   background: var(--accent-soft);
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 .oc-media-grid {
   display: grid;
@@ -241,15 +246,15 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   cursor: grab;
   transition: all var(--dur-fast) var(--ease-out);
 }
 .oc-media-card:hover {
   border-color: var(--border-strong);
-  transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
+/* Selection is an outline, not a fill — the thumbnail underneath is the point of the card. */
 .oc-media-card[data-selected='true'] {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
@@ -257,7 +262,7 @@
 .oc-media-card__thumb {
   position: relative;
   aspect-ratio: 16 / 10;
-  background: var(--surface-0);
+  background: var(--canvas);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -274,11 +279,13 @@
   bottom: 4px;
   right: 4px;
   padding: 1px 5px;
-  background: rgba(0, 0, 0, 0.7);
+  /* Sits ON the thumbnail, so it is scrimmed against the user's own image rather than against a
+     theme surface — it must stay legible over both a white sky and a night shot. */
+  background: rgba(0, 0, 0, 0.72);
   border-radius: var(--radius-xs);
   font-size: 9px;
   font-family: var(--font-mono);
-  color: #fff;
+  color: #ffffff;
 }
 .oc-media-card__name {
   padding: 6px 8px;
@@ -302,8 +309,9 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
-  background:
-    radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.02), transparent 70%), var(--surface-0);
+  /* Flat --canvas, no vignette. The stage is a frame around the user's footage; anything drawn
+     on it is a second image competing with the first. */
+  background: var(--canvas);
   position: relative;
 }
 .oc-preview__canvas-wrap {
@@ -343,13 +351,13 @@
   width: 20px;
   height: 20px;
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   cursor: pointer;
   padding: 0;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 .oc-swatch:hover {
-  transform: scale(1.12);
+  transform: scale(1.1);
 }
 .oc-swatch[data-active='true'] {
   outline: 2px solid var(--accent);
@@ -379,7 +387,7 @@
   max-width: 640px;
   padding: var(--space-3) var(--space-4);
   background: var(--surface-2);
-  border: 1px solid var(--border-strong, var(--border-subtle));
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
 }
@@ -404,7 +412,7 @@
 .oc-recovery .oc-btn {
   padding: 6px 14px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   background: var(--surface-3);
   color: var(--text-primary);
   font-size: var(--text-sm);
@@ -413,11 +421,14 @@
 }
 .oc-recovery .oc-btn--primary {
   background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+  border-color: transparent;
+  color: var(--on-accent);
 }
 .oc-recovery .oc-btn:hover {
-  filter: brightness(1.1);
+  background: var(--surface-4);
+}
+.oc-recovery .oc-btn--primary:hover {
+  background: var(--accent-hover);
 }
 .oc-transport {
   display: flex;
@@ -426,7 +437,7 @@
   height: 52px;
   padding: 0 var(--space-3);
   background: var(--surface-1);
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border);
 }
 .oc-transport__time {
   font-family: var(--font-mono);
@@ -449,17 +460,21 @@
   height: 40px;
   border-radius: var(--radius-full);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-out);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 .oc-play-btn:hover {
   background: var(--accent-hover);
-  box-shadow: 0 0 20px var(--accent-glow);
+}
+.oc-play-btn:active {
+  transform: scale(0.95);
 }
 
 /* ── Inspector ── */
@@ -517,6 +532,75 @@
   font-weight: 600;
 }
 
+/* ── Text presets ─────────────────────────────────────────────────────────────
+   Each row previews the preset by rendering its real style, so the list is chosen from by LOOK
+   rather than by name. The stage is a fixed-height, clipped strip: presets differ in size by 3×
+   and a row that grew to fit "Thumbnail Punch" would make the list unscannable. */
+.oc-textpreset__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) var(--space-3);
+}
+.oc-textpreset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.oc-textpreset:hover {
+  background: var(--surface-3);
+  border-color: var(--accent);
+}
+.oc-textpreset:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* `--canvas` is the backdrop used behind user media elsewhere in the app; using it here means a
+   white preset and a black one are both judged against the surface they will really sit on. */
+.oc-textpreset__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 46px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--canvas);
+  overflow: hidden;
+}
+.oc-textpreset__swatch {
+  font-size: 22px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.oc-textpreset__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.oc-textpreset__label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.oc-textpreset__hint {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Generic list item (effects, transitions, presets) ── */
 .oc-list-item {
   display: flex;
@@ -542,7 +626,7 @@
   gap: 4px;
   padding: var(--space-3);
   background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--dur-fast) var(--ease-out);
@@ -563,7 +647,14 @@
   overflow: hidden;
 }
 
-/* Animated effect/transition preview — plays only while the chip is hovered. */
+/*
+ * Animated effect/transition preview — plays only while the chip is hovered.
+ *
+ * These three colours are hardcoded and stay hardcoded: this is a stand-in for the user's
+ * FOOTAGE, not a piece of chrome. It has to be a saturated, multi-hued image or a hue-rotate
+ * preview has nothing to rotate and a blur preview has no edges to soften — and it must look the
+ * same in both themes, because the effect does.
+ */
 .oc-fx-demo {
   position: absolute;
   inset: 0;

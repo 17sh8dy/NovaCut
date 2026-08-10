@@ -33,6 +33,19 @@ function resolveBinary(envKey: 'OPENCUT_FFMPEG' | 'OPENCUT_FFPROBE', name: strin
 const FFMPEG = resolveBinary('OPENCUT_FFMPEG', 'ffmpeg');
 const FFPROBE = resolveBinary('OPENCUT_FFPROBE', 'ffprobe');
 
+/** The resolved ffmpeg path, so About reports the version of the binary actually in use. */
+export const ffmpegBinary = (): string => FFMPEG;
+
+/**
+ * Encoder thread cap, from the Performance preference. 0 means "let ffmpeg decide", which is its
+ * own default and what most people want — the setting exists for leaving headroom on a machine
+ * doing something else at the same time.
+ */
+let encoderThreads = 0;
+export function setEncoderThreads(n: number): void {
+  encoderThreads = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
 /** ENOENT from a spawn means "not installed", which deserves a sentence a user can act on. */
 function describeSpawnFailure(err: unknown): Error {
   const code = (err as { code?: string } | undefined)?.code;
@@ -204,6 +217,8 @@ export class FfmpegEncoder {
         args.push('-c:a', 'aac', '-b:a', `${s.audioBitrateKbps || 192}k`, '-map', '0:v:0', '-map', '1:a:0', '-shortest');
       }
     }
+    // Before the output, after the codec: ffmpeg applies -threads to the encoder it precedes.
+    if (encoderThreads > 0) args.push('-threads', String(encoderThreads));
     args.push(job.outputPath);
 
     this.child = spawn(FFMPEG, args, { windowsHide: true });

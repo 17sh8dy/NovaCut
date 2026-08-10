@@ -13,10 +13,15 @@ import {
   type ImportedFileDTO,
   type MenuId,
   type RecentProjectDTO,
+  type HostPrefsDTO,
   type WindowAction,
 } from './ipc-types.js';
-import { ffmpegThumbnail, ffprobeMedia, FfmpegEncoder } from './ffmpeg.js';
+import { ffmpegThumbnail, ffprobeMedia, FfmpegEncoder, ffmpegBinary, setEncoderThreads } from './ffmpeg.js';
 import { popupMenu } from './menu.js';
+import {
+  chooseDirectory, clearCache, openDataFolder, setLaunchOnStartup, storageUsage, systemInfo,
+  writeStartupPrefs,
+} from './settings-host.js';
 
 /** Callbacks main provides so shell-level state (dirty flag, quit guard) stays in one place. */
 export interface HandlerHooks {
@@ -86,9 +91,20 @@ async function readRecents(): Promise<RecentProjectDTO[]> {
   }
 }
 
+/**
+ * Renderer-owned preferences main needs at IPC time.
+ *
+ * Mirrored here rather than read from localStorage, which main cannot see. Only the handful of
+ * values that change main's behaviour live here — this is not a second copy of the settings.
+ */
+const hostPrefs = { maxRecentProjects: 12, defaultProjectDir: '', exportDir: '' };
+
 async function pushRecent(path: string): Promise<void> {
   const list = await readRecents();
-  const next = [{ path, name: basename(path).replace(/\.opencut$/, ''), modifiedAt: Date.now() }, ...list.filter((r) => r.path !== path)].slice(0, 12);
+  const next = [
+    { path, name: basename(path).replace(/\.opencut$/, ''), modifiedAt: Date.now() },
+    ...list.filter((r) => r.path !== path),
+  ].slice(0, Math.max(1, hostPrefs.maxRecentProjects));
   await writeFile(recentsPath(), JSON.stringify(next), 'utf8').catch(() => {});
 }
 
@@ -97,6 +113,7 @@ export function registerHandlers(hooks: HandlerHooks): void {
   ipcMain.handle(CH.openProject, async () => {
     const res = await dialog.showOpenDialog({
       title: 'Open Project',
+      ...(hostPrefs.defaultProjectDir ? { defaultPath: hostPrefs.defaultProjectDir } : {}),
       filters: [{ name: 'Open Cut Project', extensions: ['opencut'] }],
       properties: ['openFile'],
     });
@@ -112,7 +129,9 @@ export function registerHandlers(hooks: HandlerHooks): void {
     if (!target) {
       const res = await dialog.showSaveDialog({
         title: 'Save Project',
-        defaultPath: 'Untitled.opencut',
+        defaultPath: hostPrefs.defaultProjectDir
+          ? join(hostPrefs.defaultProjectDir, 'Untitled.opencut')
+          : 'Untitled.opencut',
         filters: [{ name: 'Open Cut Project', extensions: ['opencut'] }],
       });
       if (res.canceled || !res.filePath) return null;
@@ -159,7 +178,10 @@ export function registerHandlers(hooks: HandlerHooks): void {
 
   // ── Export path + encoder session ──
   ipcMain.handle(CH.chooseExportPath, async (_e, defaultName: string) => {
-    const res = await dialog.showSaveDialog({ title: 'Export Video', defaultPath: defaultName });
+    // Joined HERE rather than in the renderer, which has no business knowing the platform's path
+    // separator. `defaultName` is always a bare filename.
+    const defaultPath = hostPrefs.exportDir ? join(hostPrefs.exportDir, defaultName) : defaultName;
+    const res = await dialog.showSaveDialog({ title: 'Export Video', defaultPath });
     return res.canceled ? null : res.filePath ?? null;
   });
 
@@ -231,6 +253,33 @@ export function registerHandlers(hooks: HandlerHooks): void {
   // that can reach the renderer to launch a program.
   ipcMain.on(CH.openExternal, (_e, url: string) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  });
+
+  // ── Settings ──
+  ipcMain.on(CH.hostPrefs, (_e, next: HostPrefsDTO) => {
+    Object.assign(hostPrefs, next);
+    setEncoderThreads(next.cpuThreads ?? 0);
+    // Persisted for the NEXT launch: neither hardware acceleration nor the window's background
+    // colour can be changed on a running window.
+    writeStartupPrefs({
+      gpuAcceleration: next.gpuAcceleration !== false,
+      theme: next.theme ?? 'system',
+    });
+  });
+  ipcMain.handle(CH.chooseDirectory, (e) => chooseDirectory(BrowserWindow.fromWebContents(e.sender)));
+  ipcMain.handle(CH.systemInfo, () => systemInfo(ffmpegBinary()));
+  ipcMain.handle(CH.storageUsage, (_e, projectDir: string) => storageUsage(projectDir ?? ''));
+  ipcMain.handle(CH.clearCache, () => clearCache());
+  ipcMain.handle(CH.openDataFolder, () => openDataFolder());
+  ipcMain.handle(CH.setLaunchOnStartup, (_e, enabled: boolean) => setLaunchOnStartup(!!enabled));
+  ipcMain.handle(CH.clearRecentProjects, async () => {
+    await writeFile(recentsPath(), '[]', 'utf8').catch(() => {});
+  });
+  ipcMain.on(CH.setZoomFactor, (e, factor: number) => {
+    // Clamped in main, not just in the slider: a bad value here makes the window unusable and
+    // the only way back is a settings file the user can't reach from inside the app.
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (win) win.webContents.setZoomFactor(Math.min(2, Math.max(0.5, factor)));
   });
 
   ipcMain.on(CH.windowAction, (e, action: WindowAction) => {

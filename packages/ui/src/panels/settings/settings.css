@@ -1,0 +1,410 @@
+/*
+ * Settings window — search, the registry-driven controls, and the bespoke panes.
+ *
+ * Split out of dialog.css because the Settings window grew from one pane of toggles into a
+ * thirteen-category surface with its own control vocabulary; keeping it here means dialog.css
+ * stays about dialogs.
+ */
+
+/* ── Search ───────────────────────────────────────────────────────────────────
+   The whole point of driving the panes from a registry. Styled as a first-class control rather
+   than an afterthought in a corner, because it is the fastest route to any of ~60 settings. */
+.oc-settings__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 30px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.oc-settings__search:focus-within {
+  border-color: var(--accent);
+  color: var(--text-secondary);
+}
+.oc-settings__search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--text-primary);
+  font-size: var(--text-base, 13px);
+}
+/* Chromium draws its own clear affordance on type=search; ours is Escape. */
+.oc-settings__search input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.oc-settings__search--inline {
+  flex: 1;
+  max-width: 280px;
+}
+.oc-settings__count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+}
+.oc-settings__navitem[data-dim='true'] {
+  opacity: 0.35;
+  cursor: default;
+}
+.oc-settings__navitem > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oc-settings__resultnote {
+  margin-left: var(--space-3);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm, 12px);
+}
+
+/* ── Groups and planned rows ── */
+.oc-setting-group {
+  margin-bottom: var(--space-4);
+}
+.oc-setting-group__title {
+  margin: var(--space-4) 0 2px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.oc-setting-group:first-child .oc-setting-group__title {
+  margin-top: 0;
+}
+/*
+ * A setting that exists in the UI but not yet in the app. Dimmed and labelled rather than
+ * hidden: the shape of the product stays visible and searchable, and nothing pretends to work.
+ */
+.oc-setting-row[data-planned] .oc-setting-row__title {
+  color: var(--text-secondary);
+}
+.oc-setting-row[data-planned] .oc-setting-row__control {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.oc-setting-row__blocked {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm, 12px);
+  font-style: italic;
+}
+.oc-setting-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--surface-3);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+.oc-setting-tag--info {
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: var(--warning);
+}
+.oc-setting-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px 12px;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, transparent);
+  color: var(--warning);
+  font-size: var(--text-sm, 12px);
+}
+
+/* ── Controls ── */
+.oc-select,
+.oc-input {
+  height: 30px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-base, 13px);
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.oc-select:focus,
+.oc-input:focus {
+  border-color: var(--accent);
+}
+.oc-select:disabled,
+.oc-input:disabled {
+  opacity: 0.5;
+}
+.oc-select {
+  min-width: 168px;
+}
+.oc-input {
+  min-width: 200px;
+}
+.oc-input--num {
+  min-width: 84px;
+  text-align: right;
+}
+.oc-setting-slider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.oc-setting-slider input[type='range'] {
+  width: 168px;
+  accent-color: var(--accent);
+}
+/*
+ * Tabular figures and a reserved width. Without them the row reflows every time the value's
+ * digit count changes, and the slider appears to twitch under the cursor while you drag it.
+ */
+.oc-setting-slider__value {
+  min-width: 62px;
+  text-align: right;
+  color: var(--text-secondary);
+  font-size: var(--text-sm, 12px);
+  font-variant-numeric: tabular-nums;
+}
+.oc-setting-value {
+  display: inline-block;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: var(--text-sm, 12px);
+}
+.oc-setting-value--good {
+  max-width: 360px;
+  white-space: normal;
+  text-align: right;
+  color: var(--success);
+}
+/* ── Accent picker ────────────────────────────────────────────────────────────
+   Swatches of the actual colour, at the size of a real target. The selected one is ringed in
+   its OWN colour with a surface-coloured gap, so the ring reads on a white and a charcoal
+   sidebar alike and nothing has to know which theme it is in. */
+.oc-accent-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.oc-accent-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 18%, transparent);
+  padding: 0;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.oc-accent-swatch:hover {
+  transform: scale(1.1);
+}
+.oc-accent-swatch[data-active='true'] {
+  box-shadow:
+    0 0 0 2px var(--surface-0),
+    0 0 0 4px currentColor;
+}
+/*
+ * The custom picker is the same 22px circle as the presets, so the row reads as one control
+ * rather than as six swatches plus a form field. Chromium draws `input[type=color]` as a
+ * bordered box with an inset swatch, which is what the two pseudo-elements are for: without them
+ * this is a grey-framed square sitting in a line of circles.
+ */
+.oc-accent-custom {
+  padding: 0;
+  background: none;
+  appearance: none;
+  -webkit-appearance: none;
+  overflow: hidden;
+}
+.oc-accent-custom::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.oc-accent-custom::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+/* A vertical rule between the presets and the custom picker: they set the same preference, but
+   one is a choice from a list and the other opens the OS colour dialog. */
+.oc-accent-picker__sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+.oc-folder-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 420px;
+}
+/* `direction: rtl` keeps the TAIL of a long path visible, which is the informative end — a
+   truncated "C:\Users\…\Do" tells you nothing. */
+.oc-folder-picker__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: var(--text-sm, 12px);
+}
+
+/* ── Shortcuts toolbar ── */
+.oc-sc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+/* ── Storage ── */
+.oc-storage__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.oc-storage__total {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.oc-storage__totallabel {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm, 12px);
+}
+.oc-storage__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+}
+.oc-storage__row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.oc-storage__name {
+  color: var(--text-primary);
+  font-size: var(--text-md, 14px);
+}
+.oc-storage__size {
+  color: var(--text-secondary);
+  font-size: var(--text-sm, 13px);
+  font-variant-numeric: tabular-nums;
+}
+.oc-storage__bar {
+  height: 6px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.oc-storage__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+/* Projects are YOUR data, not reclaimable space — coloured differently so the bar that must not
+   be cleared never reads as more cache. */
+.oc-storage__bar span[data-key='projects'] {
+  background: var(--success);
+}
+.oc-storage__desc {
+  margin-top: 6px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm, 12px);
+}
+
+/* ── About ── */
+.oc-about__highlights {
+  list-style: none;
+  margin: var(--space-3) 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm, 12px);
+}
+.oc-about__table {
+  width: min(420px, 100%);
+  margin: 0 auto var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.oc-about__line {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 7px 12px;
+  font-size: var(--text-sm, 12px);
+}
+.oc-about__line:nth-child(odd) {
+  background: var(--surface-1);
+}
+.oc-about__line span:first-child {
+  color: var(--text-tertiary);
+}
+.oc-about__line span:last-child {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oc-about__legal {
+  margin-top: var(--space-4);
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* ── Preferences applied at the document root ──────────────────────────────────
+   These are the CSS half of useAppliedPreferences: the hook sets the attribute, these rules are
+   what the attribute means. */
+:root[data-compact] .oc-setting-row {
+  padding: 9px 0;
+}
+:root[data-compact] .oc-titlebar,
+:root[data-compact] .oc-home__chrome {
+  height: 40px;
+}
+:root[data-large-icons] .oc-rail__btn svg {
+  width: 22px;
+  height: 22px;
+}
+/* "Fast" retunes the duration tokens the whole app already animates against, rather than adding
+   a second speed system beside them. "Off" is handled by the existing data-reduce-motion gate. */
+:root[data-animation='fast'] {
+  --dur-fast: 60ms;
+  --dur: 100ms;
+  --dur-slow: 150ms;
+}

@@ -26,7 +26,7 @@ interface AnimatedContentProps {
 export function AnimatedContent({
   children,
   direction = 'up',
-  distance = 16,
+  distance = 10,
   delay = 0,
   as: Tag = 'div',
   className = '',

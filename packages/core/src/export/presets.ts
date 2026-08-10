@@ -94,6 +94,42 @@ export function defaultExportSettings(fps = 30): ExportSettings {
   };
 }
 
+/**
+ * Expand a filename pattern into an actual filename.
+ *
+ * Tokens: {project} {date} {time} {resolution} {fps}. An unknown token is left verbatim, so a
+ * typo produces a visibly wrong name rather than silently falling back to something the user
+ * then has to reverse-engineer.
+ *
+ * The result is sanitised, because the project name is user text and routinely contains `:` or
+ * `/` — characters a filesystem either rejects outright or, worse on Windows, reinterprets as a
+ * path. Returns a bare name with no extension; the caller appends the container.
+ */
+export function formatExportFilename(
+  pattern: string,
+  ctx: { project: string; resolution: string; fps: number; at?: Date },
+): string {
+  const at = ctx.at ?? new Date();
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const tokens: Record<string, string> = {
+    project: ctx.project,
+    date: `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`,
+    time: `${pad(at.getHours())}${pad(at.getMinutes())}`,
+    resolution: ctx.resolution,
+    fps: String(ctx.fps),
+  };
+  const expanded = (pattern || '{project}').replace(/\{(\w+)\}/g, (whole, key: string) =>
+    key in tokens ? tokens[key]! : whole,
+  );
+  const safe = expanded
+    .replace(/[\\/:*?"<>|]/g, '-') // characters no mainstream filesystem accepts
+    .replace(/\s+/g, '_')
+    .replace(/-{2,}/g, '-')
+    .replace(/^[.\-_]+|[.\-_\s]+$/g, '') // a leading dot hides the file; a trailing one breaks Windows
+    .slice(0, 120);
+  return safe || 'export';
+}
+
 /** Estimated output size in bytes for a given duration (seconds). */
 export function estimateFileSize(settings: ExportSettings, durationSeconds: number): number {
   const videoMbps =

@@ -14,13 +14,17 @@
 
 import type { Command } from '@opencut/core';
 import { cloneFill, createShapeLayer, createTextLayer } from '../model/factory.js';
-import { baseSize, boundsOf, layerCorners, type Rect, type Size } from '../model/geometry.js';
+import {
+  applyMat, baseSize, boundsOf, layerCorners, layerMatrix,
+  type Point, type Rect, type Size,
+} from '../model/geometry.js';
 import type { LayerId } from '../model/ids.js';
 import type { Fill, Glow, Shadow, Stroke } from '../model/paint.js';
+import type { Selection, SelectionRegion } from '../model/selection.js';
 import type { ShapeKind, ShapeParams } from '../model/shapes.js';
 import type { TextStyle } from '../model/text.js';
 import { findLayer, flattenLayers } from '../model/tree.js';
-import type { Layer, PhotoDocument, ShapeLayer, TextLayer } from '../model/types.js';
+import type { Layer, PhotoDocument, ShapeLayer, TextLayer, Transform2D } from '../model/types.js';
 import { fitModeOf, isShapeLayer, isTextLayer } from '../model/types.js';
 import { addLayer, updateLayer } from './mutations.js';
 
@@ -518,3 +522,224 @@ export function trimCanvasToContent(natural: NaturalSizes, padding = 0): PhotoCo
 /** The drawn size of a layer at 100%, for the inspector's readouts. */
 export const drawnSize = (layer: Layer, natural: Size, canvas: Size): Size =>
   baseSize(natural, canvas, fitModeOf(layer));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canvas orientation
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ── ROTATING AND FLIPPING THE WHOLE CANVAS ───────────────────────────────────
+ *
+ * Distinct from rotating a LAYER (the ring outside the corner handles, and Transform →
+ * Rotation): that turns one object inside a fixed frame; this turns the frame and everything in
+ * it. Both exist because both get asked for, and conflating them is how a "rotate" feature ends
+ * up rotating the wrong thing.
+ *
+ * This is a rigid map of the whole composition, so the only way to build it that stays correct
+ * is to state the canvas-space map Q once and re-solve every layer against it — not to hand-edit
+ * x/y/rotation per layer and hope. Two consequences fall out of `layerMatrix`, and both matter:
+ *
+ *   • A LEAF layer sits directly in canvas space, so the map composes on the OUTSIDE:
+ *     `Lin' = Q · Lin`. For a quarter turn that is rotation += 90; for a mirror it is
+ *     rotation → −rotation with one flip flag toggled, because `S(-1,1)·R(θ) = R(-θ)·S(-1,1)`.
+ *
+ *   • A GROUP flattens its children into a CANVAS-SIZED buffer, so those children live in canvas
+ *     space too and are turned by the recursion below. Its own transform is therefore CONJUGATED,
+ *     `Lin' = Q · Lin · Q⁻¹` — which for a quarter turn leaves its rotation alone and instead
+ *     swaps scaleX with scaleY and flipH with flipV. Composing on the outside like a leaf would
+ *     turn a group's contents twice.
+ *
+ * `contain` layers (imported bitmaps) are aspect-fitted to the canvas, so a quarter turn changes
+ * the frame they fit into and would silently resize them. Their scale is compensated by the ratio
+ * of old base size to new, which is what keeps the turn rigid.
+ *
+ * Positions are not written directly either: each layer's local origin is mapped through Q and
+ * the position is then solved so the new matrix puts it exactly there. That is what makes the
+ * result correct for a non-centre `anchorX/anchorY` rather than merely correct for the default.
+ */
+
+/** A canvas-space map, expressed as the fields `layerMatrix` composes. */
+interface CanvasMap {
+  label: string;
+  /** The new canvas size, given the old one. */
+  size: (canvas: Size) => Size;
+  /** A point in OLD canvas pixels (top-left origin) → NEW canvas pixels. */
+  point: (p: Point, canvas: Size) => Point;
+  /** A leaf layer's new orientation fields — the map composed on the outside. */
+  leaf: (t: Transform2D) => Pick<Transform2D, 'rotation' | 'flipH' | 'flipV'>;
+  /** A group's new fields — the map conjugated, because its children moved too. */
+  group: (t: Transform2D) => Pick<Transform2D, 'rotation' | 'scaleX' | 'scaleY' | 'flipH' | 'flipV'>;
+}
+
+/** Quarter turns clockwise: 1 = 90° right, 2 = 180°, 3 = 90° left. */
+export type QuarterTurns = 1 | 2 | 3;
+
+const QUARTER: Record<QuarterTurns, CanvasMap> = {
+  1: {
+    label: 'Rotate Canvas 90° Right',
+    size: (c) => ({ width: c.height, height: c.width }),
+    point: (p, c) => ({ x: c.height - p.y, y: p.x }),
+    leaf: (t) => ({ rotation: normalizeTurn(t.rotation + 90), flipH: t.flipH, flipV: t.flipV }),
+    group: (t) => ({ rotation: t.rotation, scaleX: t.scaleY, scaleY: t.scaleX, flipH: t.flipV, flipV: t.flipH }),
+  },
+  2: {
+    label: 'Rotate Canvas 180°',
+    size: (c) => c,
+    point: (p, c) => ({ x: c.width - p.x, y: c.height - p.y }),
+    leaf: (t) => ({ rotation: normalizeTurn(t.rotation + 180), flipH: t.flipH, flipV: t.flipV }),
+    // A half turn commutes with everything `layerMatrix` composes, so a group keeps every field
+    // and only its position moves.
+    group: (t) => ({ rotation: t.rotation, scaleX: t.scaleX, scaleY: t.scaleY, flipH: t.flipH, flipV: t.flipV }),
+  },
+  3: {
+    label: 'Rotate Canvas 90° Left',
+    size: (c) => ({ width: c.height, height: c.width }),
+    point: (p, c) => ({ x: p.y, y: c.width - p.x }),
+    leaf: (t) => ({ rotation: normalizeTurn(t.rotation - 90), flipH: t.flipH, flipV: t.flipV }),
+    group: (t) => ({ rotation: t.rotation, scaleX: t.scaleY, scaleY: t.scaleX, flipH: t.flipV, flipV: t.flipH }),
+  },
+};
+
+const MIRROR: Record<'h' | 'v', CanvasMap> = {
+  h: {
+    label: 'Flip Canvas Horizontal',
+    size: (c) => c,
+    point: (p, c) => ({ x: c.width - p.x, y: p.y }),
+    leaf: (t) => ({ rotation: normalizeTurn(-t.rotation), flipH: !t.flipH, flipV: t.flipV }),
+    // No flag toggle for a group: conjugating a ±1 diagonal by another leaves it unchanged, and
+    // the mirroring the user sees comes from its children having been mirrored.
+    group: (t) => ({
+      rotation: normalizeTurn(-t.rotation),
+      scaleX: t.scaleX, scaleY: t.scaleY, flipH: t.flipH, flipV: t.flipV,
+    }),
+  },
+  v: {
+    label: 'Flip Canvas Vertical',
+    size: (c) => c,
+    point: (p, c) => ({ x: p.x, y: c.height - p.y }),
+    leaf: (t) => ({ rotation: normalizeTurn(-t.rotation), flipH: t.flipH, flipV: !t.flipV }),
+    group: (t) => ({
+      rotation: normalizeTurn(-t.rotation),
+      scaleX: t.scaleX, scaleY: t.scaleY, flipH: t.flipH, flipV: t.flipV,
+    }),
+  },
+};
+
+/** Keep degrees inside the −180..180 the Rotation slider shows, so turns can't walk off it. */
+function normalizeTurn(deg: number): number {
+  const d = (((deg + 180) % 360) + 360) % 360 - 180;
+  // −180 and +180 are the same angle; prefer the positive end so four right turns read
+  // 90 → 180 → −90 → 0 rather than parking on a negative half turn.
+  if (d === -180) return 180;
+  return Object.is(d, -0) ? 0 : d;
+}
+
+/**
+ * Rotate the entire canvas by quarter turns, clockwise.
+ *
+ * `natural` is required for the same reason `alignLayers` requires it: a bitmap's drawn size
+ * lives in a decoded image that this package deliberately cannot see, and a quarter turn changes
+ * the frame that size is fitted into.
+ */
+export function rotateCanvas(turns: QuarterTurns, natural: NaturalSizes): PhotoCommand {
+  return canvasMapCommand(QUARTER[turns], natural);
+}
+
+/** Mirror the entire canvas. */
+export function flipCanvas(axis: 'h' | 'v', natural: NaturalSizes): PhotoCommand {
+  return canvasMapCommand(MIRROR[axis], natural);
+}
+
+const ORIGIN: Point = { x: 0, y: 0 };
+
+function canvasMapCommand(map: CanvasMap, natural: NaturalSizes): PhotoCommand {
+  return {
+    label: map.label,
+    apply: (doc) => {
+      const oldCanvas: Size = { width: doc.width, height: doc.height };
+      const newCanvas = map.size(oldCanvas);
+
+      const move = (layer: Layer): Layer => {
+        const fit = fitModeOf(layer);
+        const isGroup = layer.kind === 'group';
+        const t = layer.transform;
+        // A group's flattened buffer IS canvas-sized, so its natural size follows the new canvas
+        // once its children have moved. Asking the caller would hand back the old one.
+        const naturalBefore: Size = isGroup ? oldCanvas : natural(layer);
+        const naturalAfter: Size = isGroup ? newCanvas : naturalBefore;
+
+        // Leaves only. A group's scale swap already accounts for its base size following the
+        // canvas, and compensating on top of that would undo it.
+        const k = isGroup || fit !== 'contain'
+          ? { x: 1, y: 1 }
+          : baseRatio(naturalBefore, oldCanvas, newCanvas);
+        const oriented: Transform2D = isGroup
+          ? { ...t, ...map.group(t) }
+          : { ...t, ...map.leaf(t), scaleX: t.scaleX * k.x, scaleY: t.scaleY * k.y };
+
+        // Pin the layer's local origin to wherever the canvas map sends it. Writing x/y directly
+        // would be right only for a centred anchor; solving is right for any anchor.
+        const from = applyMat(layerMatrix(t, naturalBefore, oldCanvas, fit), ORIGIN);
+        const to = map.point(from, oldCanvas);
+        const at = applyMat(layerMatrix({ ...oriented, x: 0, y: 0 }, naturalAfter, newCanvas, fit), ORIGIN);
+        const moved = {
+          ...layer,
+          transform: { ...oriented, x: to.x - at.x, y: to.y - at.y },
+        } as Layer;
+
+        return moved.kind === 'group' ? { ...moved, children: moved.children.map(move) } : moved;
+      };
+
+      return {
+        ...doc,
+        width: Math.round(newCanvas.width),
+        height: Math.round(newCanvas.height),
+        layers: doc.layers.map(move),
+        selection: doc.selection ? mapSelection(doc.selection, map, oldCanvas) : null,
+        modifiedAt: Date.now(),
+      };
+    },
+  };
+}
+
+/**
+ * How much a `contain` layer's base size changes when the canvas does.
+ *
+ * Both sizes are aspect-fits of the same source, so the two ratios are in fact one scalar. They
+ * are returned per-axis because scaleX/scaleY are what get multiplied, and an axis-wise value
+ * stays obviously correct if `baseSize` ever stops preserving aspect.
+ */
+function baseRatio(natural: Size, oldCanvas: Size, newCanvas: Size): { x: number; y: number } {
+  const before = baseSize(natural, oldCanvas, 'contain');
+  const after = baseSize(natural, newCanvas, 'contain');
+  return {
+    x: after.width ? before.width / after.width : 1,
+    y: after.height ? before.height / after.height : 1,
+  };
+}
+
+/**
+ * Carry the marquee through the turn.
+ *
+ * A selection is geometry in canvas pixels, so it maps like everything else — and it has to, or
+ * rotating the canvas would leave the next edit clipped to a region of the OLD frame while the
+ * ants marched somewhere else entirely. Rect and ellipse are axis-aligned, so their two corners
+ * are mapped and re-normalised; a path's points map directly.
+ */
+function mapSelection(selection: Selection, map: CanvasMap, canvas: Size): Selection {
+  const region = (r: SelectionRegion): SelectionRegion => {
+    if (r.kind === 'path') {
+      return { ...r, contours: r.contours.map((c) => c.map((p) => map.point(p, canvas))) };
+    }
+    const a = map.point({ x: r.x, y: r.y }, canvas);
+    const b = map.point({ x: r.x + r.width, y: r.y + r.height }, canvas);
+    return {
+      ...r,
+      x: Math.min(a.x, b.x),
+      y: Math.min(a.y, b.y),
+      width: Math.abs(b.x - a.x),
+      height: Math.abs(b.y - a.y),
+    };
+  };
+  return { ...selection, regions: selection.regions.map(region) };
+}

@@ -7,6 +7,10 @@
 
 export { EditorApp } from './EditorApp.js';
 export { createAppStore, type AppStore } from './state/store.js';
+export {
+  applyTheme, loadPreferences, resolveTheme,
+  type ThemePreference, type ResolvedTheme,
+} from './state/preferences.js';
 export { StoreProvider, useStore, useAppStore } from './state/context.js';
 export * from './components/primitives/index.js';
 export * from './components/animated/index.js';

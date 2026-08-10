@@ -18,6 +18,7 @@ import type { MediaId } from '@opencut/core';
 import { FrameSourcePool, PhotoRenderer, dlog } from '@opencut/engine';
 import { applyCanvasSize, type PhotoDocument } from '@opencut/photo';
 import { usePhotoStore } from './photoContext.js';
+import { useAppStore } from './context.js';
 
 export type ExportFormat = 'png' | 'jpeg' | 'webp';
 
@@ -48,8 +49,29 @@ export interface PhotoEngine {
   exportImage: (options: ExportOptions) => Promise<Blob | null>;
 }
 
+/**
+ * The document as the PREVIEW should draw it.
+ *
+ * With high-quality previews off, a document larger than PREVIEW_CAP on its long edge is
+ * rendered smaller — the compositor allocates framebuffers at document size, so a 6000px canvas
+ * costs several hundred MB of VRAM per effect pass whether or not the screen can show that
+ * detail. The cap is on the LONG edge and preserves aspect, so nothing is distorted.
+ *
+ * Exports are unaffected: `exportImage` composites off-screen from the untouched document, and
+ * `toPng` routes through it for exactly this reason.
+ */
+const PREVIEW_CAP = 2048;
+function previewDoc(doc: PhotoDocument, highQuality: boolean): PhotoDocument {
+  if (highQuality) return doc;
+  const longest = Math.max(doc.width, doc.height);
+  if (longest <= PREVIEW_CAP) return doc;
+  const scale = PREVIEW_CAP / longest;
+  return applyCanvasSize(Math.round(doc.width * scale), Math.round(doc.height * scale), true).apply(doc);
+}
+
 export function usePhotoEngine(): PhotoEngine {
   const store = usePhotoStore();
+  const app = useAppStore();
   const renderer = useRef<PhotoRenderer | null>(null);
   const pool = useRef<FrameSourcePool | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -67,7 +89,7 @@ export function usePhotoEngine(): PhotoEngine {
     const r = renderer.current;
     const p = pool.current;
     if (!r || !p) return;
-    r.render(contextFor(doc, p));
+    r.render(contextFor(previewDoc(doc, app.getState().preferences.photoHqPreview), p));
   };
 
   const ensureCore = () => {
@@ -92,14 +114,17 @@ export function usePhotoEngine(): PhotoEngine {
       },
       redraw: () => renderDoc(store.getState().doc),
       toPng: async () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return null;
-        // Draw once more so the buffer is guaranteed current, then read the canvas rather than
-        // the renderer's own pixels: GL readPixels is bottom-up and would need a manual vflip,
-        // while toBlob respects canvas orientation and works because the GL context is created
-        // with preserveDrawingBuffer.
-        renderDoc(store.getState().doc);
-        return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
+        // Composited OFF-SCREEN at full document resolution, never read back from the live
+        // canvas. The preview canvas is allowed to be a downscaled approximation (see
+        // previewDoc), and quick-export must not silently inherit that reduction — a one-click
+        // PNG that is quietly half-resolution is the worst kind of bug, because the file looks
+        // fine until someone zooms in.
+        ensureCore();
+        const p = pool.current;
+        if (!p) return null;
+        return exportOffscreen(store.getState().doc, p, {
+          format: 'png', quality: 1, scale: 1, transparent: true, matte: '#00000000',
+        });
       },
       exportImage: async (options) => {
         ensureCore();

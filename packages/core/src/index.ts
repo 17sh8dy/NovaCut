@@ -10,6 +10,7 @@ export * from './model/ids.js';
 export * from './model/time.js';
 export * from './model/types.js';
 export * from './model/factory.js';
+export * from './model/textPresets.js';
 export * from './model/animation.js';
 export * from './model/queries.js';
 

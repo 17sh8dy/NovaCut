@@ -14,6 +14,7 @@ import { PhotoProvider } from './state/photoContext.js';
 import { useShortcuts } from './state/useShortcuts.js';
 import { useAutosave } from './state/useAutosave.js';
 import { useRecovery } from './state/useRecovery.js';
+import { useAppliedPreferences } from './state/useAppliedPreferences.js';
 import { useAppStore } from './state/context.js';
 import type { AppStore } from './state/store.js';
 import { TitleBar } from './panels/TitleBar.js';
@@ -47,31 +48,42 @@ export function EditorApp({ store }: { store: AppStore }) {
 /** Chooses between the Home launcher and the editor, and applies app-wide root attributes. */
 function AppRoot() {
   useRecovery(); // runs on both screens so Home can offer "Recover" after a crash
+  useAppliedPreferences(); // theme, accent, density, zoom — everything the document root owns
   const view = useStore((s) => s.view);
-  const theme = useStore((s) => s.project.settings.theme);
-  const reduceMotionAlways = useStore((s) => s.preferences.reduceMotionAlways);
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
-  useEffect(() => {
-    document.documentElement.toggleAttribute('data-reduce-motion', reduceMotionAlways);
-  }, [reduceMotionAlways]);
+  const dialog = useStore((s) => s.dialog);
 
   // Keying on the view name replays the enter transition whenever we switch screens,
   // giving Home ↔ Editor a smooth cross-fade instead of a hard cut.
   return (
-    <div className="oc-view" key={view}>
-      {view === 'home' && <HomePage />}
-      {view === 'photo' && <PhotoWorkspace />}
-      {view === 'editor' && (
-        <PlaybackProvider>
-          <EditorLayout />
-        </PlaybackProvider>
-      )}
-    </div>
+    <>
+      <div className="oc-view" key={view}>
+        {view === 'home' && <HomePage />}
+        {view === 'photo' && <PhotoWorkspace />}
+        {view === 'editor' && (
+          <PlaybackProvider>
+            <EditorLayout />
+          </PlaybackProvider>
+        )}
+      </div>
+      {/* Settings live ABOVE the view switch so they open from Home and the photo workspace too,
+          not only from the video editor where they used to be mounted. */}
+      {dialog === 'settings' && <SettingsDialog />}
+      {dialog === 'shortcuts' && <SettingsDialog initialCategory="Shortcuts" />}
+    </>
   );
 }
+
+/**
+ * The Photo preference's three choices as document backgrounds.
+ *
+ * `#rrggbbaa`, not CSS keywords: the renderer parses the background with hexToRgba, so
+ * "transparent" has to be spelled as a colour with zero alpha to survive the round trip.
+ */
+const CANVAS_BACKGROUNDS: Record<'transparent' | 'white' | 'black', string> = {
+  transparent: '#00000000',
+  white: '#ffffffff',
+  black: '#000000ff',
+};
 
 /**
  * The photo workspace and its store, mounted only while that view is active — so its document,
@@ -85,6 +97,12 @@ function PhotoWorkspace() {
       bridge: store.getState().bridge,
       notify: (title: string, kind?: 'info' | 'success' | 'error', body?: string) =>
         store.getState().notify(title, kind, body),
+      // Read once, at mount: these seed the session, and the tool rail owns them afterwards.
+      overlayDefaults: {
+        showRulers: store.getState().preferences.showRulers,
+        showGuides: store.getState().preferences.showGuides,
+      },
+      newDocumentBackground: CANVAS_BACKGROUNDS[store.getState().preferences.photoCanvasColor],
     }),
     [store],
   );
@@ -139,9 +157,6 @@ function EditorLayout() {
 
       {dialog === 'export' && <ExportDialog />}
       {dialog === 'projectSettings' && <ProjectSettingsDialog />}
-      {dialog === 'settings' && <SettingsDialog />}
-      {/* Same window, opened straight onto the shortcut editor (Help → Keyboard Shortcuts). */}
-      {dialog === 'shortcuts' && <SettingsDialog initialCategory="Keyboard Shortcuts" />}
     </div>
   );
 }

@@ -52,6 +52,23 @@ registerBuiltins();
 export interface PhotoHost {
   bridge: PlatformBridge;
   notify: (title: string, kind?: 'info' | 'success' | 'error', body?: string) => void;
+  /**
+   * Starting state for the canvas overlays, from the app-level Interface preferences.
+   *
+   * Seeded rather than bound: the tool rail toggles these per session, so a live binding would
+   * mean flipping a button in the rail silently rewrote a global preference — two controls
+   * fighting over one value. The preference decides where a session STARTS; the rail owns it
+   * from then on.
+   */
+  overlayDefaults?: { showRulers: boolean; showGuides: boolean };
+  /**
+   * Background for documents this session creates, from the Photo preferences.
+   *
+   * A `#rrggbbaa` string, because the document model stores alpha in the background and
+   * "transparent" has to be expressible — `'transparent'` as a CSS keyword would not survive
+   * the round-trip through the renderer's hexToRgba.
+   */
+  newDocumentBackground?: string;
 }
 
 /**
@@ -225,7 +242,7 @@ interface PhotoState {
 /** Where the session's autosave lives. One slot — this is crash insurance, not a file format. */
 const AUTOSAVE_KEY = 'opencut.photo.autosave.v3';
 
-export function createPhotoStore({ bridge, notify }: PhotoHost) {
+export function createPhotoStore({ bridge, notify, overlayDefaults, newDocumentBackground }: PhotoHost) {
   const initial = createPhotoDocument();
   const history = new History<PhotoDocument>(initial);
 
@@ -241,8 +258,8 @@ export function createPhotoStore({ bridge, notify }: PhotoHost) {
     shapeKind: 'rounded-rectangle',
     selection: [],
     viewport: { zoom: 1, panX: 0, panY: 0, autoFit: true, fitNonce: 0 },
-    showRulers: true,
-    showGuides: true,
+    showRulers: overlayDefaults?.showRulers ?? true,
+    showGuides: overlayDefaults?.showGuides ?? true,
     snapping: true,
     dock: 'layers',
     dialog: null,
@@ -329,7 +346,8 @@ export function createPhotoStore({ bridge, notify }: PhotoHost) {
     },
 
     newDocument: (name, size) => {
-      const doc = createPhotoDocument(name ?? 'Untitled', undefined, size);
+      const fresh = createPhotoDocument(name ?? 'Untitled', undefined, size);
+      const doc = newDocumentBackground ? { ...fresh, background: newDocumentBackground } : fresh;
       get().history.reset(doc, 'New Photo');
       set({
         doc,

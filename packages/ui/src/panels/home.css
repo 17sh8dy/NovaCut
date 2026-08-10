@@ -1,10 +1,15 @@
-/* Home launcher screen. */
+/*
+ * Home launcher screen — the first impression.
+ *
+ * It used to open on a drifting aurora over an accent-tinted radial wash, with a floating,
+ * glowing logo and two lines of animated gradient text. That is a landing page, not an
+ * application. This is now a flat neutral surface with one piece of colour on it (the mark), and
+ * the workspace cards do the talking.
+ */
 .oc-home {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(1200px 600px at 50% -10%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%),
-    var(--surface-0, var(--surface-1));
+  background: var(--surface-0);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -28,12 +33,37 @@
 .oc-home__chrome > * {
   -webkit-app-region: no-drag;
 }
+/* The spacer must stay draggable — it IS the strip you grab to move the window, and marking
+   every child no-drag above would otherwise leave almost nothing to grab. */
+.oc-home__chrome-spacer {
+  flex: 1;
+  align-self: stretch;
+  -webkit-app-region: drag;
+}
+.oc-home__chrome-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.oc-home__chrome-btn:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
 [data-os='mac'] .oc-home__chrome {
   padding-left: 80px;
 }
 .oc-home__scroll {
   position: relative;
-  z-index: 1; /* above the aurora backdrop */
+  z-index: 1;
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -49,38 +79,36 @@
   padding: clamp(20px, 5vh, 56px) 0 clamp(24px, 4vh, 40px);
 }
 /*
- * The hero mark. `drop-shadow`, not `box-shadow`: box-shadow would trace the element's square
- * box, and the logo's own rounded corners are transparent — so the halo would show through them
- * as four bright triangles. drop-shadow follows the artwork's alpha instead.
+ * The hero mark. It no longer floats and no longer glows in cyan; it casts an ordinary elevation
+ * shadow, like any other object on the page.
+ *
+ * `drop-shadow`, not `box-shadow`: box-shadow traces the element's square box, and the logo's own
+ * rounded corners are transparent — so the shadow would show through them as four bright
+ * triangles. drop-shadow follows the artwork's alpha instead. That trap applies to anything ever
+ * styled on top of this asset.
  */
 .oc-home__logo {
-  width: 96px;
-  height: 96px;
-  margin: 0 auto 20px;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 22px;
   background: url('../assets/logo.svg') center / contain no-repeat;
-  filter: drop-shadow(0 14px 34px var(--brand-glow));
-  animation: oc-home-float 5.5s var(--ease-in-out) infinite;
 }
-@keyframes oc-home-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-5px);
-  }
+/* Only on light. A navy shadow under a navy mark on a charcoal page is not depth, it is a smudge
+   — dark themes get their separation from the artwork's own brightness instead. */
+:root[data-theme='light'] .oc-home__logo {
+  filter: drop-shadow(0 12px 24px rgba(7, 27, 92, 0.22));
 }
 .oc-home__title {
   margin: 0;
-  font-size: clamp(32px, 5vw, 46px);
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: clamp(30px, 4.4vw, 42px);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
   color: var(--text-primary);
 }
 .oc-home__tagline {
   margin: 10px 0 0;
   color: var(--text-secondary);
-  font-size: clamp(14px, 1.6vw, 17px);
+  font-size: clamp(14px, 1.6vw, 16px);
 }
 .oc-home__cta {
   display: flex;
@@ -102,13 +130,14 @@
 }
 
 /* ── Workspace chooser ─────────────────────────────────────────────────────────
-   Each card is tinted by its own accent (--ws-accent). The live card is an interactive,
-   spotlit button; staged cards are muted and carry a status badge. */
+   A neutral card with ONE tinted element: the icon tile. --ws-accent used to wash the whole
+   card in a gradient, tint its border, its badge and its call to action — five colour cues for
+   one piece of information. The card is now a surface; the icon carries the identity. */
 .oc-workspaces {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
-  gap: 14px;
-  margin-top: 10px;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
 }
 .oc-ws-card {
   position: relative;
@@ -119,10 +148,8 @@
   padding: 20px;
   text-align: left;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-subtle);
-  background:
-    linear-gradient(160deg, color-mix(in srgb, var(--ws-accent) 9%, transparent), transparent 62%),
-    var(--surface-2);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
   color: var(--text-primary);
   transition:
     transform var(--dur) var(--ease-out),
@@ -132,17 +159,17 @@
 .oc-ws-card__icon {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   margin-bottom: 4px;
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--ws-accent) 16%, transparent);
+  background: color-mix(in srgb, var(--ws-accent) 14%, transparent);
   color: var(--ws-accent);
 }
 .oc-ws-card__title {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
 }
 .oc-ws-card__desc {
   font-size: 13px;
@@ -155,13 +182,15 @@
   gap: 6px;
   margin-top: auto;
   padding-top: 10px;
-  color: var(--ws-accent);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
+  transition: color var(--dur-fast) var(--ease-out);
 }
 .oc-ws-card__cta svg {
   transition: transform var(--dur) var(--ease-out);
 }
+/* A status badge is metadata, not an accent. Neutral, so "Future" never competes with "Open". */
 .oc-ws-card__badge {
   position: absolute;
   top: 14px;
@@ -169,42 +198,44 @@
   padding: 3px 9px;
   border-radius: var(--radius-full);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-  color: var(--ws-accent);
-  background: color-mix(in srgb, var(--ws-accent) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--ws-accent) 30%, transparent);
+  color: var(--text-tertiary);
+  background: var(--surface-3);
 }
 
-/* Live card — interactive, lifts and glows in its accent on hover. */
+/* Live card — a one-pixel lift and an ordinary shadow. */
 .oc-ws-card--live {
   cursor: pointer;
-  border-color: color-mix(in srgb, var(--ws-accent) 45%, transparent);
 }
 .oc-ws-card--live:hover {
-  transform: translateY(-3px);
-  border-color: var(--ws-accent);
-  box-shadow:
-    0 16px 44px -20px var(--ws-accent),
-    0 0 0 1px color-mix(in srgb, var(--ws-accent) 35%, transparent);
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+.oc-ws-card--live:hover .oc-ws-card__cta {
+  color: var(--accent-text);
 }
 .oc-ws-card--live:hover .oc-ws-card__cta svg {
-  transform: translateX(3px);
+  transform: translateX(2px);
 }
 
-/* Staged cards — non-navigating; a touch muted, with a gentle hover cue only. */
+/* Staged cards — non-navigating; a touch muted, and no hover cue at all, because there is
+   nothing to click. */
 .oc-ws-card--soon,
 .oc-ws-card--future {
   cursor: default;
+  background: var(--surface-1);
 }
 .oc-ws-card--soon .oc-ws-card__desc,
 .oc-ws-card--future .oc-ws-card__desc {
   color: var(--text-tertiary);
 }
-.oc-ws-card--soon:hover,
-.oc-ws-card--future:hover {
-  border-color: color-mix(in srgb, var(--ws-accent) 35%, transparent);
+.oc-ws-card--soon .oc-ws-card__icon,
+.oc-ws-card--future .oc-ws-card__icon {
+  background: var(--surface-3);
+  color: var(--text-tertiary);
 }
 
 /* AI Tools card spans two columns and lists its capabilities. */
@@ -227,7 +258,7 @@
   color: var(--text-secondary);
 }
 .oc-ws-card__features li svg {
-  color: var(--ws-accent);
+  color: var(--text-tertiary);
   flex-shrink: 0;
 }
 @media (max-width: 640px) {
@@ -242,24 +273,37 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  padding: 11px 20px;
+  padding: 10px 18px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: var(--surface-2);
+  background: var(--surface-1);
   color: var(--text-primary);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: transform var(--dur-fast, 0.12s) var(--ease-out), border-color var(--dur-fast, 0.12s);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 .oc-home__btn:hover {
-  transform: translateY(-1px);
-  border-color: var(--accent);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
 }
+.oc-home__btn:active {
+  transform: scale(0.98);
+}
+/* Solid accent, not an accent→cyan gradient. A gradient button is the accent used as decoration,
+   and it also drifts off-brand the moment someone picks a green accent. */
 .oc-home__btn--primary {
-  background: linear-gradient(135deg, var(--accent), var(--accent-far));
+  background: var(--accent);
   border-color: transparent;
-  color: #fff;
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.oc-home__btn--primary:hover {
+  background: var(--accent-hover);
+  border-color: transparent;
 }
 
 /* Recover banner */
@@ -270,8 +314,8 @@
   padding: 16px 20px;
   margin: 8px 0 32px;
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--surface-1);
+  border: 1px solid var(--accent-line);
 }
 .oc-home__recover-icon {
   display: grid;
@@ -279,8 +323,8 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--accent) 25%, transparent);
-  color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
   flex-shrink: 0;
 }
 .oc-home__recover-text {
@@ -311,8 +355,8 @@
 }
 .oc-home__section-head h2 {
   margin: 0;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 .oc-home__cols {
@@ -333,25 +377,29 @@
 }
 .oc-home__card {
   text-align: left;
-  padding: 14px;
+  padding: 12px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-2);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
   color: var(--text-primary);
   cursor: pointer;
-  transition: transform var(--dur-fast, 0.12s) var(--ease-out), border-color var(--dur-fast, 0.12s);
+  font: inherit;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
 }
 .oc-home__card:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
 }
 .oc-home__card--soon {
   cursor: default;
   opacity: 0.6;
 }
 .oc-home__card--soon:hover {
-  transform: none;
-  border-color: var(--border-subtle);
+  box-shadow: none;
+  border-color: var(--border);
 }
 .oc-home__card-thumb {
   display: grid;
@@ -359,7 +407,7 @@
   height: 72px;
   margin-bottom: 10px;
   border-radius: var(--radius-sm);
-  background: var(--surface-3);
+  background: var(--canvas);
   color: var(--text-tertiary);
 }
 .oc-home__card-name {

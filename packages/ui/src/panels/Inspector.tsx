@@ -523,7 +523,150 @@ function TextTab({ clip }: { clip: Clip }) {
       </div>
       <ToggleField label="Italic" value={t.italic} onChange={(v) => setText('Italic', { italic: v })} />
       <ToggleField label="Underline" value={t.underline} onChange={(v) => setText('Underline', { underline: v })} />
+
+      {/*
+        The decoration fields. These existed on TextStyle from the start but had no controls, so
+        the only way to get a stroke was to not have one — which is why the old presets were six
+        sizes of the same white text. Each is opt-in: toggling one on seeds a value that reads
+        clearly at the default 96px, because a stroke of 0 or a fully transparent glow looks
+        identical to the feature being broken.
+      */}
+      <div className="oc-section-title" style={{ paddingLeft: 0 }}>Style</div>
+
+      <ToggleField
+        label="Outline"
+        value={!!t.stroke}
+        onChange={(v) => setText('Outline', { stroke: v ? { color: '#000000', width: 8 } : undefined })}
+      />
+      {t.stroke && (
+        <div className="oc-field">
+          <div className="oc-field__row">
+            <div>
+              <span className="oc-field__label">Colour</span>
+              <ColorInput value={t.stroke.color} onChange={(c) => setText('Outline Colour', { stroke: { ...t.stroke!, color: c } })} />
+            </div>
+            <div>
+              <span className="oc-field__label">Width</span>
+              <NumberField value={t.stroke.width} step={1} onChange={(v) => setText('Outline Width', { stroke: { ...t.stroke!, width: Math.max(0, v) } })} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ToggleField
+        label="Shadow"
+        value={!!t.shadow}
+        onChange={(v) => setText('Shadow', { shadow: v ? { color: '#000000aa', blur: 12, x: 0, y: 4 } : undefined })}
+      />
+      {t.shadow && (
+        <div className="oc-field">
+          <div className="oc-field__row">
+            <div>
+              <span className="oc-field__label">Colour</span>
+              <ColorInput value={t.shadow.color} onChange={(c) => setText('Shadow Colour', { shadow: { ...t.shadow!, color: c } })} />
+            </div>
+            <div>
+              <span className="oc-field__label">Blur</span>
+              <NumberField value={t.shadow.blur} step={1} onChange={(v) => setText('Shadow Blur', { shadow: { ...t.shadow!, blur: Math.max(0, v) } })} />
+            </div>
+          </div>
+          <div className="oc-field__row">
+            <div>
+              <span className="oc-field__label">Offset X</span>
+              <NumberField value={t.shadow.x} step={1} onChange={(v) => setText('Shadow X', { shadow: { ...t.shadow!, x: v } })} />
+            </div>
+            <div>
+              <span className="oc-field__label">Offset Y</span>
+              <NumberField value={t.shadow.y} step={1} onChange={(v) => setText('Shadow Y', { shadow: { ...t.shadow!, y: v } })} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ToggleField
+        label="Glow"
+        value={!!t.glow}
+        onChange={(v) => setText('Glow', { glow: v ? { color: '#31d7ff', radius: 24, intensity: 1 } : undefined })}
+      />
+      {t.glow && (
+        <div className="oc-field">
+          <div className="oc-field__row">
+            <div>
+              <span className="oc-field__label">Colour</span>
+              <ColorInput value={t.glow.color} onChange={(c) => setText('Glow Colour', { glow: { ...t.glow!, color: c } })} />
+            </div>
+            <div>
+              <span className="oc-field__label">Radius</span>
+              <NumberField value={t.glow.radius} step={2} onChange={(v) => setText('Glow Radius', { glow: { ...t.glow!, radius: Math.max(0, v) } })} />
+            </div>
+          </div>
+          <Slider label="Intensity" value={t.glow.intensity} min={0} max={1} step={0.05} onChange={(v) => setText('Glow Intensity', { glow: { ...t.glow!, intensity: v } }, `glow:${clip.id}`)} />
+        </div>
+      )}
+
+      <ToggleField
+        label="Gradient Fill"
+        value={!!t.gradient}
+        onChange={(v) => setText('Gradient', { gradient: v ? { from: '#ff9a3d', to: '#ff2e63', angle: 120 } : undefined })}
+      />
+      {t.gradient && (
+        <div className="oc-field">
+          <div className="oc-field__row">
+            <div>
+              <span className="oc-field__label">From</span>
+              <ColorInput value={t.gradient.from} onChange={(c) => setText('Gradient From', { gradient: { ...t.gradient!, from: c } })} />
+            </div>
+            <div>
+              <span className="oc-field__label">To</span>
+              <ColorInput value={t.gradient.to} onChange={(c) => setText('Gradient To', { gradient: { ...t.gradient!, to: c } })} />
+            </div>
+          </div>
+          <Slider label="Angle" value={t.gradient.angle} min={0} max={360} step={1} unit="°" onChange={(v) => setText('Gradient Angle', { gradient: { ...t.gradient!, angle: v } }, `grad:${clip.id}`)} />
+        </div>
+      )}
+
+      <ToggleField
+        label="Background"
+        value={!!t.background}
+        onChange={(v) => setText('Background', { background: v ? { color: '#0f1115e0', padding: 24, radius: 10 } : undefined })}
+      />
+      {t.background && (
+        <div className="oc-field">
+          <div className="oc-field__row">
+            <div>
+              <span className="oc-field__label">Colour</span>
+              <ColorInput value={t.background.color} onChange={(c) => setText('Background Colour', { background: { ...t.background!, color: c } })} />
+            </div>
+            <div>
+              <span className="oc-field__label">Padding</span>
+              <NumberField value={t.background.padding} step={2} onChange={(v) => setText('Background Padding', { background: { ...t.background!, padding: Math.max(0, v) } })} />
+            </div>
+          </div>
+          <Slider label="Corner Radius" value={Math.min(200, t.background.radius)} min={0} max={200} step={1} unit="px" onChange={(v) => setText('Background Radius', { background: { ...t.background!, radius: v } }, `bgr:${clip.id}`)} />
+        </div>
+      )}
     </>
+  );
+}
+
+/**
+ * A colour input that does not destroy alpha.
+ *
+ * `input[type=color]` only speaks `#rrggbb`. Several text defaults are `#rrggbbaa` — a shadow at
+ * 67% and a background scrim at 88% — and binding them straight to the input would silently
+ * promote every one of them to fully opaque the first time the user opened the picker. So the
+ * input sees the opaque half and the alpha suffix is carried across unchanged.
+ */
+function ColorInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const rgb = value.slice(0, 7);
+  const alpha = value.length > 7 ? value.slice(7) : '';
+  return (
+    <input
+      type="color"
+      value={rgb}
+      onChange={(e) => onChange(e.target.value + alpha)}
+      style={{ width: '100%', height: 28, border: 'none', borderRadius: 'var(--radius-sm)', background: 'var(--surface-3)', cursor: 'pointer' }}
+    />
   );
 }
 

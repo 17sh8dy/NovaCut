@@ -38,6 +38,27 @@ import { useAppStore, useStore } from '../state/context.js';
 import { usePlayback } from '../state/playbackContext.js';
 import { ClipContextMenu } from './ClipContextMenu.js';
 
+/**
+ * How tall to draw a track.
+ *
+ * `Track.height` is a model field, but nothing in the app can change it — there is no per-track
+ * resize handle — so every track carries the same factory default and the field is effectively a
+ * constant. The Interface preference is therefore the real control, and the model value is only
+ * honoured when a project explicitly disagrees with the factory default (a hand-edited file, or
+ * a future resize handle), which keeps the preference from silently overriding real data.
+ */
+const FACTORY_HEIGHT = { video: 72, audio: 56 } as const;
+const useTrackHeight = (track: Track): number => {
+  const pref = useStore((s) => s.preferences.timelineHeight);
+  const kind = track.kind === 'audio' ? 'audio' : 'video';
+  // A project carrying a non-factory height means someone set it deliberately; leave it alone.
+  if (track.height !== FACTORY_HEIGHT[kind]) return track.height;
+  // Audio lanes stay proportionally shorter, as the factory defaults intended.
+  return kind === 'audio'
+    ? Math.round(pref * (FACTORY_HEIGHT.audio / FACTORY_HEIGHT.video))
+    : pref;
+};
+
 /** Convert between ticks and pixels for the current zoom. */
 const useScale = () => {
   const pps = useStore((s) => s.pixelsPerSecond);
@@ -286,8 +307,9 @@ function Ruler({
 const TrackHeader = memo(function TrackHeader({ track }: { track: Track }) {
   const store = useAppStore();
   const isAudio = track.kind === 'audio';
+  const height = useTrackHeight(track);
   return (
-    <div className="oc-track-head" style={{ height: track.height }}>
+    <div className="oc-track-head" style={{ height }}>
       <input
         className="oc-track-head__name"
         defaultValue={track.name}
@@ -348,6 +370,7 @@ const Lane = memo(function Lane({
   toTicks: (px: number) => Ticks;
 }) {
   const store = useAppStore();
+  const height = useTrackHeight(track);
 
   // Transitions drawn for this lane, resolved against their clips. A transition whose clips
   // are gone simply does not appear — `resolvedTransitions` applies that rule in one place.
@@ -387,7 +410,7 @@ const Lane = memo(function Lane({
       className="oc-lane"
       data-track-id={track.id}
       data-locked={track.locked}
-      style={{ height: track.height }}
+      style={{ height }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
     >
@@ -518,16 +541,20 @@ const TimelineClip = memo(function TimelineClip({
   };
 
   /**
-   * Find the nearest magnetic snap target to `t` within the 8px threshold. Returns the snapped
+   * Find the nearest magnetic snap target to `t` within the snap threshold. Returns the snapped
    * value and the tick it snapped to (for the guide line), or null when nothing is in range or
    * snapping is disabled (globally off, or Alt held to temporarily bypass). The live playhead is
    * included alongside clip edges / in-out marks from snapTargets().
+   *
+   * The threshold is the `snapStrength` preference, read from the store at drag time rather than
+   * captured in the dependency list: it can be changed from Settings while a project is open, and
+   * a stale closure would keep snapping at the old distance until something forced a re-render.
    */
   const snapResult = useCallback(
     (t: Ticks, disabled: boolean): { value: Ticks; guide: Ticks | null } => {
       if (!snap || disabled) return { value: t, guide: null };
       const s = store.getState();
-      const threshold = toTicks(8);
+      const threshold = toTicks(s.preferences.snapStrength);
       let best = t;
       let bestDist = threshold;
       let guide: Ticks | null = null;

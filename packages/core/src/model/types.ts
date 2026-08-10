@@ -304,7 +304,14 @@ export interface ProjectSettings {
   autosaveIntervalMs: number;
   snapEnabled: boolean;
   rippleEnabled: boolean;
-  theme: 'dark' | 'light' | 'midnight';
+  /**
+   * @deprecated Appearance is an application preference, not a property of a video — a project
+   * that repaints the editor when a colleague opens it is a bug, not a feature. Nothing reads
+   * this any more; the real setting is `AppPreferences.theme` in the UI package. The field stays
+   * so projects written by older builds still parse unchanged, and the factory keeps writing
+   * 'dark' to hold the shape stable. Remove it the next time schemaVersion bumps.
+   */
+  theme: 'dark' | 'light';
 }
 
 export interface Project {

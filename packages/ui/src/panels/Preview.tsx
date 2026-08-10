@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   ChevronFirst,
   ChevronLast,
@@ -9,7 +9,7 @@ import {
   SkipBack,
   Square,
 } from 'lucide-react';
-import { formatTimecode, sample, type Clip, type Sequence } from '@opencut/core';
+import { formatTimecode } from '@opencut/core';
 import { IconButton, Tooltip } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
 import { usePlayback } from '../state/playbackContext.js';
@@ -45,8 +45,14 @@ export function Preview() {
           className="oc-preview__canvas-wrap"
           style={{ aspectRatio: `${seq.width} / ${seq.height}` }}
         >
+          {/*
+            Nothing is layered over the canvas any more. Text used to be a DOM overlay here,
+            which looked right on screen and was invisible to the export — `readPixels` reads
+            the WebGL canvas and never saw it. Text is now rasterized and composited by the
+            Compositor like every other clip, so the preview and the exported file are the same
+            pixels by construction.
+          */}
           <canvas ref={canvasRef} width={seq.width} height={seq.height} />
-          <TextOverlay sequence={seq} time={playhead} />
         </div>
       </div>
 
@@ -121,63 +127,3 @@ export function Preview() {
   );
 }
 
-/**
- * Text clips are composited as DOM over the canvas (crisp text, live editing) rather than
- * rasterized in WebGL. For export they're rendered to a canvas layer — the model is the
- * same, only the target differs.
- */
-function TextOverlay({ sequence, time }: { sequence: Sequence; time: number }) {
-  const active = useMemo(() => {
-    const clips: Clip[] = [];
-    for (const track of sequence.tracks) {
-      if (track.kind !== 'video' || track.hidden) continue;
-      for (const c of track.clips) {
-        if (c.kind === 'text' && c.enabled && time >= c.start && time < c.start + c.duration) clips.push(c);
-      }
-    }
-    return clips;
-  }, [sequence, time]);
-
-  return (
-    <div className="oc-preview__overlay">
-      {active.map((clip) => {
-        const t = clip.transform;
-        const local = time - clip.start;
-        const ts = clip.text!;
-        const opacity = sample(t.opacity, local);
-        const x = sample(t.x, local);
-        const y = sample(t.y, local);
-        const rot = sample(t.rotation, local);
-        const scale = sample(t.scaleX, local);
-        // Position as a percentage so the overlay scales with the responsive canvas.
-        return (
-          <div
-            key={clip.id}
-            style={{
-              position: 'absolute',
-              left: `calc(50% + ${(x / sequence.width) * 100}%)`,
-              top: `calc(50% + ${(y / sequence.height) * 100}%)`,
-              transform: `translate(-50%, -50%) rotate(${rot}deg) scale(${scale})`,
-              opacity,
-              fontFamily: ts.fontFamily,
-              // Scale font by canvas height ratio via cqh-like em using vh fallback.
-              fontSize: `${(ts.fontSize / sequence.height) * 100}cqh`,
-              fontWeight: ts.fontWeight,
-              fontStyle: ts.italic ? 'italic' : 'normal',
-              textDecoration: ts.underline ? 'underline' : 'none',
-              textAlign: ts.align,
-              letterSpacing: ts.letterSpacing,
-              lineHeight: ts.lineHeight,
-              color: ts.color,
-              whiteSpace: 'pre-wrap',
-              textShadow: ts.shadow ? `${ts.shadow.x}px ${ts.shadow.y}px ${ts.shadow.blur}px ${ts.shadow.color}` : undefined,
-              WebkitTextStroke: ts.stroke ? `${ts.stroke.width}px ${ts.stroke.color}` : undefined,
-            }}
-          >
-            {ts.content}
-          </div>
-        );
-      })}
-    </div>
-  );
-}

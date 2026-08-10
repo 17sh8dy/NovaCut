@@ -24,3 +24,4 @@ export * from './audio/audioGraph.js';
 export * from './export/offlineExporter.js';
 export { renderSequenceAudioWav } from './export/offlineAudioRenderer.js';
 export { dlog, dthrottle } from './debug.js';
+export { setMaxTextureSize, getMaxTextureSize } from './gl/limits.js';

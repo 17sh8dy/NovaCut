@@ -29,8 +29,9 @@ only the *platform bridge* changes.
 - **Professional export** — resolution up to 8K, 24–240 fps, codec/container matrix,
   quality/bitrate, hardware acceleration, live size & render-time estimates, and a real
   frame-streaming pipeline into native FFmpeg.
-- **Premium UI** — dark-first design system, resizable/dockable panels, glass overlays,
-  smooth motion, keyboard shortcuts, autosave, themes.
+- **Premium UI** — a restrained, neutral design system in System / Light / Dark with a
+  choosable accent colour, resizable/dockable panels, subtle motion, keyboard shortcuts,
+  autosave. See [Design system](#design-system).
 
 ## Architecture (short version)
 
@@ -105,6 +106,34 @@ installer for everyone else.
 > symlinks, which a standard Windows account may not create — the build then fails with *"Cannot
 > create symbolic link: A required privilege is not held by the client"*. Enable **Developer
 > Mode** (Settings → System → For developers), or run the packaging step from an elevated shell.
+
+## Design system
+
+`packages/ui/src/theme/tokens.css` is the whole thing, and its header states the three rules the
+rest of the UI is held to:
+
+1. **Surfaces are neutral.** White and light grey in Light, charcoal in Dark. The interface is the
+   room; the user's photos and video are the only saturated things on screen.
+2. **The accent is a signal, not a decoration.** It marks what is interactive or active — primary
+   buttons, the selected tool, selection outlines, focus rings, sliders, progress, switches — and
+   nothing else. There are no accent-washed panels and no glows.
+3. **The brand is not the accent.** `--brand-deep / --brand-blue / --brand-cyan` are the logo's own
+   gradient stops and never change. `--accent` is a user preference that *defaults* to the brand
+   blue. Choosing a green accent recolours the controls and leaves the mark alone.
+
+**Themes** are System (default, follows the OS live), Light and Dark. Only `--accent` is ever
+written to the document by the app; `--accent-hover / -active / -text / -soft / -line` are derived
+from it per theme with `color-mix`, so hover lightens on charcoal and darkens on white without the
+app having to know which theme is active.
+
+**Accent presets** live in `ACCENT_PRESETS` (`state/preferences.ts`): Ocean Blue (default), Purple,
+Green, Orange, Red, Pink, Gray, plus a custom colour picker. Ocean Blue is stored as the empty
+string rather than as `#1565ff`, so tokens.css stays the only place the brand colour is written
+down.
+
+**Motion** is fade, scale and slide at 100 / 160 / 240 ms on one decelerate curve. The only looping
+animations left are the ones that carry information: the export progress sheen, loading skeletons,
+and the spinner.
 
 ## How the pieces fit
 

@@ -57,7 +57,7 @@ export function BrowserPanel() {
         <PlaceholderPanel title="Audio Library" hint="Background music & sound effects live here" />
       )}
       {active === 'captions' && (
-        <PlaceholderPanel title="Captions" hint="Auto-generate or import SRT from the Captions menu" />
+        <PlaceholderPanel title="Captions" hint="Auto-generate and SRT import aren't built yet" />
       )}
     </Panel>
   );

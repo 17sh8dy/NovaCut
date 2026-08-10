@@ -1,11 +1,13 @@
 # Verification harnesses
 
-Two headless checks that run the **real** engine and UI under Electron and assert on actual
-rendered pixels. Run them after touching the compositor, the effect chain, or the photo flow.
+Headless checks that run the **real** engine, UI and domain code and assert on what they
+actually produce. Run them after touching the compositor, the effect chain, the photo flow, or
+layer placement.
 
 ```bash
 npm run verify:orientation   # the photo render graph: orientation + compositing, on real pixels
 npm run verify:photo         # the photo workspace, end to end
+npm run verify:canvas        # canvas rotate/flip geometry — no Electron, ~200ms
 ```
 
 Each exits 0 on pass, 1 on failure, and prints a JSON result.
@@ -60,6 +62,26 @@ Its `probeMedia()` **throws on purpose**. The photo path must take image dimensi
 decode rather than ffprobe — FFmpeg is optional per the README, and the video import path falls
 back to a hardcoded 1920x1080 when it is missing. For a photo that fallback would be the canvas
 size, silently letterboxing every import. The throwing stub keeps that regression caught.
+
+## verify:canvas
+
+The odd one out: pure geometry, so it needs no Electron, no GPU and no window — it esbuilds
+`canvas-orientation.mjs` straight against the package **source** and runs it in Node. A check
+that finishes in 200ms is a check people actually run.
+
+It asserts that `rotateCanvas` / `flipCanvas` are **rigid**: every layer's four drawn corners,
+taken from the same `layerCorners()` the selection box and hit-testing use, must land exactly
+where the canvas map sends them. Comparing transform *fields* instead would prove neither what
+is drawn nor what is clickable.
+
+Its fixture has one layer per way of getting this wrong — a `contain` bitmap (silently resizes
+without base-size compensation), a rotated + flipped + non-uniformly scaled leaf, and a group
+with its own transform (whose contents get turned twice if a group is treated like a leaf). All
+three were confirmed to FAIL against deliberately broken builds, at 149px and 185px of error.
+
+Note the "four right turns is the identity" case **passes against the broken-group build**. It
+is kept as a cheap smoke test and is deliberately not the real assertion — a reminder that a
+round-trip proves much less than it looks like it does.
 
 ## Notes
 

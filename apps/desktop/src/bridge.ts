@@ -16,7 +16,10 @@ import {
   type ImportKind,
   type PlatformBridge,
   type Project,
+  type HostPrefs,
   type RecentProject,
+  type StorageUsage,
+  type SystemInfo,
   type WindowAction,
   type WindowMenuId,
 } from '@opencut/core';
@@ -115,5 +118,42 @@ export class ElectronBridge implements PlatformBridge {
 
   onWindowState(handler: (state: { maximized: boolean }) => void): () => void {
     return this.api.onWindowState(handler);
+  }
+
+  // ── Settings support ──
+  chooseDirectory(): Promise<string | null> {
+    return this.api.chooseDirectory();
+  }
+
+  systemInfo(): Promise<SystemInfo> {
+    return this.api.systemInfo();
+  }
+
+  storageUsage(projectDir: string): Promise<StorageUsage> {
+    return this.api.storageUsage(projectDir);
+  }
+
+  clearCache(): Promise<number> {
+    return this.api.clearCache();
+  }
+
+  clearRecentProjects(): Promise<void> {
+    return this.api.clearRecentProjects();
+  }
+
+  openDataFolder(): Promise<void> {
+    return this.api.openDataFolder();
+  }
+
+  setLaunchOnStartup(enabled: boolean): Promise<void> {
+    return this.api.setLaunchOnStartup(enabled);
+  }
+
+  setZoomFactor(factor: number): void {
+    this.api.setZoomFactor(factor);
+  }
+
+  setHostPrefs(prefs: HostPrefs): void {
+    this.api.setHostPrefs(prefs);
   }
 }

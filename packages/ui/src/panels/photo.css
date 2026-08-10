@@ -67,7 +67,7 @@
   gap: var(--space-1);
   padding: var(--space-2) var(--space-1);
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   flex: 0 0 auto;
 }
@@ -143,8 +143,8 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--surface-0);
-  border: 1px solid var(--border-subtle);
+  background: var(--canvas);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   touch-action: none; /* pointer drags must not turn into page scrolls */
   user-select: none;
@@ -171,12 +171,12 @@
 .oc-stage__checker {
   position: absolute;
   inset: 0;
-  background-color: #2a2d34;
+  background-color: var(--checker-a);
   background-image:
-    linear-gradient(45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.06) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.06) 75%);
+    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--checker-b) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--checker-b) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--checker-b) 75%);
   background-size: 24px 24px;
   background-position: 0 0, 0 12px, 12px -12px, -12px 0;
   box-shadow: var(--shadow-lg);
@@ -501,7 +501,7 @@
 }
 
 .oc-layer__clipmark {
-  color: var(--accent);
+  color: var(--accent-text);
   flex: 0 0 auto;
 }
 
@@ -551,7 +551,7 @@
 }
 
 .oc-sect {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-2);
   overflow: hidden;
@@ -730,7 +730,7 @@
 
 .oc-toggle input:checked + .oc-toggle__track::after {
   transform: translateX(12px);
-  background: #fff;
+  background: var(--knob);
 }
 
 .oc-toggle__label {
@@ -970,7 +970,7 @@
   align-items: center;
   gap: 4px;
   padding: var(--space-2) 4px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-2);
   color: var(--text-secondary);
@@ -1014,7 +1014,7 @@
   align-items: center;
   gap: var(--space-2);
   padding: 5px var(--space-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   cursor: pointer;
@@ -1129,7 +1129,7 @@
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-3);
 }
@@ -1186,7 +1186,7 @@
   align-items: flex-start;
   gap: 3px;
   padding: var(--space-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-2);
   cursor: pointer;
@@ -1239,7 +1239,7 @@
   position: absolute;
   top: 6px;
   right: 6px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ── Status bar ───────────────────────────────────────────────────────────── */
@@ -1359,7 +1359,7 @@
 }
 
 .oc-check--accent {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -1435,7 +1435,7 @@
   gap: 4px;
   height: 62px;
   padding: var(--space-1);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-2);
   color: var(--text-secondary);

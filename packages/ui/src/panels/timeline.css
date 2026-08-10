@@ -7,7 +7,7 @@
   min-height: 0;
   background: var(--surface-1);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   overflow: hidden;
 }
 
@@ -127,7 +127,7 @@
   color: var(--text-secondary);
 }
 .oc-tt[data-on='true'] {
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 .oc-tt[data-warn='true'] {
   color: var(--warning);
@@ -139,24 +139,33 @@
   border-bottom: 1px solid var(--border-subtle);
   box-sizing: border-box;
 }
+/* Derived from the text colour, not a white alpha: on the light theme a white hatch over a
+   white lane is nothing at all, so the lock state simply vanished. */
 .oc-lane[data-locked='true'] {
   background: repeating-linear-gradient(
     45deg,
     transparent,
     transparent 8px,
-    rgba(255, 255, 255, 0.015) 8px,
-    rgba(255, 255, 255, 0.015) 16px
+    color-mix(in srgb, var(--text-primary) 4%, transparent) 8px,
+    color-mix(in srgb, var(--text-primary) 4%, transparent) 16px
   );
 }
 
 /* Clip */
+/*
+ * A clip is a container for the user's footage, so it is a neutral surface with a thumbnail or
+ * waveform inside it — the kind cue is carried by a hairline of label colour on the left edge,
+ * not by tinting the whole block. Selection is the accent, and it is the only accent on the
+ * timeline apart from the snap guide.
+ */
 .oc-clip {
   position: absolute;
   top: 4px;
   bottom: 4px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, var(--surface-4), var(--surface-3));
+  background: var(--surface-3);
   border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--label-blue);
   overflow: hidden;
   cursor: grab;
   display: flex;
@@ -172,11 +181,23 @@
   box-shadow: 0 0 0 1px var(--accent), var(--shadow-md);
   z-index: 2;
 }
+/*
+ * The kind stripe. These rules sit AFTER [data-selected] on purpose and at equal specificity, so
+ * they win the left edge: a selected audio clip is still an audio clip, and the accent ring
+ * around it says everything selection needs to say.
+ */
 .oc-clip[data-kind='audio'] {
-  background: linear-gradient(180deg, #1c3a34, #16302b);
+  border-left-color: var(--label-teal);
 }
 .oc-clip[data-kind='text'] {
-  background: linear-gradient(180deg, #3a2f52, #2e2643);
+  border-left-color: var(--label-purple);
+}
+.oc-clip[data-kind='image'],
+.oc-clip[data-kind='shape'] {
+  border-left-color: var(--label-orange);
+}
+.oc-clip[data-kind='adjustment'] {
+  border-left-color: var(--label-green);
 }
 .oc-clip__label {
   padding: 3px 7px;
@@ -237,7 +258,7 @@
   right: 6px;
   display: flex;
   gap: 3px;
-  color: var(--accent-hover);
+  color: var(--accent-text);
   pointer-events: none;
 }
 /* Live duration/position readout shown while dragging or trimming a clip. */
@@ -325,12 +346,17 @@
   color: var(--text-primary);
   cursor: pointer;
 }
+/* Hover on a menu row is a neutral highlight, not a blue bar: a context menu is a list of
+   equally weighted commands, and painting whichever one the pointer happens to be over in the
+   brand colour makes it look like the recommended choice. */
 .oc-ctx__item:hover {
-  background: var(--accent);
-  color: #fff;
+  background: var(--surface-3);
+}
+.oc-ctx__item[data-danger='true'] {
+  color: var(--danger);
 }
 .oc-ctx__item[data-danger='true']:hover {
-  background: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 .oc-ctx__item kbd {
   font-family: var(--font-mono);
@@ -338,7 +364,7 @@
   color: var(--text-tertiary);
 }
 .oc-ctx__item:hover kbd {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
 }
 .oc-ctx__sep {
   height: 1px;
@@ -384,9 +410,11 @@
   border-color: var(--accent-hover);
 }
 
+/* Selected: a ring in the primary text colour, which is the only value guaranteed to contrast
+   with the surface in BOTH themes — hardcoded white vanished on the light theme. */
 .oc-transition--selected {
-  border-color: #fff;
-  box-shadow: 0 0 0 1px #fff inset;
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 1px var(--text-primary) inset;
 }
 
 /* The hourglass pinch, drawn with two triangles meeting at the centre — the universal
