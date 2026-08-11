@@ -10,6 +10,15 @@
 import { toSeconds, type MediaAsset, type Ticks } from '@opencut/core';
 import { dlog, dthrottle } from '../debug.js';
 
+/**
+ * How long a single seek may stay outstanding before the source releases itself.
+ *
+ * Longer than whenReady's 2s wait on purpose: this is not a pacing knob, it is the escape hatch
+ * for a seek that will never complete at all. Firing it early would abandon decodes that were
+ * merely slow.
+ */
+const SEEK_WATCHDOG_MS = 4000;
+
 export type FrameBitmap = HTMLVideoElement | HTMLImageElement | ImageBitmap;
 
 /**
@@ -38,6 +47,8 @@ export class FrameSource {
   private pendingSeek: number | null = null;
   /** Last seek target (seconds) we requested — used to avoid re-issuing an unreachable seek. */
   private lastSeekTarget = -1;
+  /** Releases a seek that never completes; see the note in seekTo. */
+  private seekWatchdog: ReturnType<typeof setTimeout> | undefined;
 
   /** Fired when a new drawable frame becomes available (decode/seek complete). */
   private onReady: () => void;
@@ -186,10 +197,39 @@ export class FrameSource {
     this.seekTo(sourceTime);
   }
 
-  /** Seek a video source to a source-time position (ticks). Images ignore this. */
+  /**
+   * Seek a video source to a source-time position (ticks). Images ignore this.
+   *
+   * ── THE TARGET IS CLAMPED, AND THAT IS LOAD-BEARING ──────────────────────────────────
+   *
+   * A transition renders BOTH of its clips across its whole window, and that window straddles the
+   * cut — so the incoming clip is asked for times before its own start, a NEGATIVE source time,
+   * and the outgoing one for times past its end. Unclamped, that wedged the source permanently:
+   *
+   *   1. the guards below passed, so `seeking` was set and `currentTime = -0.3` assigned
+   *   2. the browser clamps that to 0 — and if currentTime was already 0 nothing changed, so no
+   *      `seeked` event ever fired
+   *   3. `seeking` stayed true forever, and `onseeked` — the only thing that drains
+   *      `pendingSeek` — never ran again
+   *   4. every later seekTo hit the coalescing branch and returned without seeking, so the
+   *      element froze on whatever frame it happened to hold
+   *   5. every whenReady() then waited out its full timeout, once per exported frame
+   *
+   * Measured: one 1s cross dissolve took an 8s export from 21.6s to ~190s, and the source stayed
+   * frozen for the rest of the render — invisible on solid-colour test footage, a still image on
+   * anything real.
+   *
+   * Clamping first turns an out-of-range request into one the element can actually satisfy, which
+   * the "already there" guard then recognises as a no-op and returns from WITHOUT claiming to be
+   * seeking.
+   */
   seekTo(sourceTime: Ticks): void {
     if (!(this.el instanceof HTMLVideoElement)) return;
-    const target = toSeconds(sourceTime);
+    const v = this.el;
+    // duration is NaN until metadata arrives; clamp what we can and leave the rest to the element.
+    const limit = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : Infinity;
+    const target = Math.min(Math.max(0, toSeconds(sourceTime)), limit);
+
     if (this.seeking) {
       // Coalesce rapid scrubs: remember only the latest requested time.
       this.pendingSeek = sourceTime;
@@ -197,13 +237,31 @@ export class FrameSource {
     }
     // Guard against re-issuing the SAME seek every frame: if the target can't be reached yet
     // (data not buffered), re-seeking would cancel the in-flight seek forever → frozen/flash.
-    if (Math.abs(this.el.currentTime - target) < 1 / 1000 || target === this.lastSeekTarget) return;
+    if (Math.abs(v.currentTime - target) < 1 / 1000 || target === this.lastSeekTarget) return;
     this.lastSeekTarget = target;
     this.seeking = true;
+
+    /*
+     * Defence in depth for a seek that genuinely never completes — a corrupt file, a decoder that
+     * gives up. Without it one such seek costs every remaining frame its full timeout and leaves
+     * the picture frozen. This releases the source so the next frame can try again, and is longer
+     * than whenReady's own timeout so it fires only when something is actually wrong.
+     */
+    clearTimeout(this.seekWatchdog);
+    this.seekWatchdog = setTimeout(() => {
+      if (!this.seeking) return;
+      this.seeking = false;
+      this.lastSeekTarget = -1; // allow the same target to be retried
+      const pending = this.pendingSeek;
+      this.pendingSeek = null;
+      if (pending != null) this.seekTo(pending);
+    }, SEEK_WATCHDOG_MS);
+
     try {
-      this.el.currentTime = target;
+      v.currentTime = target;
     } catch {
       this.seeking = false;
+      clearTimeout(this.seekWatchdog);
     }
   }
 
@@ -277,6 +335,10 @@ export class FrameSource {
   }
 
   dispose(): void {
+    // Before the element goes: a pending watchdog would otherwise fire against a dead source and
+    // re-enter seekTo on it. Export disposes the whole pool in a finally, so this runs on the
+    // failure path too.
+    clearTimeout(this.seekWatchdog);
     if (this.el instanceof HTMLVideoElement) {
       this.el.pause();
       this.el.removeAttribute('src');
