@@ -31,7 +31,7 @@ const api: OpenCutApi = {
   platform: 'desktop',
   os: process.platform,
   openProject: () => ipcRenderer.invoke(CH.openProject),
-  saveProject: (json, path) => ipcRenderer.invoke(CH.saveProject, json, path),
+  saveProject: (json, path, suggestedName) => ipcRenderer.invoke(CH.saveProject, json, path, suggestedName),
   loadProject: (path) => ipcRenderer.invoke(CH.loadProject, path),
   recentProjects: () => ipcRenderer.invoke(CH.recentProjects),
   importFiles: (kinds) => ipcRenderer.invoke(CH.importFiles, kinds),
@@ -57,6 +57,7 @@ const api: OpenCutApi = {
   encoderFinish: (jobId) => ipcRenderer.invoke(CH.encoderFinish, jobId),
   encoderAbort: (jobId) => ipcRenderer.invoke(CH.encoderAbort, jobId),
   notify: (title, body) => ipcRenderer.send(CH.notify, title, body),
+  revealFile: (path) => ipcRenderer.send(CH.revealFile, path),
 
   onMenuCommand: (handler) => subscribe<MenuCommand>(CH.menuCommand, handler),
   onOpenProjectPath: (handler) => subscribe<string>(CH.openProjectPath, handler),

@@ -1,3 +1,4 @@
+import { defaultProjectName } from '@opencut/core';
 /**
  * The photo editor's three dialogs: new canvas, canvas size, and export.
  *
@@ -79,10 +80,11 @@ function PresetGrid({
 export function NewCanvasDialog() {
   const store = usePhotoStore();
   const [size, setSize] = useState({ width: 1280, height: 720 });
-  const [name, setName] = useState('Untitled');
+  // Stamped once when the dialog mounts, so the name matches when the canvas is created.
+  const [name, setName] = useState(() => defaultProjectName('photo'));
 
   const create = () => {
-    store.getState().newDocument(name.trim() || 'Untitled', size);
+    store.getState().newDocument(name.trim() || defaultProjectName('photo'), size);
     store.getState().setDialog(null);
   };
 

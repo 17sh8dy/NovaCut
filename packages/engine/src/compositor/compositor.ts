@@ -35,7 +35,7 @@ import {
   type Sequence,
   type Ticks,
 } from '@opencut/core';
-import type { FrameSourcePool } from '../media/frameSource.js';
+import type { FrameSource, FrameSourcePool } from '../media/frameSource.js';
 import { COMPOSITE_FRAGMENT, VERTEX_SHADER } from './shaders.js';
 import { GLContext, type Fbo } from '../gl/glContext.js';
 import { FboPool } from '../gl/fboPool.js';
@@ -92,6 +92,90 @@ export class Compositor {
     this.fbos.evictOtherSizes(width, height);
   }
 
+  /**
+   * Visit whatever contributes to the frame at `ctx.time`, bottom track first.
+   *
+   * Extracted from render() so that prepare() walks the frame by the SAME rule. The export
+   * pipeline calls prepare() one frame ahead of render(); if the two ever disagreed about which
+   * clips a frame needs, the render would sample a source nobody waited for — which is exactly
+   * the un-awaited-decode bug that once wrote black into half an export.
+   */
+  private walkFrame(
+    ctx: RenderContext,
+    onTransition: (crossing: ActiveTransition) => void,
+    onClip: (clip: Clip) => void,
+  ): number {
+    // videoTracksTopDown returns top-first; reverse so we paint bottom → top.
+    const tracks = videoTracksTopDown(ctx.sequence).reverse();
+    let active = 0;
+    for (const track of tracks) {
+      if (track.hidden) continue;
+      // A transition wins over the plain clip lookup: while the playhead is inside its window
+      // BOTH clips are on screen, and each of them is outside its own time range for part of
+      // that window — which is precisely why this cannot be expressed as a clip search.
+      const crossing = transitionAtTime(track, ctx.time);
+      if (crossing) {
+        active += 2;
+        onTransition(crossing);
+        continue;
+      }
+      const clip = track.clips.find(
+        (c) => c.enabled && ctx.time >= c.start && ctx.time < c.start + c.duration,
+      );
+      if (!clip) continue;
+      active++;
+      onClip(clip);
+    }
+    return active;
+  }
+
+  /**
+   * Point every decoder this frame needs at the source time it needs, and do nothing else.
+   *
+   * This is the front half of renderClip with the GPU work removed, and it exists for the export
+   * pipeline: a seek is answered in tens of milliseconds while the readback and the encode of the
+   * PREVIOUS frame cost tens more, and those two waits are independent. Issuing the next frame's
+   * seeks before draining the current one overlaps them, which is where most of an export's time
+   * was going. It changes no pixels — it only starts the same work sooner.
+   */
+  prepare(ctx: RenderContext): void {
+    this.walkFrame(
+      ctx,
+      (crossing) => {
+        this.prepareClip(ctx, crossing.from);
+        this.prepareClip(ctx, crossing.to);
+      },
+      (clip) => this.prepareClip(ctx, clip),
+    );
+  }
+
+  private prepareClip(ctx: RenderContext, clip: Clip): void {
+    const media = clip.mediaId ? ctx.getMedia(clip.mediaId) : undefined;
+    if (!media || media.kind === 'audio') return;
+    this.syncClipSource(ctx, clip, media);
+  }
+
+  /**
+   * Map timeline time → source time for one clip and reconcile its decoder to it.
+   *
+   * Shared by prepare() and renderClip() so the seek that gets issued and the seek that gets
+   * waited for are computed by the same arithmetic. Returns the source so the caller can sample
+   * it; prepare() ignores the return.
+   */
+  private syncClipSource(ctx: RenderContext, clip: Clip, media: MediaAsset): FrameSource {
+    const source = this.sources.get(media);
+    const localTicks = ctx.time - clip.start;
+    const speedRate = clip.speed.reverse ? -clip.speed.rate : clip.speed.rate;
+    const sourceTicks = clip.sourceIn + localTicks * speedRate;
+    // Run the element at clipSpeed × previewSpeed. sourceTicks (above) is already correct
+    // because ctx.time — the playhead — advances at the preview speed; it's only the
+    // element's own playbackRate that must be scaled up, or it lags the playhead and the
+    // drift-correction seek fires every frame (the black flash on sped-up preview).
+    // Reverse/zero rates fall back to per-frame seeking inside sync().
+    source.sync(sourceTicks as Ticks, !!ctx.playing, speedRate * (ctx.speed ?? 1));
+    return source;
+  }
+
   /** Render one composited frame to the canvas. */
   render(ctx: RenderContext): void {
     const { sequence } = ctx;
@@ -105,33 +189,18 @@ export class Compositor {
     this.ctx.clear(br, bg, bb, 1);
     this.ctx.enableSourceOver();
 
-    // videoTracksTopDown returns top-first; reverse so we paint bottom → top.
-    const tracks = videoTracksTopDown(sequence).reverse();
-    let active = 0;
-    for (const track of tracks) {
-      if (track.hidden) continue;
-      // A transition wins over the plain clip lookup: while the playhead is inside its window
-      // BOTH clips are on screen, and each of them is outside its own time range for part of
-      // that window — which is precisely why this cannot be expressed as a clip search.
-      const crossing = transitionAtTime(track, ctx.time);
-      if (crossing) {
-        active += 2;
-        this.renderTransition(ctx, crossing);
-        continue;
-      }
-      const clip = track.clips.find(
-        (c) => c.enabled && ctx.time >= c.start && ctx.time < c.start + c.duration,
-      );
-      if (!clip) continue;
-      active++;
-      this.renderClip(ctx, clip, null);
-    }
+    const active = this.walkFrame(
+      ctx,
+      (crossing) => this.renderTransition(ctx, crossing),
+      (clip) => this.renderClip(ctx, clip, null),
+    );
     dthrottle('render', 400, 'render', () => [
       'render()',
       {
         time: ctx.time,
         canvas: `${this.canvas.width}x${this.canvas.height}`,
-        videoTracks: tracks.length,
+        // Inside the throttled closure: this only runs when a line is actually logged.
+        videoTracks: videoTracksTopDown(ctx.sequence).length,
         activeClips: active,
         bg: sequence.background,
       },
@@ -224,17 +293,10 @@ export class Compositor {
         fit = { x: raster.width / ctx.sequence.width, y: raster.height / ctx.sequence.height };
       }
     } else if (media && media.kind !== 'audio') {
-      const source = this.sources.get(media);
-      // Map timeline time → source time honoring trim + speed.
-      const localTicks = ctx.time - clip.start;
-      const speedRate = clip.speed.reverse ? -clip.speed.rate : clip.speed.rate;
-      const sourceTicks = clip.sourceIn + localTicks * speedRate;
-      // Run the element at clipSpeed × previewSpeed. sourceTicks (above) is already correct
-      // because ctx.time — the playhead — advances at the preview speed; it's only the
-      // element's own playbackRate that must be scaled up, or it lags the playhead and the
-      // drift-correction seek fires every frame (the black flash on sped-up preview).
-      // Reverse/zero rates fall back to per-frame seeking inside sync().
-      source.sync(sourceTicks, !!ctx.playing, speedRate * (ctx.speed ?? 1));
+      // Same seek arithmetic prepare() uses — see syncClipSource. When the export pipeline has
+      // already prepared this frame the sync is a no-op: the element is at the target and
+      // seekTo's "already there" guard returns without touching it.
+      const source = this.syncClipSource(ctx, clip, media);
       const frame = source.getFrame();
       if (frame) {
         this.ctx.uploadFrame(this.source, frame);
@@ -341,9 +403,20 @@ export class Compositor {
   }
 
   /** Read the current canvas pixels — the export path uses this per frame. */
-  readPixels(): Uint8Array {
+  readPixels(into?: Uint8Array): Uint8Array {
     this.ctx.bindTarget(null, this.width, this.height);
-    return this.ctx.readPixels(this.width, this.height);
+    return this.ctx.readPixels(this.width, this.height, into);
+  }
+
+  /** Queue an async readback of the frame just rendered. See GLContext.beginReadPixels. */
+  beginReadPixels(slot: number): void {
+    this.ctx.bindTarget(null, this.width, this.height);
+    this.ctx.beginReadPixels(this.width, this.height, slot);
+  }
+
+  /** Collect a readback queued earlier. */
+  endReadPixels(slot: number, into: Uint8Array): Uint8Array {
+    return this.ctx.endReadPixels(slot, into);
   }
 
   dispose(): void {

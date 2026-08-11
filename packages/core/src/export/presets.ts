@@ -121,13 +121,27 @@ export function formatExportFilename(
   const expanded = (pattern || '{project}').replace(/\{(\w+)\}/g, (whole, key: string) =>
     key in tokens ? tokens[key]! : whole,
   );
-  const safe = expanded
+  return safeFilename(expanded, 'export');
+}
+
+/**
+ * Reduce a display name to something every mainstream filesystem will accept.
+ *
+ * Shared by the export filename pattern and the Save Project dialog's suggested name, because
+ * a project called "OpenCut Video File at 1.42 PM" has to survive being offered as a filename
+ * in both places, and two copies of these rules would drift the first time one was tightened.
+ *
+ * Spaces become underscores rather than being stripped: a filename with no word boundaries at
+ * all is materially harder to read than one with underscores.
+ */
+export function safeFilename(name: string, fallback = 'untitled'): string {
+  const safe = name
     .replace(/[\\/:*?"<>|]/g, '-') // characters no mainstream filesystem accepts
     .replace(/\s+/g, '_')
     .replace(/-{2,}/g, '-')
     .replace(/^[.\-_]+|[.\-_\s]+$/g, '') // a leading dot hides the file; a trailing one breaks Windows
     .slice(0, 120);
-  return safe || 'export';
+  return safe || fallback;
 }
 
 /** Estimated output size in bytes for a given duration (seconds). */

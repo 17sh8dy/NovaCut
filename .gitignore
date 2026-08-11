@@ -9,6 +9,7 @@ out/
 build/
 *.tsbuildinfo
 .verify/dist-ui/
+.verify/dist-export/
 
 # Electron
 release/

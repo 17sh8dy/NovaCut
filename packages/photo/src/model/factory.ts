@@ -7,7 +7,12 @@
  * kind breaks the compile here, which is the earliest place it can usefully break.
  */
 
-import { instantiateEffect, type EffectInstance, type MediaAsset } from '@opencut/core';
+import {
+  defaultProjectName,
+  instantiateEffect,
+  type EffectInstance,
+  type MediaAsset,
+} from '@opencut/core';
 import { newLayerId, newPhotoDocumentId } from './ids.js';
 import { DEFAULT_FILL, type Fill, type Glow, type Shadow, type Stroke } from './paint.js';
 import { DEFAULT_SHAPE_PARAMS, type ShapeKind, type ShapeParams } from './shapes.js';
@@ -162,7 +167,7 @@ const firstLine = (content: string): string => {
  * where video instead fits media into a fixed frame.
  */
 export function createPhotoDocument(
-  name = 'Untitled',
+  name = defaultProjectName('photo'),
   media?: MediaAsset,
   /** An explicit canvas size (a preset). Wins over the media's, which wins over the default. */
   size?: { width: number; height: number },

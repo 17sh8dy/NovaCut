@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Download, FolderOpen } from 'lucide-react';
 import {
   CONTAINER_CODECS,
@@ -62,6 +62,13 @@ export function ExportDialog() {
     });
   });
   const [outputPath, setOutputPath] = useState<string | null>(null);
+  /**
+   * The render in flight, so Cancel can actually stop it.
+   *
+   * A ref rather than state: nothing renders from it, and re-rendering the dialog on every
+   * progress tick just to store a handle would be churn.
+   */
+  const running = useRef<{ abort: () => void } | null>(null);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
 
   const durationSec = toSeconds(seq.duration) || 1;
@@ -119,6 +126,7 @@ export function ExportDialog() {
       // Render + encode at the sequence resolution; ffmpeg scales to the chosen output size.
       encoder = await bridge.createEncoder(job, { width: seq.width, height: seq.height, audioWav });
       const exporter = new OfflineExporter(project, seq, resolveUrl, seq.width, seq.height);
+      running.current = exporter;
       await exporter.run(encoder, settings.fps, (info) => {
         setProgress({
           jobId: job.id,
@@ -129,9 +137,29 @@ export function ExportDialog() {
           totalFrames: info.totalFrames,
         });
       });
+      /*
+       * A cancelled run resolves normally — it is not a failure — so it has to be detected
+       * rather than caught. Everything below this point announces a finished file and opens a
+       * folder on it, and neither is true of an export the user stopped part-way.
+       */
+      if (exporter.cancelled) {
+        setProgress(null);
+        store.getState().notify('Export cancelled', 'info');
+        return;
+      }
       setProgress({ jobId: job.id, status: 'done', progress: 1 });
       const s2 = store.getState();
       s2.notify('Export complete', 'success');
+      /*
+       * Show the finished file in the file manager.
+       *
+       * Only on this branch, and only after `finish()` has resolved — an export that failed or
+       * was cancelled goes to the catch below, and a truncated file is not something to go and
+       * present to someone. The path is the one the encoder actually wrote, which is the export
+       * folder from Settings whenever the user accepted the dialog's default location and the
+       * right answer regardless when they did not.
+       */
+      s2.bridge.revealFile(path);
       // A system notification as well as the in-app toast: a render can take minutes and the
       // whole point is to be told while you are in another window.
       if (s2.preferences.notifyExport) s2.bridge.notify('Export complete', job.filename);
@@ -143,7 +171,18 @@ export function ExportDialog() {
       await encoder?.abort().catch(() => {});
       setProgress({ jobId: job.id, status: 'error', progress: 0, message: String(err) });
       store.getState().notify('Export failed', 'error');
+    } finally {
+      running.current = null;
     }
+  };
+
+  /** Stop a render in flight; falls back to closing the dialog when nothing is running. */
+  const cancel = () => {
+    if (running.current) {
+      running.current.abort();
+      return;
+    }
+    store.getState().openDialog(null);
   };
 
   const { width, height } = RESOLUTIONS[settings.resolution];
@@ -158,8 +197,8 @@ export function ExportDialog() {
             {width}×{height} · {activeCodec.toUpperCase()} · {effectiveBitrate} Mbps
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Button variant="ghost" onClick={() => store.getState().openDialog(null)}>
-              Cancel
+            <Button variant="ghost" onClick={cancel}>
+              {progress?.status === 'rendering' ? 'Cancel Export' : 'Cancel'}
             </Button>
             <Button variant="primary" icon={<Download size={16} />} onClick={startExport} disabled={progress?.status === 'rendering'}>
               {progress?.status === 'rendering' ? 'Exporting…' : 'Export'}

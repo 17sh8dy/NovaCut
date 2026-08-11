@@ -4,6 +4,7 @@
  */
 
 import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron';
+import { existsSync } from 'node:fs';
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, extname, join } from 'node:path';
@@ -124,14 +125,15 @@ export function registerHandlers(hooks: HandlerHooks): void {
     return { path, json };
   });
 
-  ipcMain.handle(CH.saveProject, async (_e, json: string, path?: string) => {
+  ipcMain.handle(CH.saveProject, async (_e, json: string, path?: string, suggestedName?: string) => {
     let target = path;
     if (!target) {
+      // The project's own name, so a first save offers "OpenCut Video File at 1.42 PM.opencut"
+      // rather than proposing "Untitled" for every project the user has ever made.
+      const file = `${suggestedName || 'Untitled'}.opencut`;
       const res = await dialog.showSaveDialog({
         title: 'Save Project',
-        defaultPath: hostPrefs.defaultProjectDir
-          ? join(hostPrefs.defaultProjectDir, 'Untitled.opencut')
-          : 'Untitled.opencut',
+        defaultPath: hostPrefs.defaultProjectDir ? join(hostPrefs.defaultProjectDir, file) : file,
         filters: [{ name: 'Open Cut Project', extensions: ['opencut'] }],
       });
       if (res.canceled || !res.filePath) return null;
@@ -237,6 +239,20 @@ export function registerHandlers(hooks: HandlerHooks): void {
   // ── Misc ──
   ipcMain.on(CH.notify, (_e, title: string, body: string) => {
     if (Notification.isSupported()) new Notification({ title, body }).show();
+  });
+
+  /*
+   * Reveal a finished export in Explorer (Finder, Nautilus), with the file selected.
+   *
+   * Guarded by an existence check because showItemInFolder on a path that is not there opens a
+   * window on nothing at all on Windows — a worse outcome than doing nothing, since it looks
+   * like the export went somewhere unexpected. It also keeps a cancelled or failed export, which
+   * never calls this, from being able to surprise anyone if that ever changes.
+   */
+  ipcMain.on(CH.revealFile, (_e, filePath: string) => {
+    if (typeof filePath === 'string' && filePath && existsSync(filePath)) {
+      shell.showItemInFolder(filePath);
+    }
   });
 
   // ── Shell integration ──

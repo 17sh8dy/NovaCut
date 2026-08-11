@@ -28,6 +28,7 @@ import {
   type Command,
   type MediaAsset,
   type PlatformBridge,
+  defaultProjectName,
 } from '@opencut/core';
 import {
   DEFAULT_BRUSH,
@@ -346,7 +347,7 @@ export function createPhotoStore({ bridge, notify, overlayDefaults, newDocumentB
     },
 
     newDocument: (name, size) => {
-      const fresh = createPhotoDocument(name ?? 'Untitled', undefined, size);
+      const fresh = createPhotoDocument(name ?? defaultProjectName('photo'), undefined, size);
       const doc = newDocumentBackground ? { ...fresh, background: newDocumentBackground } : fresh;
       get().history.reset(doc, 'New Photo');
       set({

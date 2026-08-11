@@ -83,6 +83,34 @@ Note the "four right turns is the identity" case **passes against the broken-gro
 is kept as a cheap smoke test and is deliberately not the real assertion — a reminder that a
 round-trip proves much less than it looks like it does.
 
+## `npm run verify:export` — where an export's time actually goes
+
+An Electron harness that runs the REAL `OfflineExporter` over real decoded media and reports the
+loop's cost split by phase, plus two correctness checks. It takes the media paths on the query
+string:
+
+```
+npm run verify:export -- --show "query=?a=<file-url>&b=<file-url>&secs=5&fps=30"
+```
+
+The encoder is a stand-in that only counts bytes, on purpose: this measures frame PRODUCTION
+(seek, decode, composite, readback) and leaves FFmpeg's own throughput out of it. Mixing the two
+makes every number uninterpretable.
+
+Two things it exists to stop you assuming:
+
+- **The compositor is not the cost.** Measured at 1080p30 it is well under 1% of the loop. Time
+  goes to waiting for `<video>` seeks and to pulling pixels back off the GPU.
+- **Export cost is dominated by the SOURCE, not by us.** The same code takes 66 ms/frame on a
+  file with an 8-second keyframe interval and 19 ms/frame on the same footage at 1 second,
+  because every output frame is a seek and a seek costs whatever the GOP costs.
+
+`verifySelfConsistency` answers a question you must ask before trusting any frame comparison:
+two identical runs of the exporter differ on a handful of frames, because a seek lands on
+whichever frame the decoder presents. So an exact per-frame checksum is NOT a valid oracle here
+— which is why the real quality gate for the export path is an end-to-end A/B of the produced
+file (identical MD5 against the previous build), not this harness's checksum diff.
+
 ## Notes
 
 - Scripts build as **IIFE** and load over `file://`, where Chromium blocks module scripts as

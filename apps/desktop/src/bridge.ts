@@ -9,6 +9,7 @@
 import {
   deserializeProject,
   RESOLUTIONS,
+  safeFilename,
   serializeProject,
   type ExportJob,
   type FrameEncoder,
@@ -35,7 +36,9 @@ export class ElectronBridge implements PlatformBridge {
   }
 
   async saveProject(project: Project, path?: string): Promise<{ path: string } | null> {
-    return this.api.saveProject(serializeProject(project), path);
+    // Suggest the project's own name as the filename. Main cannot compute this itself: the
+    // workspace packages are aliased into the renderer bundle only, so the sanitiser lives here.
+    return this.api.saveProject(serializeProject(project), path, safeFilename(project.name, 'Untitled'));
   }
 
   async loadProject(path: string): Promise<Project> {
@@ -102,6 +105,10 @@ export class ElectronBridge implements PlatformBridge {
 
   notify(title: string, body: string): void {
     this.api.notify(title, body);
+  }
+
+  revealFile(path: string): void {
+    this.api.revealFile(path);
   }
 
   popupMenu(id: WindowMenuId, x: number, y: number): void {

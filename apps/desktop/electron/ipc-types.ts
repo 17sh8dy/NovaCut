@@ -64,7 +64,7 @@ export interface OpenCutApi {
   /** `process.platform`, so the UI can inset for macOS traffic lights. */
   os: NodeJS.Platform;
   openProject(): Promise<{ path: string; json: string } | null>;
-  saveProject(json: string, path?: string): Promise<{ path: string } | null>;
+  saveProject(json: string, path?: string, suggestedName?: string): Promise<{ path: string } | null>;
   loadProject(path: string): Promise<string>;
   recentProjects(): Promise<RecentProjectDTO[]>;
   importFiles(kinds?: readonly string[]): Promise<ImportedFileDTO[]>;
@@ -88,6 +88,7 @@ export interface OpenCutApi {
   encoderFinish(jobId: string): Promise<void>;
   encoderAbort(jobId: string): Promise<void>;
   notify(title: string, body: string): void;
+  revealFile(path: string): void;
 
   // ── Shell integration ──
   /** Subscribe to application-menu commands. Returns an unsubscribe function. */
@@ -178,6 +179,7 @@ export const CH = {
   encoderFinish: 'encoder:finish',
   encoderAbort: 'encoder:abort',
   notify: 'app:notify',
+  revealFile: 'app:revealFile',
   // Shell integration (main → renderer for the first two, renderer → main for the rest).
   menuCommand: 'app:menuCommand',
   openProjectPath: 'app:openProjectPath',

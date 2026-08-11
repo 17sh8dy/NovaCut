@@ -105,6 +105,17 @@ export interface PlatformBridge {
 
   // ── Misc host services ──
   notify(title: string, body: string): void;
+  /**
+   * Show a file in the host's file manager, selected, in whatever folder it actually landed in.
+   *
+   * Deliberately takes the FILE and not a directory. The export dialog defaults to the export
+   * folder from Settings but the user can save anywhere, and opening the configured folder when
+   * the file is somewhere else would point them at the wrong place with total confidence.
+   * Revealing the file is right in both cases and needs no preference to stay right.
+   *
+   * A no-op on hosts with no file manager, which is why it returns nothing and cannot fail.
+   */
+  revealFile(path: string): void;
 
   // ── Window chrome (desktop only) ──
   /**

@@ -234,8 +234,29 @@
 
   --text-primary: #111827;
   --text-secondary: #6b7280;
-  --text-tertiary: #9ca3af;
+  /*
+   * Tertiary was #9ca3af, which is 2.4:1 on white — below even the 3:1 floor for incidental
+   * text, and it is used for real labels (durations, hints, the export summary line). A grey
+   * that reads on charcoal is not the same grey that reads on white; this is the light-theme
+   * value, measured rather than eyeballed.
+   */
+  --text-tertiary: #6e7683;
   --text-disabled: #c3c8d1;
+
+  /*
+   * ── Semantic colours, re-tuned for white ──
+   *
+   * These were defined once, in the dark palette, and inherited unchanged into the light theme —
+   * where they are far too light. Measured on --surface-1: success 2.4:1, warning 2.0:1, danger
+   * 3.5:1, all as TEXT (settings rows, the photo warning strip, timeline markers, the export
+   * error line all use `color: var(--…)`). The hue is unchanged so the meaning still reads; only
+   * the lightness moves, which is exactly what changing background from charcoal to white
+   * requires.
+   */
+  --success: #047857;
+  --warning: #b45309;
+  --danger: #c62828;
+  --info: #1d4ed8;
 
   /* Hover DARKENS on white — the mirror of the dark theme, not a copy of it. */
   --accent-hover: color-mix(in srgb, var(--accent) 88%, black);

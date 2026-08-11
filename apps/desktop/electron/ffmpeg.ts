@@ -158,7 +158,52 @@ function availableEncoders(): Set<string> {
 }
 
 /**
- * Pick the first candidate this FFmpeg actually provides.
+ * Does this encoder actually WORK on this machine, not merely exist in this build?
+ *
+ * `-encoders` lists what FFmpeg was COMPILED with, which on any full build is every vendor's
+ * hardware encoder at once. A stock build therefore reports h264_nvenc on a machine with no
+ * NVIDIA card, and picking by that list sends every AMD and Intel user to an encoder that fails
+ * the moment it is opened — the same "hardware acceleration is broken on non-NVIDIA hardware"
+ * defect the list was introduced to fix, one layer further down. Verified on this machine:
+ * h264_nvenc is listed and dies with "Cannot load nvcuda.dll", while h264_amf encodes fine.
+ *
+ * So ask the only question that matters — open it and encode one frame — and cache the answer.
+ * Roughly 200 ms per hardware candidate, once per process, and only for candidates that are
+ * reached at all: the software encoders are checked by presence alone, because a missing one is
+ * a missing library rather than absent silicon.
+ */
+const encoderWorks = new Map<string, boolean>();
+function canEncode(name: string): boolean {
+  const cached = encoderWorks.get(name);
+  if (cached !== undefined) return cached;
+  if (!availableEncoders().has(name)) {
+    encoderWorks.set(name, false);
+    return false;
+  }
+  let ok = false;
+  try {
+    const probe = spawnSync(
+      FFMPEG,
+      [
+        '-hide_banner', '-v', 'error',
+        '-f', 'lavfi', '-i', 'color=c=black:s=320x240:d=0.1',
+        '-frames:v', '1',
+        '-c:v', name,
+        '-f', 'null', '-',
+      ],
+      { encoding: 'utf8', timeout: 20_000, windowsHide: true },
+    );
+    ok = probe.status === 0;
+  } catch {
+    ok = false;
+  }
+  encoderWorks.set(name, ok);
+  return ok;
+}
+
+/**
+ * Pick the first candidate that is present, and — for hardware encoders — that this machine can
+ * actually open.
  *
  * Falling back to `candidates[0]` when none match keeps the failure legible: ffmpeg then reports
  * the missing encoder by name rather than the export dying somewhere less obvious.
@@ -166,6 +211,11 @@ function availableEncoders(): Set<string> {
 function firstAvailable(...candidates: string[]): string {
   const have = availableEncoders();
   return candidates.find((c) => have.has(c)) ?? candidates[0]!;
+}
+
+/** As firstAvailable, but each candidate must survive a one-frame test encode. */
+function firstWorking(...candidates: string[]): string {
+  return candidates.find((c) => canEncode(c)) ?? candidates[candidates.length - 1]!;
 }
 
 /**
@@ -185,17 +235,17 @@ function videoEncoder(codec: string, hardware: boolean): string {
   switch (codec) {
     case 'h264':
       return hardware
-        ? firstAvailable('h264_nvenc', 'h264_amf', 'h264_qsv', 'h264_mf', 'libopenh264', 'libx264')
+        ? firstWorking('h264_nvenc', 'h264_amf', 'h264_qsv', 'h264_mf', 'libx264', 'libopenh264')
         : firstAvailable('libx264', 'libopenh264');
     case 'h265':
       return hardware
-        ? firstAvailable('hevc_nvenc', 'hevc_amf', 'hevc_qsv', 'hevc_mf', 'libkvazaar', 'libx265')
+        ? firstWorking('hevc_nvenc', 'hevc_amf', 'hevc_qsv', 'hevc_mf', 'libx265', 'libkvazaar')
         : firstAvailable('libx265', 'libkvazaar');
     case 'vp9':
       return 'libvpx-vp9';
     case 'av1':
       return hardware
-        ? firstAvailable('av1_nvenc', 'av1_amf', 'av1_qsv', 'libsvtav1')
+        ? firstWorking('av1_nvenc', 'av1_amf', 'av1_qsv', 'libsvtav1')
         : firstAvailable('libsvtav1', 'libaom-av1', 'librav1e');
     case 'prores':
       return 'prores_ks';

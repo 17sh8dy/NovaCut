@@ -45,6 +45,7 @@ import {
   type Sequence,
   type Ticks,
   type TrackId,
+  defaultProjectName,
 } from '@opencut/core';
 
 registerBuiltins();
@@ -342,7 +343,7 @@ export function createAppStore(bridge: PlatformBridge) {
       // "Default resolution" and "Default frame rate" mean something the moment they are set.
       const p = get().preferences;
       const size = RESOLUTIONS[p.defaultResolution as keyof typeof RESOLUTIONS] ?? RESOLUTIONS['1080p'];
-      const project = createProject(name ?? 'Untitled Project', {
+      const project = createProject(name ?? defaultProjectName('video'), {
         name: `${size.width}×${size.height} · ${p.defaultFrameRate}fps`,
         width: size.width,
         height: size.height,

@@ -164,7 +164,35 @@ export function createSequence(preset: SequencePreset): Sequence {
   };
 }
 
-export function createProject(name = 'Untitled Project', preset = SEQUENCE_PRESETS['1080p30']!): Project {
+/**
+ * The name a new project or document carries until someone names it themselves.
+ *
+ * "Untitled Project" is the same string every time, so a folder of them tells you nothing and
+ * saving a second one offers to overwrite the first. Stamping the creation time makes each one
+ * distinguishable at a glance and orders them naturally in a file listing.
+ *
+ * ── WHY THERE IS NO COLON IN THE TIME ────────────────────────────────────────────────
+ *
+ * This string is used as a FILENAME, not only as a label: it seeds the Save Project dialog and
+ * expands into `{project}` in the export filename pattern. Windows forbids `:` in a filename, so
+ * a literal "1:42 PM" would either be rejected by the save dialog or silently rewritten by the
+ * export sanitiser into something the user never chose. A full stop is legal everywhere and
+ * still reads as a time.
+ *
+ * The time comes from `toLocaleTimeString`, so it is the user's own local time and their own
+ * 12/24-hour convention. Recent ICU puts a narrow no-break space before AM/PM, which is a legal
+ * but surprising thing to find in a filename, so every kind of space is normalised to a plain one.
+ */
+export function defaultProjectName(kind: 'video' | 'photo' = 'video', at: Date = new Date()): string {
+  const time = at
+    .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    .replace(/[\s\u00a0\u202f\u2009]+/g, ' ')
+    .replace(/:/g, '.')
+    .trim();
+  return `OpenCut ${kind === 'photo' ? 'Photo' : 'Video'} File at ${time}`;
+}
+
+export function createProject(name = defaultProjectName('video'), preset = SEQUENCE_PRESETS['1080p30']!): Project {
   const sequence = createSequence(preset);
   const now = Date.now();
   return {
