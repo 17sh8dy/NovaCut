@@ -35,6 +35,29 @@ files:
   - '!src/**'
   - '!**/*.map'
 
+# ── Bundled FFmpeg ───────────────────────────────────────────────────────────────────
+#
+# Copied to `resources/ffmpeg/` inside the installed app, which is exactly where
+# `electron/ffmpeg.ts` looks before falling back to PATH. This is what makes a downloaded Open
+# Cut able to import and export without the user installing anything first — without it, a clean
+# machine gets a zero-length clip on import and no export at all.
+#
+# The build is LGPL, NOT GPL: Open Cut is MIT, and GPL components would force the combined work
+# to GPL. `LICENSE.txt` ships beside the executables because the LGPL requires it to.
+# `npm run ffmpeg:fetch` fetches and licence-checks them; see resources/ffmpeg/README.md.
+#
+# electron-builder does not fail when this folder is missing or half-empty — it just produces an
+# installer without FFmpeg in it, which looks completely normal and is broken on every machine
+# that does not already have FFmpeg. `npm run dist` is therefore gated behind
+# `scripts/check-ffmpeg.mjs`, which refuses to package unless both executables are present and
+# still report an LGPL configuration.
+extraResources:
+  - from: resources/ffmpeg
+    to: ffmpeg
+    filter:
+      - '**/*'
+      - '!README.md'
+
 # No native modules anywhere in the tree; skipping the rebuild pass saves a minute per build.
 npmRebuild: false
 

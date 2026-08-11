@@ -12,7 +12,7 @@
  * for users who already have ffmpeg on PATH.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -127,22 +127,82 @@ export async function ffmpegThumbnail(src: string, atSeconds: number): Promise<s
 }
 
 /** Map our codec keys to ffmpeg encoders, choosing hardware variants when requested. */
+/**
+ * The encoder names this FFmpeg actually has, read from the binary once and cached.
+ *
+ * Asking is the only reliable way. Which encoders exist depends on how the binary was compiled
+ * and on the machine it is running on, and neither is knowable from here: the bundled build is
+ * LGPL and therefore has no x264 or x265 at all, a user pointing OPENCUT_FFMPEG at their own
+ * build may have those and nothing else, and the hardware encoders only exist where the matching
+ * GPU does. Guessing produces "Unknown encoder 'libx264'" at the end of a render, which is the
+ * worst possible moment to discover it.
+ *
+ * Sync on purpose: it runs once, costs about a tenth of a second, and the alternative is making
+ * the encoder constructor async for a value every call needs immediately.
+ */
+let encoderCache: Set<string> | null = null;
+function availableEncoders(): Set<string> {
+  if (encoderCache) return encoderCache;
+  encoderCache = new Set();
+  try {
+    const out = spawnSync(FFMPEG, ['-hide_banner', '-encoders'], { encoding: 'utf8', timeout: 10_000 });
+    for (const line of (out.stdout || '').split('\n')) {
+      // " V....D libopenh264          OpenH264 ..." — flags, then the name.
+      const m = /^\s*[A-Z.]{6}\s+(\S+)/.exec(line);
+      if (m) encoderCache.add(m[1]!);
+    }
+  } catch {
+    /* No binary, or it did not answer. Callers fall back to the first candidate. */
+  }
+  return encoderCache;
+}
+
+/**
+ * Pick the first candidate this FFmpeg actually provides.
+ *
+ * Falling back to `candidates[0]` when none match keeps the failure legible: ffmpeg then reports
+ * the missing encoder by name rather than the export dying somewhere less obvious.
+ */
+function firstAvailable(...candidates: string[]): string {
+  const have = availableEncoders();
+  return candidates.find((c) => have.has(c)) ?? candidates[0]!;
+}
+
+/**
+ * Map a requested codec to a real encoder.
+ *
+ * Software lists are ordered BEST-FIRST, not licence-first: x264 and x265 lead because they are
+ * the better encoders, and the bundled LGPL build simply does not contain them, so it falls
+ * through to OpenH264 and kvazaar on its own. A user who points OPENCUT_FFMPEG at their own GPL
+ * build therefore gets the better encoder without any of this needing to know which build it is
+ * talking to.
+ *
+ * Hardware is chosen by what the machine HAS, not by vendor assumption. This previously returned
+ * `h264_nvenc` unconditionally, so ticking "hardware acceleration" on any AMD or Intel machine
+ * asked for an NVIDIA encoder that was not there and failed the export outright.
+ */
 function videoEncoder(codec: string, hardware: boolean): string {
   switch (codec) {
     case 'h264':
-      return hardware ? 'h264_nvenc' : 'libx264';
+      return hardware
+        ? firstAvailable('h264_nvenc', 'h264_amf', 'h264_qsv', 'h264_mf', 'libopenh264', 'libx264')
+        : firstAvailable('libx264', 'libopenh264');
     case 'h265':
-      return hardware ? 'hevc_nvenc' : 'libx265';
+      return hardware
+        ? firstAvailable('hevc_nvenc', 'hevc_amf', 'hevc_qsv', 'hevc_mf', 'libkvazaar', 'libx265')
+        : firstAvailable('libx265', 'libkvazaar');
     case 'vp9':
       return 'libvpx-vp9';
     case 'av1':
-      return 'libsvtav1';
+      return hardware
+        ? firstAvailable('av1_nvenc', 'av1_amf', 'av1_qsv', 'libsvtav1')
+        : firstAvailable('libsvtav1', 'libaom-av1', 'librav1e');
     case 'prores':
       return 'prores_ks';
     case 'gif':
       return 'gif';
     default:
-      return 'libx264';
+      return firstAvailable('libx264', 'libopenh264');
   }
 }
 

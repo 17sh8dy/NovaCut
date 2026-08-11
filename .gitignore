@@ -40,3 +40,11 @@ Thumbs.db
 # Open Cut runtime data (local dev)
 .opencut-cache/
 *.opencut.bak
+
+# Bundled FFmpeg binaries (~110 MB each). Fetched by `npm run ffmpeg:fetch`, verified LGPL by
+# `npm run ffmpeg:check`, and shipped by electron-builder's extraResources — but never committed,
+# because two binaries of that size are in the history forever. The licence text and the README
+# beside them ARE tracked: the LGPL obligation travels with the repo, not just with the download.
+apps/desktop/resources/ffmpeg/*
+!apps/desktop/resources/ffmpeg/README.md
+!apps/desktop/resources/ffmpeg/LICENSE.txt
