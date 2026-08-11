@@ -30,7 +30,7 @@ export function AboutPane() {
   }, [store]);
 
   const lines: [string, string][] = [
-    ['Version', info?.appVersion ?? '0.1.0'],
+    ['Version', info?.appVersion ?? '—'],
     ['Platform', info?.platform ?? 'desktop'],
     ['Electron', info?.electron ?? '—'],
     ['Chromium', info?.chrome ?? '—'],

@@ -1,6 +1,6 @@
 {
   "name": "@opencut/ui",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Open Cut React UI: design system, editor panels, and the app store. Platform-agnostic — receives a PlatformBridge via context.",
   "type": "module",
@@ -11,9 +11,9 @@
     "./styles.css": "./src/theme/global.css"
   },
   "dependencies": {
-    "@opencut/core": "0.1.0",
-    "@opencut/engine": "0.1.0",
-    "@opencut/photo": "0.1.0",
+    "@opencut/core": "1.0.0",
+    "@opencut/engine": "1.0.0",
+    "@opencut/photo": "1.0.0",
     "lucide-react": "^0.454.0",
     "zustand": "^5.0.1"
   },

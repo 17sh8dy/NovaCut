@@ -1,6 +1,6 @@
 {
   "name": "@opencut/desktop",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Open Cut desktop app — the Electron shell that hosts the editor and provides the native PlatformBridge (dialogs, filesystem, FFmpeg export).",
   "author": "Open Cut",
@@ -20,9 +20,9 @@
     "dist:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
-    "@opencut/core": "0.1.0",
-    "@opencut/engine": "0.1.0",
-    "@opencut/ui": "0.1.0",
+    "@opencut/core": "1.0.0",
+    "@opencut/engine": "1.0.0",
+    "@opencut/ui": "1.0.0",
     "lucide-react": "^0.454.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -1,6 +1,6 @@
 {
   "name": "@opencut/engine",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Open Cut rendering engine: playback clock, WebGL2 compositor, photo render graph, Web Audio graph, media frame sources. Browser APIs only.",
   "type": "module",
@@ -10,8 +10,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@opencut/core": "0.1.0",
-    "@opencut/photo": "0.1.0"
+    "@opencut/core": "1.0.0",
+    "@opencut/photo": "1.0.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

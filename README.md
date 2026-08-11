@@ -48,10 +48,11 @@ Dependencies point only downward. Everything platform-specific is funneled throu
 
 ## Getting started
 
-**Prerequisites:** Node ≥ 20. For media probing, thumbnails, and export, install
-[FFmpeg](https://ffmpeg.org/) and ensure `ffmpeg` / `ffprobe` are on your `PATH`
-(or set `OPENCUT_FFMPEG` / `OPENCUT_FFPROBE`). The editor is fully usable without FFmpeg;
-those features degrade gracefully.
+**Prerequisites:** Node ≥ 20. Released builds bundle FFmpeg, but the binaries are not in
+this repository — so for media probing, thumbnails, and export from a source checkout, run
+`npm run ffmpeg:fetch` (downloads an LGPL build into `apps/desktop/resources/ffmpeg/`), or put
+`ffmpeg` / `ffprobe` on your `PATH`, or set `OPENCUT_FFMPEG` / `OPENCUT_FFPROBE`. The editor is
+fully usable without FFmpeg; those features degrade gracefully.
 
 ```bash
 npm install        # install the whole workspace
@@ -107,9 +108,11 @@ Builds are unsigned, so Windows SmartScreen warns on first run until a code-sign
 is configured (`CSC_LINK` / `CSC_KEY_PASSWORD`).
 
 FFmpeg is resolved at runtime from `OPENCUT_FFMPEG` / `OPENCUT_FFPROBE`, then from
-`resources/ffmpeg/` inside the installed app, then from `PATH`. Dropping `ffmpeg.exe` and
-`ffprobe.exe` into that folder makes one installation self-sufficient without adding 80 MB to the
-installer for everyone else.
+`resources/ffmpeg/` inside the installed app, then from `PATH`. As of 1.0.0 the installer ships
+an LGPL FFmpeg in that folder (`extraResources`), which is most of the download size — the
+lookup order above is what lets a user substitute their own build without repackaging.
+`npm run dist` runs `npm run ffmpeg:check` first, which refuses to package unless both binaries
+are present, actually execute, and report neither `--enable-gpl` nor `--enable-nonfree`.
 
 > **Windows, once per machine:** electron-builder unpacks a signing toolchain that contains macOS
 > symlinks, which a standard Windows account may not create — the build then fails with *"Cannot
