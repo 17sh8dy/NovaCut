@@ -1,7 +1,8 @@
+import { useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import {
   addClipOnFreeTrack,
-  allEffects,
+  allTools,
   allTransitions,
   createTextClip,
   instantiateEffect,
@@ -11,9 +12,22 @@ import {
   type EffectCategory,
   type VideoTextPreset,
 } from '@opencut/core';
-import { EmptyState } from '../components/primitives/index.js';
+import { EmptyState, Segmented } from '../components/primitives/index.js';
 import { applyTransitionAtTime } from './Timeline.js';
 import { useAppStore, useStore } from '../state/context.js';
+import { TextAnimationsPanel } from './browsers/TextAnimationsPanel.js';
+import { TextEffectsPanel } from './browsers/TextEffectsPanel.js';
+import {
+  CategoryTabs,
+  ItemChip,
+  matches,
+  NoResults,
+  SearchBox,
+  bucket,
+  useShelfMemory,
+} from './browsers/shared.js';
+
+export { FiltersPanel } from './browsers/FiltersPanel.js';
 
 const CATEGORY_LABEL: Record<EffectCategory, string> = {
   blur: 'Blur',
@@ -49,12 +63,37 @@ function transitionDemo(type: string): string {
   return 'fade';
 }
 
-/** Effects browser: grouped catalog; clicking adds the effect to the selected clip. */
+/**
+ * Effects browser: the raw TOOLS, searchable and grouped by what they do to pixels.
+ *
+ * `allTools()` rather than `allEffects()` — filters are effects too, but they belong on the
+ * Filters shelf, and dropping thirty finished looks into a list of adjustment tools is exactly
+ * the "one giant list" this browser exists to avoid.
+ */
 export function EffectsPanel() {
   const store = useAppStore();
   const selectedId = useStore((s) => s.selectedClipIds[0]);
-  const effects = allEffects();
-  const categories = [...new Set(effects.map((e) => e.category))];
+  const [tab, setTab] = useState<EffectCategory | 'all'>('all');
+  const [query, setQuery] = useState('');
+  const { favorites, recents, toggleFavorite, markUsed } = useShelfMemory('effects');
+
+  const tools = useMemo(() => allTools(), []);
+  const tabs = useMemo(
+    () => [
+      { value: 'all' as const, label: 'All' },
+      ...[...new Set(tools.map((e) => e.category))].map((c) => ({ value: c, label: CATEGORY_LABEL[c] })),
+    ],
+    [tools],
+  );
+
+  const items = useMemo(
+    () =>
+      tools
+        .filter((e) => tab === 'all' || e.category === tab)
+        .filter((e) => matches(query, e.label, e.category, e.type)),
+    [tools, tab, query],
+  );
+  const { favorite, recent, rest } = bucket(items, (e) => e.type, favorites, recents);
 
   const addEffect = (type: string) => {
     const id = selectedId;
@@ -65,29 +104,54 @@ export function EffectsPanel() {
       label: 'Add Effect',
       apply: (p) => updateClip(p, seq.id, id, (c) => ({ ...c, effects: [...c.effects, instance] })),
     });
+    markUsed(type);
     store.getState().setInspectorTab('effects');
     store.getState().notify('Effect added', 'success');
   };
 
+  const chip = (e: { type: string; label: string; category: EffectCategory }) => (
+    <ItemChip
+      key={e.type}
+      label={e.label}
+      title={`${e.label} — hover to preview, click to apply`}
+      favorite={favorites.includes(e.type)}
+      onToggleFavorite={() => toggleFavorite(e.type)}
+      onClick={() => addEffect(e.type)}
+    >
+      <FxPreview demo={e.category} />
+    </ItemChip>
+  );
+
   return (
-    <div style={{ overflow: 'auto', height: '100%' }}>
-      {categories.map((cat) => (
-        <div key={cat}>
-          <div className="oc-section-title">{CATEGORY_LABEL[cat]}</div>
-          <div className="oc-chip-grid">
-            {effects
-              .filter((e) => e.category === cat)
-              .map((e) => (
-                <button key={e.type} className="oc-chip" onClick={() => addEffect(e.type)} title={`${e.label} — hover to preview`}>
-                  <div className="oc-chip__preview">
-                    <FxPreview demo={e.category} />
-                  </div>
-                  <span className="oc-chip__label">{e.label}</span>
-                </button>
-              ))}
-          </div>
-        </div>
-      ))}
+    <div className="oc-browser">
+      <CategoryTabs tabs={tabs} value={tab} onChange={setTab} />
+      <SearchBox value={query} onChange={setQuery} placeholder="Search effects" />
+      <div className="oc-browser__scroll">
+        {items.length === 0 ? (
+          <NoResults query={query} />
+        ) : (
+          <>
+            <ChipRow title="Favourites" items={favorite} render={chip} />
+            <ChipRow title="Recent" items={recent} render={chip} />
+            <ChipRow
+              title={favorite.length || recent.length ? 'All' : tabs.find((t) => t.value === tab)!.label}
+              items={rest}
+              render={chip}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Local section helper — the shared one takes children; this one takes a render function. */
+function ChipRow<T>({ title, items, render }: { title: string; items: T[]; render: (item: T) => React.ReactNode }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <div className="oc-section-title">{title}</div>
+      <div className="oc-chip-grid">{items.map(render)}</div>
     </div>
   );
 }
@@ -194,8 +258,38 @@ function TextPresetSwatch({ preset }: { preset: VideoTextPreset }) {
   );
 }
 
-/** Text browser: presets that drop a styled text clip on a free track at the playhead. */
+/**
+ * The Text browser, split three ways.
+ *
+ * Presets create a title; Animations and Effects change one that already exists. Keeping them
+ * on one rail button but behind sub-tabs matches how the work actually goes — you add the
+ * title, then animate it, then dress it — without making "Text" mean three different things
+ * depending on which rail icon you remembered to press.
+ */
 export function TextPanel() {
+  const [section, setSection] = useState<'presets' | 'animations' | 'effects'>('presets');
+  return (
+    <div className="oc-browser">
+      <div className="oc-browser__sections">
+        <Segmented
+          options={[
+            { value: 'presets' as const, label: 'Presets' },
+            { value: 'animations' as const, label: 'Animations' },
+            { value: 'effects' as const, label: 'Effects' },
+          ]}
+          value={section}
+          onChange={setSection}
+        />
+      </div>
+      {section === 'presets' && <TextPresetsPanel />}
+      {section === 'animations' && <TextAnimationsPanel />}
+      {section === 'effects' && <TextEffectsPanel />}
+    </div>
+  );
+}
+
+/** Presets that drop a styled text clip on a free track at the playhead. */
+function TextPresetsPanel() {
   const store = useAppStore();
 
   const addText = (preset: VideoTextPreset) => {

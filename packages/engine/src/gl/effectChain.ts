@@ -12,7 +12,7 @@
  * keeps the ping-pong honest.
  */
 
-import { getEffectDef, sample, type EffectInstance, type Ticks } from '@opencut/core';
+import { getEffectDef, sample, type EffectDefinition, type EffectInstance, type Ticks } from '@opencut/core';
 import { EFFECT_FRAGMENTS, COLOR_ADJUST_KEYS, VERTEX_SHADER } from '../compositor/shaders.js';
 import type { Fbo, GLContext } from './glContext.js';
 import { IDENTITY3 } from './glContext.js';
@@ -64,7 +64,7 @@ export function runEffectChain(
 
   for (const fx of active) {
     const def = getEffectDef(fx.type)!;
-    applyEffect(gl, def.render, fx, current, front, width, height, timeSeconds, localTicks);
+    applyEffect(gl, def, fx, current, front, width, height, timeSeconds, localTicks);
     current = front.tex;
     owned = front;
     if (back) {
@@ -79,10 +79,10 @@ export function runEffectChain(
   return { tex: owned.tex, owned };
 }
 
-/** One effect pass: bind params as `u_<key>`, draw a full-target quad. */
+/** One effect pass: bind constants and params as `u_<key>`, draw a full-target quad. */
 function applyEffect(
   gl: GLContext,
-  renderKey: string,
+  def: EffectDefinition,
   fx: EffectInstance,
   inputTex: WebGLTexture,
   output: Fbo,
@@ -91,6 +91,7 @@ function applyEffect(
   timeSeconds: number,
   localTicks: Ticks,
 ): void {
+  const renderKey = def.render;
   const source = EFFECT_FRAGMENTS[renderKey] ?? EFFECT_FRAGMENTS['passthrough']!;
   const prog = gl.getProgram(renderKey, VERTEX_SHADER, source);
 
@@ -102,6 +103,24 @@ function applyEffect(
   gl.setUniform1f(prog, 'u_time', timeSeconds);
   gl.setUniform1f(prog, 'u_opacity', 1);
   gl.setUniformMat3(prog, 'u_model', IDENTITY3);
+
+  /*
+   * Definition constants first, instance params second.
+   *
+   * The order is the contract: a param with the same key as a constant OVERRIDES it. That is
+   * what lets the thirty filters share one shader — each binds its whole grade from the
+   * definition and exposes only `intensity` as a param — while leaving the door open for a
+   * definition to publish one of its constants as an editable dial later without the shader or
+   * this binder changing at all.
+   *
+   * Constants are also why the program cache is safe here. Programs are keyed by render key and
+   * shared across every effect that uses them, so a uniform that one effect writes and the next
+   * leaves alone keeps the PREVIOUS effect's value. Because each filter writes the complete set
+   * every pass, there is nothing for a sibling to leak into it.
+   */
+  for (const [key, val] of Object.entries(def.constants ?? {})) {
+    gl.setUniform1f(prog, `u_${key}`, val);
+  }
 
   // Bind every param as u_<key>. Zero-fill the color-adjust family so its shared shader
   // ignores channels this particular effect doesn't expose.

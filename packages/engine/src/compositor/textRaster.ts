@@ -56,16 +56,24 @@ const MAX_RASTER = 4096;
  * with a glow is milliseconds of `fillText` per frame, per clip. The cache is small because the
  * working set is: the handful of text clips visible around the playhead.
  */
-const CACHE_LIMIT = 32;
+const CACHE_LIMIT = 64;
 const cache = new Map<string, TextRaster>();
 
-/** Everything that changes the bitmap, and nothing that does not (position/opacity are transform). */
-function signature(style: TextStyle): string {
+/**
+ * Everything that changes the bitmap, and nothing that does not (position/opacity are transform).
+ *
+ * `shown` — the character count a typewriter is currently up to — is part of the key because
+ * each prefix is a different bitmap. It is keyed on the integer COUNT rather than on the raw
+ * reveal fraction, so the sixty frames that all show the same twelve characters share one entry
+ * instead of minting sixty identical bitmaps.
+ */
+function signature(style: TextStyle, shown: number): string {
   const s = style;
   return JSON.stringify([
     s.content, s.fontFamily, s.fontSize, s.fontWeight, s.italic, s.underline,
     s.align, s.letterSpacing, s.lineHeight, s.color,
     s.gradient, s.stroke, s.shadow, s.glow, s.background,
+    shown,
   ]);
 }
 
@@ -90,12 +98,18 @@ const cssFont = (s: TextStyle): string =>
  * Returns null when there is nothing to draw, which the compositor treats as "no texture" — the
  * same branch an undecoded video frame takes.
  */
-export function rasterizeText(style: TextStyle): TextRaster | null {
-  const key = signature(style);
+export function rasterizeText(style: TextStyle, reveal = 1): TextRaster | null {
+  // Character-accurate, and rounded UP so the first frame of a typewriter already shows one
+  // letter: starting from an empty bitmap makes the animation look like it begins late.
+  const total = String(style.content ?? '').split('\n').join('').length;
+  const shown = reveal >= 1 ? total : Math.min(total, Math.ceil(reveal * total));
+  if (shown <= 0) return null;
+
+  const key = signature(style, shown);
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const raster = build(style);
+  const raster = build(style, shown);
   if (!raster) return null;
 
   // Cheap LRU: oldest insertion out first. Map preserves insertion order.
@@ -121,7 +135,11 @@ if (typeof document !== 'undefined' && document.fonts) {
   document.fonts.addEventListener('loadingdone', () => clearTextRasterCache());
 }
 
-function build(style: TextStyle): TextRaster | null {
+/**
+ * `shown` is a count of characters across ALL lines. Layout always uses the full string and
+ * only the painting is truncated — see the note on `drawLines` below.
+ */
+function build(style: TextStyle, shown: number): TextRaster | null {
   const lines = String(style.content ?? '').split('\n');
   if (lines.length === 0 || lines.every((l) => l.length === 0)) return null;
 
@@ -161,16 +179,28 @@ function build(style: TextStyle): TextRaster | null {
   ctx.font = cssFont(style);
   ctx.letterSpacing = `${style.letterSpacing || 0}px`;
   ctx.textBaseline = 'middle';
-  ctx.textAlign = style.align === 'justify' ? 'left' : style.align;
+  /*
+   * Alignment is resolved into an explicit left edge per line, and the context is left on
+   * 'left'.
+   *
+   * Letting the canvas centre each line for us would be equivalent for static text and WRONG
+   * for a reveal: a half-typed line is narrower than the finished one, so the canvas would
+   * centre the prefix and every character already on screen would slide leftward as the next
+   * one appeared. Measuring the FULL line and painting the prefix at that line's real left edge
+   * pins each glyph to the position it will still occupy when the line is complete.
+   */
+  ctx.textAlign = 'left';
   ctx.lineJoin = 'round';
   ctx.miterLimit = 2;
 
-  // Where a line starts horizontally, given the alignment the context is set to.
+  const align = style.align === 'justify' ? 'left' : style.align;
   const boxLeft = bleed;
-  const anchorX =
-    ctx.textAlign === 'center' ? boxLeft + boxW / 2
-    : ctx.textAlign === 'right' ? boxLeft + boxW - pad
-    : boxLeft + pad;
+  const lineLeft = (i: number): number => {
+    const w = widths[i]!;
+    if (align === 'center') return boxLeft + boxW / 2 - w / 2;
+    if (align === 'right') return boxLeft + boxW - pad - w;
+    return boxLeft + pad;
+  };
 
   if (style.background) {
     ctx.save();
@@ -182,11 +212,23 @@ function build(style: TextStyle): TextRaster | null {
     ctx.restore();
   }
 
+  /*
+   * Every drawing pass — glow, shadow, stroke, fill — goes through here, so all of them are
+   * truncated identically. Truncating only the fill would leave a stroke outlining letters that
+   * have not been typed yet.
+   */
   const drawLines = (draw: (line: string, x: number, y: number) => void): void => {
+    let budget = shown;
     for (let i = 0; i < lines.length; i++) {
+      const full = lines[i]!;
+      // Newlines are not characters the user watches appear, so they cost nothing from the
+      // budget — otherwise a two-line title would visibly pause at the line break.
+      const text = budget >= full.length ? full : full.slice(0, Math.max(0, budget));
+      budget -= full.length;
+      if (text.length === 0) continue;
       // +lineH/2 because the baseline is 'middle': this centres each line in its own slot.
       const y = bleed + pad + i * lineH + lineH / 2;
-      draw(lines[i]!, anchorX, y);
+      draw(text, lineLeft(i), y);
     }
   };
 
@@ -245,13 +287,17 @@ function build(style: TextStyle): TextRaster | null {
     const thickness = Math.max(1, style.fontSize * 0.06);
     ctx.strokeStyle = ctx.fillStyle;
     ctx.lineWidth = thickness;
+    // The rule is drawn under the REVEALED text only, so it types on with the characters
+    // instead of sitting there ahead of them announcing how long the line is going to be.
+    let budget = shown;
     for (let i = 0; i < lines.length; i++) {
-      const w = widths[i]!;
+      const full = lines[i]!;
+      const text = budget >= full.length ? full : full.slice(0, Math.max(0, budget));
+      budget -= full.length;
+      if (text.length === 0) continue;
+      const w = text.length === full.length ? widths[i]! : m.measureText(text).width;
       const y = bleed + pad + i * lineH + lineH / 2 + style.fontSize * 0.34;
-      const x0 =
-        ctx.textAlign === 'center' ? anchorX - w / 2
-        : ctx.textAlign === 'right' ? anchorX - w
-        : anchorX;
+      const x0 = lineLeft(i);
       ctx.beginPath();
       ctx.moveTo(x0, y);
       ctx.lineTo(x0 + w, y);

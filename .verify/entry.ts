@@ -606,6 +606,103 @@ async function main() {
         left: leftPx, right: rightPx,
       });
 
+      // ── 7. The filter grade and the reveal mask, on real pixels ───────────
+      //
+      // Thirty filters share one shader and are distinguished ONLY by uniforms bound from their
+      // definition's `constants`. That binding is new, it is invisible to a type check, and if
+      // it silently no-ops then every filter renders as a pass-through — which looks exactly
+      // like "the effect is subtle" rather than like a bug. So it is asserted on pixels.
+      {
+        /*
+         * A mid-tone, moderately saturated swatch — NOT the pure red used above.
+         *
+         * A fully saturated primary is the worst possible test subject for a grade: it already
+         * sits at the top of its channel, so contrast and toning push it further out and the
+         * clamp brings it straight back to where it started. Pure red really does come out of
+         * Teal & Orange as pure red, and asserting on it would report a working shader as
+         * broken. Mid-grey is nearly as bad in the other direction, since split toning is
+         * designed to cancel in the midtones. This tone has somewhere to move in every channel.
+         */
+        const swatch = asset(await paint((c) => {
+          c.fillStyle = '#b06030';
+          c.fillRect(0, 0, SIZE, SIZE);
+        }));
+        const fseq = makeSequence(swatch, blue);
+        const clip = fseq.tracks[0]!.clips[0]!;
+        const shot = (): [number, number, number] => {
+          compositor.render({
+            sequence: fseq,
+            time: 0 as Ticks,
+            getMedia: (id: string) => [swatch, blue].find((m) => m.id === id),
+          });
+          return readback(vcanvas)(SIZE / 2, SIZE / 2);
+        };
+
+        const plain = shot();
+
+        // Mono floors saturation, so the swatch must come back grey — channel spread near zero.
+        const mono = instantiateEffect('f-mono');
+        clip.effects = [mono];
+        const grey = shot();
+        const spread = Math.max(...grey) - Math.min(...grey);
+        check('filter_constants_reach_the_shader', spread < 12 && hue(plain) === 'red', {
+          before: plain, after: grey, channel_spread: spread,
+        });
+
+        // Intensity is the one exposed dial and must cross-fade the whole grade back to source.
+        mono.params.intensity = { static: 0, keyframes: [] };
+        const off = shot();
+        check('filter_intensity_zero_is_identity', near(off, plain), { got: off, want: plain });
+
+        // A second, differently-graded filter through the SAME cached program: proves one
+        // filter's uniforms do not leak into the next, the specific hazard of sharing one
+        // program across thirty effects.
+        clip.effects = [instantiateEffect('f-teal-orange')];
+        const teal = shot();
+        check('filter_looks_differ_through_shared_program', !near(teal, grey) && !near(teal, plain), {
+          teal_orange: teal, mono: grey, ungraded: plain,
+        });
+
+        // ── The text-animation reveal mask ──
+        //
+        // `text-reveal` multiplies ALPHA, so a fully-hidden pass must reveal the sequence
+        // BACKGROUND rather than paint black over the clip. On a black background those two are
+        // indistinguishable, which is why this repaints the sequence green before asserting.
+        fseq.background = '#00ff00';
+        const mask = instantiateEffect('text-reveal');
+        const setMask = (k: string, v: number) => {
+          mask.params[k] = { static: v, keyframes: [] };
+        };
+        clip.effects = [mask];
+
+        setMask('mode', 0);
+        setMask('softness', 0.001);
+        setMask('angle', 0);
+        setMask('progress', 1);
+        const revealed = shot();
+        setMask('progress', 0);
+        const concealed = shot();
+        check('reveal_mask_spans_hidden_to_shown',
+          hue(revealed) === 'red' && near(concealed, [0, 255, 0]),
+          { at_progress_1: revealed, at_progress_0: concealed });
+
+        // Half revealed with a hard edge, wiping left to right: the left side has come through
+        // and the right has not. A mask that merely faded uniformly would pass the test above
+        // and fail this one.
+        setMask('progress', 0.5);
+        compositor.render({
+          sequence: fseq,
+          time: 0 as Ticks,
+          getMedia: (id: string) => [swatch, blue].find((m) => m.id === id),
+        });
+        const half = readback(vcanvas);
+        const maskLeft = half(1, SIZE / 2);
+        const maskRight = half(SIZE - 2, SIZE / 2);
+        check('reveal_mask_wipes_directionally',
+          hue(maskLeft) === 'red' && near(maskRight, [0, 255, 0]),
+          { left: maskLeft, right: maskRight });
+      }
+
       compositor.dispose();
     }
 

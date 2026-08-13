@@ -897,6 +897,173 @@ export const EFFECT_FRAGMENTS: Record<string, string> = {
       vec3 lowFreq = sum / max(wsum, 1e-4);
       fragColor = vec4(clamp(c.rgb + (c.rgb - lowFreq) * u_amount, 0.0, 1.0), c.a);
     }`),
+
+  /**
+   * The look engine: one grade, driven entirely by a filter definition's `constants`.
+   *
+   * Every one of the thirty filters renders through this and differs only in its uniforms, so a
+   * new look costs no shader work and one GPU pass. The stages are ordered the way a colourist
+   * works — expose, shape the tone curve, tint the ends, then saturate — because the order
+   * changes the result: saturating before the tone curve pushes already-vivid pixels into clipping,
+   * and tinting before the curve means the curve fights the tint back out again.
+   *
+   * `u_intensity` cross-fades the finished grade against the untouched pixel at the very end.
+   * Fading each stage individually would be wrong as well as slower: half of a fade-plus-tint is
+   * not the same picture as a fade-plus-tint at half strength.
+   */
+  filterGrade: frag(/* glsl */ `
+    uniform float u_intensity;
+    uniform float u_exposure;
+    uniform float u_contrast;
+    uniform float u_saturation;
+    uniform float u_vibrance;
+    uniform float u_temperature;
+    uniform float u_tint;
+    uniform float u_hue;
+    uniform float u_gamma;
+    uniform float u_fade;
+    uniform float u_toning;
+    uniform float u_shadowTint;
+    uniform float u_highlightTint;
+    uniform float u_vignette;
+    uniform float u_grain;
+
+    const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+
+    vec3 unpackColor(float v) {
+      float r = floor(v / 65536.0);
+      float g = floor(mod(v, 65536.0) / 256.0);
+      float b = mod(v, 256.0);
+      return vec3(r, g, b) / 255.0;
+    }
+
+    vec3 hueShift(vec3 col, float deg) {
+      float a = radians(deg);
+      float c = cos(a), s = sin(a);
+      mat3 m = mat3(
+        0.299 + 0.701*c + 0.168*s, 0.587 - 0.587*c + 0.330*s, 0.114 - 0.114*c - 0.497*s,
+        0.299 - 0.299*c - 0.328*s, 0.587 + 0.413*c + 0.035*s, 0.114 - 0.114*c + 0.292*s,
+        0.299 - 0.300*c + 1.250*s, 0.587 - 0.588*c - 1.050*s, 0.114 + 0.886*c - 0.203*s);
+      return clamp(m * col, 0.0, 1.0);
+    }
+
+    float noise(vec2 uv) {
+      return fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453);
+    }
+
+    void main() {
+      vec4 src = texture(u_texture, v_uv);
+      vec3 col = src.rgb;
+
+      col *= pow(2.0, u_exposure);
+
+      // Lifted blacks. Compressing the range into [fade, 1] rather than simply adding the lift
+      // is what keeps the whites from blowing out as the shadows come up — the move that makes
+      // a matte look matte instead of just washed out.
+      if (u_fade > 0.001) {
+        float lift = u_fade * 0.55;
+        col = vec3(lift) + col * (1.0 - lift);
+      }
+
+      col = (col - 0.5) * (1.0 + u_contrast) + 0.5;
+
+      if (abs(u_gamma) > 0.001) {
+        float g = clamp(1.0 - u_gamma * 0.8, 0.05, 5.0);
+        col = pow(max(col, 0.0), vec3(g));
+      }
+
+      col.r += u_temperature * 0.15; col.b -= u_temperature * 0.15;
+      col.g += u_tint * 0.15;
+
+      // ── Split toning ──
+      // Shadows and highlights get pulled toward their own colours, weighted by luminance so
+      // the midtones stay put. Both tints are biased against mid-grey, which makes an unset end
+      // (#808080) contribute exactly nothing and keeps every filter's table sparse.
+      if (u_toning > 0.001) {
+        float l = clamp(dot(col, LUMA), 0.0, 1.0);
+        vec3 sh = (unpackColor(u_shadowTint) - 0.5) * 2.0;
+        vec3 hi = (unpackColor(u_highlightTint) - 0.5) * 2.0;
+        float shW = (1.0 - smoothstep(0.0, 0.6, l)) * u_toning;
+        float hiW = smoothstep(0.4, 1.0, l) * u_toning;
+        col += sh * shW * 0.22 + hi * hiW * 0.22;
+      }
+
+      if (abs(u_vibrance) > 0.001) {
+        float mx = max(col.r, max(col.g, col.b));
+        float mn = min(col.r, min(col.g, col.b));
+        float g = dot(col, LUMA);
+        col = mix(vec3(g), col, 1.0 + u_vibrance * (1.0 - clamp(mx - mn, 0.0, 1.0)));
+      }
+      float g2 = dot(col, LUMA);
+      col = mix(vec3(g2), col, 1.0 + u_saturation);
+
+      if (abs(u_hue) > 0.001) col = hueShift(col, u_hue);
+
+      if (u_vignette > 0.001) {
+        vec2 d = (v_uv - 0.5) * 2.0;
+        float r = dot(d, d);
+        col *= clamp(1.0 - max(0.0, r - 0.35) * u_vignette * 1.4, 0.0, 1.0);
+      }
+
+      if (u_grain > 0.001) {
+        // Time-varying so grain crawls between frames the way film does; a static pattern reads
+        // as a dirty lens instead. u_time is clip-local, so it is identical in preview and export.
+        float n = noise(v_uv * 1024.0 + fract(u_time) * 91.7) - 0.5;
+        // Weighted toward the shadows, where real grain lives and where it is least destructive.
+        float shadowWeight = 1.0 - smoothstep(0.0, 0.8, dot(col, LUMA));
+        col += n * u_grain * 0.22 * (0.4 + 0.6 * shadowWeight);
+      }
+
+      col = clamp(col, 0.0, 1.0);
+      fragColor = vec4(mix(src.rgb, col, clamp(u_intensity, 0.0, 1.0)), src.a);
+    }`),
+
+  /**
+   * The reveal mask that drives every wipe, iris, blinds and dissolve text animation.
+   *
+   * It multiplies ALPHA rather than blending toward a colour, which is what lets a half-revealed
+   * title composite correctly over whatever is beneath it — fading toward black would paint a
+   * dark rectangle over the video for the duration of the wipe.
+   *
+   * `u_progress` is 0 (nothing shown) → 1 (all shown). Entrances count it up and exits count it
+   * down; the shader does not know or care which. The threshold is remapped to `[-s, 1+s]` so
+   * that the soft edge is entirely outside the frame at both extremes — without that remap a
+   * wipe at progress 0 still shows a sliver, and at 1 still hides one.
+   */
+  textReveal: frag(/* glsl */ `
+    uniform float u_mode;      // 0 wipe, 1 iris, 2 blinds, 3 dissolve
+    uniform float u_progress;
+    uniform float u_angle;
+    uniform float u_softness;
+    uniform float u_count;
+
+    float hash(vec2 uv) {
+      return fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453);
+    }
+
+    void main() {
+      vec4 c = texture(u_texture, v_uv);
+      float p = clamp(u_progress, 0.0, 1.0);
+      float s = max(u_softness, 0.001);
+      float edge = mix(-s, 1.0 + s, p);
+
+      int mode = int(u_mode + 0.5);
+      float t;
+      if (mode == 1) {
+        // Distance from centre, normalised so the corners sit at 1.0 — otherwise an iris would
+        // finish while the corners of a wide title were still hidden.
+        t = length(v_uv - 0.5) / 0.7071;
+      } else if (mode == 3) {
+        t = hash(floor(v_uv / max(u_texel * 2.0, vec2(1e-5))));
+      } else {
+        float a = radians(u_angle);
+        float proj = dot(v_uv - 0.5, vec2(cos(a), sin(a))) + 0.5;
+        t = mode == 2 ? fract(proj * max(1.0, u_count)) : proj;
+      }
+
+      float m = 1.0 - smoothstep(edge - s, edge + s, t);
+      fragColor = vec4(c.rgb, c.a * clamp(m, 0.0, 1.0));
+    }`),
 };
 
 /**

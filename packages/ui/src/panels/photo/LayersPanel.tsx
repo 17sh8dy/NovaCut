@@ -36,7 +36,7 @@ import {
   Trash2,
   Unlock,
 } from 'lucide-react';
-import { allEffects, getEffectDef } from '@opencut/core';
+import { allTools, getEffectDef } from '@opencut/core';
 import {
   addAdjustmentLayer,
   deleteLayer,
@@ -73,7 +73,8 @@ export function LayersPanel() {
   const [dropTarget, setDropTarget] = useState<{ id: LayerId; zone: DropZone } | null>(null);
 
   const adjustments = useMemo(
-    () => allEffects().filter((d) => d.category === 'color' || d.category === 'light' || d.category === 'stylize'),
+    // Tools only — an adjustment layer is for dialling a value, not for stamping a preset look.
+    () => allTools().filter((d) => d.category === 'color' || d.category === 'light' || d.category === 'stylize'),
     [],
   );
 

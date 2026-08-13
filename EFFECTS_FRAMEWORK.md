@@ -19,7 +19,7 @@ correct layer. All four share the `progress 0..1 + params` convention.
 |---|------|-----------|--------------------------|----------------------|
 | 1 | **Filters** | GPU pixel shader in the ping‑pong chain — `compositor.ts` `applyEffect()` runs `EFFECT_FRAGMENTS[render]`, binding `u_<paramKey>` generically | `EffectDefinition` + a fragment in `shaders.ts` | **None** (true zero‑touch plugin surface) |
 | 2 | **Transitions** | Two‑clip GPU blend — *new* `TRANSITION_FRAGMENTS[render]` | `TransitionDefinition` + a fragment in `transitions.ts` | **Additive** blend branch in `compositor.ts` + a drop handler |
-| 3 | **Text animations** | DOM overlay — `TextOverlay` in `Preview.tsx` | `TextAnimationDefinition.apply(content, progress, params)` | **Additive** reveal hook in `TextOverlay` |
+| 3 | **Text animations** | GPU — the text raster's reveal, transform and appended passes | `TextAnimationDefinition.apply({content, progress, params})` → numbers | **Additive** branch in `renderClip` |
 | 4 | **Transform animations** | Transform matrix — `buildModelMatrix()` samples `clip.transform` keyframes | `AnimationDefinition.build(params) → keyframes` | **None** (writes keyframes via existing undoable commands) |
 
 Filters (1) and transform animations (4) need **zero** core changes. Transitions (2) and text
@@ -67,9 +67,11 @@ engine wiring, no UI wiring (browsers read `all*()`).
 //   fragColor = mix(texture(u_from,v_uv), texture(u_to,v_uv), u_progress); }`)
 ```
 
-**Text animation** — `registerTextAnimation({ type, label, params, apply })`, pure:
+**Text animation** — `registerTextAnimation({ type, label, kind, duration, params, apply })`, pure.
+Returns NUMBERS, not CSS — see §7:
 ```ts
-apply: ({ content, progress }) => ({ content: content.slice(0, Math.ceil(content.length*progress)) })
+{ type: 'typewriter', label: 'Typewriter', kind: 'in', duration: 1.2, params: [],
+  apply: ({ progress }) => ({ reveal: progress }) }
 ```
 
 **Transform animation** — `registerAnimation({ type, label, params, build })`, pure, fraction‑based:
@@ -89,9 +91,13 @@ then a new `blendTransition(fromTex, toTex, progress, params, render)` draws to 
 cached transition program. Otherwise the current single‑clip path runs unchanged. `renderClip()`,
 `composite()`, and the buffer‑swap logic are **not modified** — this is a new guarded branch.
 
-**Hook B — Text reveal (`Preview.tsx` `TextOverlay`).** When `clip.text.animation` is set and
-`getTextAnimation(type)` resolves, compute `progress = (time - clip.start) / clip.duration`, call
-`apply()`, and use the returned `content` (fallback: full) + merge `style`. Untouched otherwise.
+**Hook B — Text reveal.** ⚠️ **Superseded — this hook describes a layer that no longer exists.**
+`TextOverlay` was deleted when text moved onto the GPU (see `textRaster.ts`), because a DOM
+overlay is invisible to `readPixels` and every title was silently dropped from exports. The
+replacement is in `Compositor.renderClip`: it calls `resolveTextAnimation(style, localSeconds,
+clipSeconds)`, hands the resulting `reveal` to `rasterizeText`, multiplies `opacity` and the
+transform into the model matrix, and appends the returned `passes` to the clip's effect chain.
+See §7.
 
 **Hook C — Animation applier (`core` command + Animations browser).** `applyAnimationPreset()`
 scales each spec's fractional `at` by `clip.duration` and `upsertKeyframe()`s onto the transform
@@ -145,3 +151,75 @@ track via a command, so users can place them.
 3. **Incremental** — framework first, then batches of 5; no code dumping.
 4. **Strict interface** — each lane has one fixed, pure contract taking `progress 0..1 + params`
    and returning its layer's output with no side effects.
+
+---
+
+## 7. Text animations, as actually built
+
+The doc above was written when text was a DOM overlay. It isn't any more, and the text lane was
+rebuilt around that. What follows describes the shipped design.
+
+### The contract
+
+`TextAnimationDefinition.apply({ content, progress, params })` returns a `TextAnimationOutput` of
+pure numbers, every field optional and defaulting to neutral:
+
+| Field | Meaning |
+|---|---|
+| `reveal` | fraction of the string painted, 0..1 — layout still uses the FULL string |
+| `opacity` | multiplied into the clip's own opacity |
+| `dx` / `dy` | offset in fractions of the text's own rendered size (`dy` positive = down) |
+| `scaleX` / `scaleY` | multiplied into the clip's scale |
+| `rotate` | degrees, added |
+| `passes` | ordinary effects (`{type, params}`) appended to the clip's chain this frame |
+
+`passes` is the extensibility hinge: anything that changes pixels rather than placement is an
+existing registry effect with resolved params, so the lane needs no new engine code to gain a
+new pixel trick, and any of the ~80 registered effects is animation material.
+
+### Three slots, not one
+
+`TextStyle` carries `animateIn`, `animateOut` and `animateLoop`, each a
+`{ type, params, duration }` where `duration` is in **seconds** (choreography, not timeline
+position). `resolveTextAnimation` composes them for a frame: opacities and scales multiply,
+offsets and rotations add, `reveal` takes the minimum, `passes` concatenate. In/out durations
+are budgeted against the clip length *before* either runs, so a trimmed title plays its
+choreography faster rather than overlapping it.
+
+Authoring direction: `in` runs 0 (nothing) → 1 (arrived); `out` runs 0 (resting) → 1 (gone);
+`loop` gets a phase that wraps forever.
+
+### Where it plugs in
+
+`Compositor.renderClip` — one guarded branch, taken only when a slot is filled:
+
+```
+resolveTextAnimation → reveal ──→ rasterizeText(style, reveal)   (full-size layout, partial paint)
+                     → passes ──→ runEffectChain([...clip.effects, ...passes])
+                     → transform → buildModelMatrix / composite opacity
+```
+
+The rasterizer measures the whole string and truncates only the painting, so a typewriter does
+not shrink its own bitmap — which matters because the compositor places text by its centre, and
+a shrinking bitmap makes a centred title creep sideways as it types.
+
+### Catalog & shelves
+
+75 animations (25 in / 25 out / 25 loop) in `core/effects/textAnimations.ts`, 30 filters in
+`filters.ts`, 28 text-effect recipes in `textEffects.ts`. Filters are ordinary effects carrying a
+`filter` category and a `constants` bag bound as uniforms from the DEFINITION — one shared
+`filterGrade` shader, one `intensity` param. Text effects are recipes over real effect instances,
+so they stack, keyframe, undo and export with no special case.
+
+Two registry flags keep the browsers navigable: `filter` moves an effect to the Filters shelf,
+`hidden` keeps machinery (the `text-reveal` mask) out of every picker. `allTools()` is what the
+Effects browser and the photo pickers read.
+
+### What pins it
+
+- `npm run verify:textanim` — catalog shape, entrances settling at rest, exits starting at rest,
+  loop seams, purity, and the in/out budget on a trimmed clip.
+- `npm run verify:orientation` — the `filterGrade` constants and the `textReveal` mask on real
+  pixels, including that two filters through the one cached program don't leak into each other.
+- `npm run verify:browsers` — mounts the real `EditorApp`, clicks the shelves, asserts on project
+  state, screenshots each panel, and checks a fade-in actually changes preview pixels.

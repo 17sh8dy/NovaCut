@@ -19,9 +19,14 @@ export * from './commands/history.js';
 export * from './commands/mutations.js';
 export * from './commands/timelineCommands.js';
 
-// Effects / transitions
+// Effects / transitions / filters / animations
 export * from './effects/registry.js';
 export * from './effects/definitions.js';
+export * from './effects/easing.js';
+export * from './effects/filters.js';
+export * from './effects/textAnimations.js';
+export * from './effects/textAnimationResolve.js';
+export * from './effects/textEffects.js';
 
 // IO / platform
 export * from './io/platform.js';

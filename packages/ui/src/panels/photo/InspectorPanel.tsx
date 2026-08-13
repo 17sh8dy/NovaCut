@@ -43,7 +43,7 @@ import {
   RotateCw,
 } from 'lucide-react';
 import {
-  allEffects,
+  allTools,
   getEffectDef,
   packColor,
   unpackColor,
@@ -765,7 +765,9 @@ function FilterRack({ layer }: { layer: Layer }) {
 
   const effects = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return allEffects()
+    // `allTools()`, not `allEffects()`: the latter now also carries the thirty one-click film
+    // looks, which belong on their own shelf rather than buried in a picker of adjustment tools.
+    return allTools()
       // `time` effects are meaningless on a still — a speed ramp has no frames to ramp. Hiding
       // them beats offering a filter that provably does nothing.
       .filter((d) => d.category !== 'time')

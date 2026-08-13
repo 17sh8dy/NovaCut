@@ -1,13 +1,14 @@
-import { FolderOpen, Sparkles, Wand2, Type, Music, Captions } from 'lucide-react';
+import { FolderOpen, Sparkles, Wand2, Type, Music, Captions, SlidersHorizontal } from 'lucide-react';
 import { useStore, useAppStore } from '../state/context.js';
 import type { PanelId } from '../state/store.js';
 import { Panel } from '../components/primitives/index.js';
 import { MediaLibrary } from './MediaLibrary.js';
-import { EffectsPanel, TransitionsPanel, TextPanel, PlaceholderPanel } from './BrowserPanels.js';
+import { EffectsPanel, FiltersPanel, TransitionsPanel, TextPanel, PlaceholderPanel } from './BrowserPanels.js';
 
 const RAIL: { id: PanelId; label: string; icon: typeof FolderOpen }[] = [
   { id: 'media', label: 'Media', icon: FolderOpen },
   { id: 'effects', label: 'Effects', icon: Sparkles },
+  { id: 'filters', label: 'Filters', icon: SlidersHorizontal },
   { id: 'transitions', label: 'Trans', icon: Wand2 },
   { id: 'text', label: 'Text', icon: Type },
   { id: 'audio', label: 'Audio', icon: Music },
@@ -17,6 +18,7 @@ const RAIL: { id: PanelId; label: string; icon: typeof FolderOpen }[] = [
 const TITLES: Record<PanelId, string> = {
   media: 'Media Library',
   effects: 'Effects',
+  filters: 'Filters',
   transitions: 'Transitions',
   text: 'Text',
   audio: 'Audio',
@@ -51,6 +53,7 @@ export function BrowserPanel() {
     <Panel title={TITLES[active]} className="oc-grow">
       {active === 'media' && <MediaLibrary />}
       {active === 'effects' && <EffectsPanel />}
+      {active === 'filters' && <FiltersPanel />}
       {active === 'transitions' && <TransitionsPanel />}
       {active === 'text' && <TextPanel />}
       {active === 'audio' && (

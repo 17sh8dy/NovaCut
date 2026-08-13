@@ -117,11 +117,18 @@ export type TextAlign = 'left' | 'center' | 'right' | 'justify';
 /**
  * An animation applied to a text clip (typewriter, word fade-in, …). Resolved against the
  * text-animation registry by `type`; `params` keys come from that definition. Optional and
- * additive — a clip with no `animation` renders exactly as before.
+ * additive — a clip with no animation slot filled renders exactly as before.
+ *
+ * `duration` is in SECONDS rather than ticks, and that is deliberate. A reveal is a piece of
+ * choreography — "half a second to land" — not a position on the timeline, and it should keep
+ * its feel when the clip is trimmed or the sequence's frame rate changes. Ticks are the right
+ * unit for *when* something happens; seconds are the right unit for *how long it takes*.
  */
 export interface TextAnimation {
   type: string;
   params: Record<string, number>;
+  /** In/out: how long the reveal takes. Loop: the length of one cycle. */
+  duration: number;
 }
 
 export interface TextStyle {
@@ -141,8 +148,18 @@ export interface TextStyle {
   shadow?: { color: string; blur: number; x: number; y: number };
   glow?: { color: string; radius: number; intensity: number };
   background?: { color: string; padding: number; radius: number };
-  /** Optional reveal/motion animation driven by the text-animation registry. */
-  animation?: TextAnimation;
+  /**
+   * The three animation slots, driven by the text-animation registry.
+   *
+   * Three independent slots rather than one field because they answer three different
+   * questions and users routinely want all of them at once: how the title arrives, how it
+   * leaves, and what it does while it sits there. Collapsing them into a single `animation`
+   * would make "fade in, then pulse, then slide out" — an entirely ordinary title — impossible
+   * to express. They compose multiplicatively at render time; see `resolveTextAnimation`.
+   */
+  animateIn?: TextAnimation;
+  animateOut?: TextAnimation;
+  animateLoop?: TextAnimation;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

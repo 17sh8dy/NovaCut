@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+  <head>
+      <meta charset="utf-8" />
+      <title>browser shelves harness</title>
+      <!-- The lib build emits the components' CSS as a sibling file. Without this link the
+           harness renders unstyled, every layout assertion is meaningless, and the screenshots
+           show a blank page. -->
+      <link rel="stylesheet" href="./dist-browsers/style.css" />
+    </head>
+  <body>
+    <script src="./dist-browsers/browsers-harness.js"></script>
+  </body>
+</html>

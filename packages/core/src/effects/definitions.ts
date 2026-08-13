@@ -12,6 +12,8 @@ import {
   type EffectParamDef,
   type TransitionDefinition,
 } from './registry.js';
+import { registerFilters } from './filters.js';
+import { registerTextAnimations } from './textAnimations.js';
 
 const p = (key: string, label: string, min: number, max: number, def: number, step = 1, unit?: string) =>
   ({ key, label, min, max, default: def, step, ...(unit ? { unit } : {}) });
@@ -221,6 +223,26 @@ const EFFECTS: EffectDefinition[] = [
     params: [p('segments', 'Segments', 2, 24, 6, 1), p('angle', 'Angle', 0, 360, 0, 1, '°')] },
   { type: 'prism', label: 'Prism', category: 'distort', render: 'prism',
     params: [p('amount', 'Amount', 0, 4, 1, 0.05)] },
+
+  /**
+   * The reveal mask behind every wipe / iris / blinds / dissolve text animation.
+   *
+   * `hidden`, because it is machinery rather than a look: on its own it is a control surface
+   * with no meaning ("mode 2, progress 0.4"), and it only makes sense when an animation is
+   * driving it frame by frame. It has to be a real registered effect so the animation lane can
+   * ask for it by type and the chain can render it with no special case.
+   *
+   * The defaults are the identity — fully revealed — so that an instance created by hand (or
+   * left behind in an old project) shows the text rather than hiding it.
+   */
+  { type: 'text-reveal', label: 'Reveal Mask', category: 'stylize', render: 'textReveal', hidden: true,
+    params: [
+      p('mode', 'Mode', 0, 3, 0, 1),
+      p('progress', 'Progress', 0, 1, 1, 0.001),
+      p('angle', 'Angle', 0, 360, 0, 1, '°'),
+      p('softness', 'Softness', 0.001, 0.5, 0.08, 0.001),
+      p('count', 'Bands', 2, 32, 8, 1),
+    ] },
 ];
 
 const TRANSITIONS: TransitionDefinition[] = [
@@ -257,10 +279,18 @@ const TRANSITIONS: TransitionDefinition[] = [
 
 let registered = false;
 
-/** Register all built-ins. Idempotent so repeated imports are safe. */
+/**
+ * Register all built-ins. Idempotent so repeated imports are safe.
+ *
+ * The filter and text-animation catalogs live in their own files but register from here, so
+ * there is exactly one call every entry point already makes and no way to end up with an app
+ * that has effects but no filters.
+ */
 export function registerBuiltins(): void {
   if (registered) return;
   registered = true;
   for (const e of EFFECTS) registerEffect(e);
   for (const t of TRANSITIONS) registerTransition(t);
+  registerFilters();
+  registerTextAnimations();
 }

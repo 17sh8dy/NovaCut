@@ -627,6 +627,17 @@
 .oc-chip {
   display: flex;
   flex-direction: column;
+  /*
+   * `align-items: stretch` is not the default here, and leaving it out cost every chip its
+   * preview.
+   *
+   * Chromium's UA stylesheet sets `align-items: flex-start` on `button`, and it wins over the
+   * initial `normal`. A chip is a flex COLUMN, so the cross axis is horizontal: with flex-start
+   * the preview shrinks to its content width, and its content is absolutely positioned, so that
+   * width is zero. The result is a chip the right height with an invisible preview — which is
+   * exactly how the effect and transition previews had been rendering.
+   */
+  align-items: stretch;
   gap: 4px;
   padding: var(--space-3);
   background: var(--surface-2);
@@ -743,4 +754,243 @@
 }
 .oc-toast--info {
   border-left: 3px solid var(--info);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Browsers — the shared chrome for Effects, Filters, Text Animations, Text Effects
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/*
+ * A three-row layout: tabs and search are pinned, only the grid scrolls.
+ *
+ * `min-height: 0` on the scroller is load-bearing. A flex child's default `min-height: auto`
+ * refuses to shrink below its content, so without it the grid pushes the whole column taller
+ * than the panel and the search field scrolls out of reach — precisely when a long catalog
+ * makes searching most useful.
+ */
+.oc-browser {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.oc-browser__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.oc-browser__sections {
+  padding: var(--space-2) var(--space-2) 0;
+}
+
+.oc-browser__tabs {
+  display: flex;
+  gap: 2px;
+  padding: var(--space-2) var(--space-2) 0;
+  overflow-x: auto;
+  /* Scrolls rather than wraps: a strip that changes height reflows the grid under it. */
+  scrollbar-width: none;
+}
+.oc-browser__tabs::-webkit-scrollbar { display: none; }
+.oc-browser__tabs button {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.oc-browser__tabs button:hover { color: var(--text-secondary); background: var(--surface-2); }
+.oc-browser__tabs button[data-active='true'] { color: var(--text-primary); background: var(--surface-3); }
+
+.oc-browser__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: var(--space-2);
+  padding: 0 8px;
+  height: 30px;
+  background: var(--surface-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+.oc-browser__search:focus-within { border-color: var(--accent); }
+.oc-browser__search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+.oc-browser__clear {
+  display: grid;
+  place-items: center;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 2px;
+}
+.oc-browser__clear:hover { color: var(--text-primary); }
+
+.oc-browser__none {
+  padding: var(--space-5) var(--space-3);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+.oc-browser__hint {
+  border-top: 1px solid var(--border);
+  padding: var(--space-2);
+}
+
+/* The explicit "no animation" reset. It scrolls with the list because it IS the first entry in
+   it — "None" is a choice among the animations, not a separate control. */
+.oc-browser__none-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: calc(100% - var(--space-4));
+  margin: 0 var(--space-2) var(--space-1);
+  padding: 7px 10px;
+  text-align: left;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.oc-browser__none-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+.oc-browser__none-btn[data-active='true'] { border-color: var(--accent); color: var(--text-primary); }
+.oc-browser__none-sub { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+/*
+ * The chip gains a favourite star, so its click target becomes an inner button rather than the
+ * card itself — nesting a button inside a button is invalid HTML and swallows the inner click.
+ */
+.oc-chip--item { position: relative; padding: 0; }
+.oc-chip__hit {
+  display: flex;
+  flex-direction: column;
+  /* Same UA-stylesheet trap as `.oc-chip` above — this is a <button> too. */
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  padding: var(--space-3);
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.oc-chip__fav {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: color-mix(in srgb, var(--surface-1) 70%, transparent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  /* Hidden until the chip is hovered or the item is already a favourite, so a grid of thirty
+     is not covered in stars competing with the previews. */
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.oc-chip--item:hover .oc-chip__fav,
+.oc-chip__fav:focus-visible { opacity: 1; }
+.oc-chip__fav[data-on='true'] { opacity: 1; color: var(--warning, #f5b301); }
+
+/* The chip currently in effect on the selection. Clicking it again clears the slot, so it needs
+   to be identifiable at a glance rather than only from its tooltip. */
+.oc-chip--item[data-applied='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* ── Text animation / text effect preview ── */
+.oc-animprev {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  /* Clipped: entrances start a full text-width outside the box and must not paint over the
+     neighbouring chips on their way in. */
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--surface-4), var(--surface-3));
+}
+/*
+ * The text-effect stage is dark in BOTH themes, and hardcoded for the same reason `.oc-fx-demo`
+ * is: it stands in for FOOTAGE. These effects — glow, outline, neon, drop shadow — exist to make
+ * white text legible over a picture, so previewing them on a light panel surface shows white on
+ * near-white and makes half the shelf look empty.
+ */
+.oc-animprev--stage {
+  background: linear-gradient(135deg, #2b3450, #151a26 60%, #241d33);
+}
+.oc-animprev--stage .oc-animprev__text { color: #fff; }
+
+.oc-animprev__text {
+  display: inline-block;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  /* The animation drives transform/opacity from JS every frame; promoting the layer keeps that
+     off the main thread's paint path. */
+  will-change: transform, opacity, filter;
+}
+
+/* ── Filter swatch ── */
+.oc-filtprev { position: absolute; inset: 0; overflow: hidden; }
+/*
+ * The test image. Hardcoded hues for the same reason `.oc-fx-demo` is: it stands in for the
+ * user's footage, and a grade needs saturated colour, a bright end and a dark end to read at
+ * all. A theme-coloured swatch would make every filter look like a slightly different grey.
+ */
+.oc-filtprev__img {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 78% 22%, #ffe08a 0%, transparent 42%),
+    linear-gradient(160deg, #123 0%, #2b5f8a 38%, #c96a3a 72%, #f2d9a8 100%);
+}
+.oc-filtprev__wash { position: absolute; inset: 0; mix-blend-mode: soft-light; pointer-events: none; }
+
+/* ── Inspector animation slot ── */
+.oc-animslot__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--border);
+}
+.oc-select {
+  height: 30px;
+  width: 100%;
+  background: var(--surface-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 0 8px;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
 }

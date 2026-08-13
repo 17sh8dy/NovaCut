@@ -23,6 +23,8 @@
     "verify:canvas": "esbuild .verify/canvas-orientation.mjs --bundle --platform=node --format=esm --alias:@opencut/photo=./packages/photo/src/index.ts --alias:@opencut/core=./packages/core/src/index.ts --outfile=.verify/dist/canvas-orientation.js && node .verify/dist/canvas-orientation.js",
     "verify:export": "vite build --config .verify/export-profile.config.ts && electron .verify/export-host.cjs export-profile.html",
     "verify:timeline": "esbuild .verify/timeline-invariants.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --outfile=.verify/dist/timeline-invariants.js && node .verify/dist/timeline-invariants.js",
+    "verify:browsers": "vite build --config .verify/browsers.config.ts && electron .verify/browsers-host.cjs",
+    "verify:textanim": "esbuild .verify/text-animations.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --outfile=.verify/dist/text-animations.js && node .verify/dist/text-animations.js",
     "lint": "eslint . --ext .ts,.tsx",
     "clean": "node -e \"const fs=require('fs');['packages/core','packages/engine','packages/ui','apps/desktop'].forEach(p=>{try{fs.rmSync(p+'/dist',{recursive:true,force:true})}catch{}})\""
   },

@@ -50,7 +50,7 @@ import {
 
 registerBuiltins();
 
-export type PanelId = 'media' | 'effects' | 'transitions' | 'text' | 'audio' | 'captions';
+export type PanelId = 'media' | 'effects' | 'filters' | 'transitions' | 'text' | 'audio' | 'captions';
 export type InspectorTab = 'transform' | 'effects' | 'audio' | 'speed' | 'text';
 export type DialogId = 'export' | 'projectSettings' | 'newProject' | 'shortcuts' | 'settings' | null;
 /** Which top-level screen is showing: the Home launcher, or one of the editor workspaces. */

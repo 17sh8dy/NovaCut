@@ -1,6 +1,8 @@
 import {
   allTransitions,
+  defaultParams,
   getEffectDef,
+  getTextAnimation,
   getTransitionDef,
   packColor,
   removeTransition,
@@ -9,6 +11,7 @@ import {
   setTransitionDuration,
   setTransitionParam,
   setTransitionType,
+  textAnimationsByKind,
   toSeconds,
   unpackColor,
   updateClip,
@@ -18,6 +21,8 @@ import {
   type AnimatedValue,
   type Clip,
   type EffectInstance,
+  type TextAnimation,
+  type TextAnimationKind,
   type TrackId,
   type Transform,
 } from '@opencut/core';
@@ -525,6 +530,16 @@ function TextTab({ clip }: { clip: Clip }) {
       <ToggleField label="Underline" value={t.underline} onChange={(v) => setText('Underline', { underline: v })} />
 
       {/*
+        Animation slots. The browser is where a user goes to CHOOSE one (it has previews); this
+        is where they tune the one they chose — duration and the animation's own params — and
+        where they turn it off. Both surfaces write the same three fields.
+      */}
+      <div className="oc-section-title" style={{ paddingLeft: 0 }}>Animation</div>
+      <AnimationSlot clip={clip} slot="animateIn" kind="in" label="In" />
+      <AnimationSlot clip={clip} slot="animateOut" kind="out" label="Out" />
+      <AnimationSlot clip={clip} slot="animateLoop" kind="loop" label="Loop" />
+
+      {/*
         The decoration fields. These existed on TextStyle from the start but had no controls, so
         the only way to get a stroke was to not have one — which is why the old presets were six
         sizes of the same white text. Each is opt-in: toggling one on seeds a value that reads
@@ -646,6 +661,91 @@ function TextTab({ clip }: { clip: Clip }) {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * One animation slot: pick an animation, set how long it runs, tune its params, or clear it.
+ *
+ * The duration control is in seconds and is the same field for all three slots, but it means
+ * something different in each — how long the entrance takes, how long the exit takes, how long
+ * one loop cycle lasts — so the label changes rather than the control. Calling it "Duration"
+ * everywhere would leave a user setting a 4-second Loop expecting the pulse to stop after four
+ * seconds.
+ */
+function AnimationSlot({
+  clip,
+  slot,
+  kind,
+  label,
+}: {
+  clip: Clip;
+  slot: 'animateIn' | 'animateOut' | 'animateLoop';
+  kind: TextAnimationKind;
+  label: string;
+}) {
+  const update = useClipUpdater(clip);
+  const current = clip.text?.[slot];
+  const def = current ? getTextAnimation(current.type) : undefined;
+  const options = textAnimationsByKind(kind);
+
+  const setSlot = (value: TextAnimation | undefined, cmdLabel: string, coalesceKey?: string) =>
+    update(cmdLabel, (c) => ({ ...c, text: { ...c.text!, [slot]: value } }), coalesceKey);
+
+  const choose = (type: string) => {
+    if (!type) return setSlot(undefined, `Remove ${label} Animation`);
+    const chosen = getTextAnimation(type);
+    if (!chosen) return;
+    setSlot(
+      { type, params: defaultParams(chosen.params), duration: chosen.duration },
+      `Set ${label} Animation`,
+    );
+  };
+
+  return (
+    <div className="oc-field">
+      <span className="oc-field__label">{label}</span>
+      <select value={current?.type ?? ''} onChange={(e) => choose(e.target.value)} className="oc-select">
+        <option value="">None</option>
+        {options.map((o) => (
+          <option key={o.type} value={o.type}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+
+      {current && def && (
+        <div className="oc-animslot__body">
+          <Slider
+            label={kind === 'loop' ? 'Cycle' : 'Duration'}
+            value={current.duration}
+            min={0.05}
+            max={kind === 'loop' ? 10 : 5}
+            step={0.05}
+            unit="s"
+            onChange={(v) => setSlot({ ...current, duration: v }, `${label} Duration`, `anim:${slot}:${clip.id}`)}
+          />
+          {def.params.map((param) => (
+            <Slider
+              key={param.key}
+              label={param.label}
+              value={current.params[param.key] ?? param.default}
+              min={param.min}
+              max={param.max}
+              step={param.step}
+              unit={param.unit}
+              onChange={(v) =>
+                setSlot(
+                  { ...current, params: { ...current.params, [param.key]: v } },
+                  `${label} ${param.label}`,
+                  `anim:${slot}:${param.key}:${clip.id}`,
+                )
+              }
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

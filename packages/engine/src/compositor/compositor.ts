@@ -24,14 +24,21 @@
  */
 
 import {
+  constant,
   getTransitionDef,
+  hasTextAnimation,
+  NEUTRAL_TEXT_ANIMATION,
+  resolveTextAnimation,
   sample,
   toSeconds,
   transitionAtTime,
   videoTracksTopDown,
   type ActiveTransition,
   type Clip,
+  type EffectInstance,
+  type EffectInstanceId,
   type MediaAsset,
+  type ResolvedTextAnimation,
   type Sequence,
   type Ticks,
 } from '@opencut/core';
@@ -276,6 +283,7 @@ export class Compositor {
    */
   private renderClip(ctx: RenderContext, clip: Clip, target: Fbo | null): void {
     const media = clip.mediaId ? ctx.getMedia(clip.mediaId) : undefined;
+    const localTicks = (ctx.time - clip.start) as Ticks;
 
     // 1. Get the source frame and upload it to the dedicated source texture.
     let uploaded = false;
@@ -284,9 +292,20 @@ export class Compositor {
      * the frame the way media is. Fitting would blow a short caption up to fill the height.
      */
     let fit: { x: number; y: number } | undefined;
+    /**
+     * The text animation's contribution this frame, already composed from the in/out/loop slots.
+     * Neutral for every other clip kind, which is what keeps the rest of this method unaware
+     * that text animations exist at all.
+     */
+    let anim: ResolvedTextAnimation = NEUTRAL_TEXT_ANIMATION;
 
     if (clip.kind === 'text' && clip.text) {
-      const raster = rasterizeText(clip.text);
+      if (hasTextAnimation(clip.text)) {
+        anim = resolveTextAnimation(clip.text, toSeconds(localTicks), toSeconds(clip.duration));
+      }
+      // A reveal of 0 means the first character has not landed yet: nothing to draw, which is
+      // the same "no texture" branch an undecoded video frame takes.
+      const raster = rasterizeText(clip.text, anim.reveal);
       if (raster) {
         this.ctx.uploadFrame(this.source, raster.canvas);
         uploaded = true;
@@ -312,12 +331,16 @@ export class Compositor {
     if (!uploaded) return;
 
     // 2. Run enabled effects as a chain, starting from the source texture.
-    const localTicks = (ctx.time - clip.start) as Ticks;
+    //
+    // The animation's passes go on the END, after the clip's own effects. A reveal mask or an
+    // exit blur is something happening TO the finished title, so it has to see the title with
+    // its glow and outline already applied — put first, a wipe would be painted over by the
+    // very effects it is supposed to be hiding.
     const chain = runEffectChain(
       this.ctx,
       this.fbos,
       this.source,
-      clip.effects,
+      anim.passes.length ? [...clip.effects, ...animationEffects(anim)] : clip.effects,
       this.width,
       this.height,
       toSeconds(localTicks),
@@ -332,7 +355,7 @@ export class Compositor {
     // transition; this one runs for every clip of every frame, so a throw here leaks at frame
     // rate until the pool has consumed the GPU.
     try {
-      this.composite(ctx.sequence, clip, chain.tex, localTicks, target, media, fit);
+      this.composite(ctx.sequence, clip, chain.tex, localTicks, target, media, fit, anim);
     } finally {
       if (chain.owned) this.fbos.release(chain.owned);
     }
@@ -346,15 +369,18 @@ export class Compositor {
     target: Fbo | null,
     media?: MediaAsset,
     fit?: { x: number; y: number },
+    anim: ResolvedTextAnimation = NEUTRAL_TEXT_ANIMATION,
   ): void {
     const prog = this.ctx.getProgram('__composite', VERTEX_SHADER, COMPOSITE_FRAGMENT);
     this.ctx.bindTarget(target, this.width, this.height);
     this.ctx.enableSourceOver();
     this.ctx.useProgram(prog);
 
-    const opacity = sample(clip.transform.opacity, localTicks);
+    // Multiplied, not replaced: an animation fading a title to 50% while the user has also set
+    // the clip to 50% opacity should land at 25%, the same as two stacked fades anywhere else.
+    const opacity = sample(clip.transform.opacity, localTicks) * anim.opacity;
     this.ctx.setUniform1f(prog, 'u_opacity', opacity);
-    this.ctx.setUniformMat3(prog, 'u_model', this.buildModelMatrix(sequence, clip, localTicks, media, fit));
+    this.ctx.setUniformMat3(prog, 'u_model', this.buildModelMatrix(sequence, clip, localTicks, media, fit, anim));
     this.ctx.bindTexture(prog, 'u_texture', tex, 0);
     this.ctx.drawQuad();
   }
@@ -366,11 +392,12 @@ export class Compositor {
     localTicks: Ticks,
     media?: MediaAsset,
     fitOverride?: { x: number; y: number },
+    anim: ResolvedTextAnimation = NEUTRAL_TEXT_ANIMATION,
   ): Float32Array {
     const t = clip.transform;
-    const sx = sample(t.scaleX, localTicks);
-    const sy = sample(t.scaleY, localTicks);
-    const rot = (sample(t.rotation, localTicks) * Math.PI) / 180;
+    const sx = sample(t.scaleX, localTicks) * anim.scaleX;
+    const sy = sample(t.scaleY, localTicks) * anim.scaleY;
+    const rot = ((sample(t.rotation, localTicks) + anim.rotate) * Math.PI) / 180;
     const tx = sample(t.x, localTicks);
     const ty = sample(t.y, localTicks);
 
@@ -391,8 +418,16 @@ export class Compositor {
     const scaleX = sx * fitX;
     const scaleY = sy * fitY;
     // Translate in clip space: sequence px → clip units (2 / dimension).
-    const ndcX = (tx / sequence.width) * 2;
-    const ndcY = -(ty / sequence.height) * 2;
+    //
+    // The animation's offset rides on top, converted from "fractions of the text's own size"
+    // into the same clip units.
+    //
+    // `scaleX` is ALREADY `sx * fitX` — the text's on-screen half-extent in clip units — which
+    // is exactly the quantity `dx: 1` means one of. Multiplying by `fitX` again here would
+    // square it, and a slide would travel a wildly different distance depending on how big the
+    // title's bitmap happened to be relative to the frame.
+    const ndcX = (tx / sequence.width) * 2 + anim.dx * scaleX * 2;
+    const ndcY = -(ty / sequence.height) * 2 - anim.dy * scaleY * 2;
 
     // M = T * R * S, column-major.
     return new Float32Array([
@@ -424,6 +459,27 @@ export class Compositor {
     this.ctx.deleteTexture(this.source);
     this.ctx.dispose();
   }
+}
+
+/**
+ * Turn an animation's requested passes into throwaway effect instances for this frame.
+ *
+ * They are never stored on the clip, never serialized and never seen by the inspector — the
+ * animation is the source of truth and these are regenerated from it every frame. Params are
+ * wrapped as `constant()` because that is the shape the chain samples; a fixed id is fine
+ * precisely because nothing keeps a reference to them past this draw.
+ */
+function animationEffects(anim: ResolvedTextAnimation): EffectInstance[] {
+  return anim.passes.map((pass, i) => {
+    const params: EffectInstance['params'] = {};
+    for (const [key, value] of Object.entries(pass.params)) params[key] = constant(value);
+    return {
+      id: `__anim${i}` as EffectInstanceId,
+      type: pass.type,
+      enabled: true,
+      params,
+    };
+  });
 }
 
 /** Identity model matrix, for passes that draw a plain fullscreen quad. */
