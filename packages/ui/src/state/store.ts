@@ -26,6 +26,7 @@ import {
 import {
   addClip,
   addMedia as addMediaCommand,
+  removeMedia as removeMediaCommand,
   createClipFromMedia,
   createProject,
   newClipId,
@@ -36,10 +37,13 @@ import {
   registerBuiltins,
   seconds,
   serializeProject,
+  snapToFrame,
   type Clip,
   type ClipId,
   type Command,
+  type ImportedFile,
   type MediaAsset,
+  type MediaId,
   type PlatformBridge,
   type Project,
   type Sequence,
@@ -108,6 +112,14 @@ interface AppState {
   recovery: RecoverySnapshot | null;
   /** Set by Home's "Import Media" so the Media Library opens the import dialog once mounted. */
   pendingImport: boolean;
+  /**
+   * Files already chosen at Home, waiting for the workspace they were routed to.
+   *
+   * Home picks the files BEFORE choosing a screen — a .png goes to the Photo Editor, a .mp4 to
+   * the timeline — so the selection has to survive the view switch. Tagged with its `target`
+   * rather than left anonymous so a workspace can only ever consume what was addressed to it.
+   */
+  pendingFiles: { target: 'editor' | 'photo'; files: ImportedFile[] } | null;
 
   // Derived helpers
   sequence: () => Sequence;
@@ -141,6 +153,7 @@ interface AppState {
   setInspectorTab: (t: InspectorTab) => void;
   openDialog: (d: DialogId) => void;
   setPendingImport: (v: boolean) => void;
+  setPendingFiles: (v: { target: 'editor' | 'photo'; files: ImportedFile[] } | null) => void;
   setPixelsPerSecond: (pps: number) => void;
   toggleSnap: () => void;
   toggleRipple: () => void;
@@ -161,6 +174,8 @@ interface AppState {
 
   // Media
   addMedia: (assets: MediaAsset[]) => void;
+  /** Forget media in Open Cut (and any clips built from it). Never touches the file on disk. */
+  removeMedia: (ids: string[]) => void;
   setImportProgress: (p: ImportProgress | null) => void;
   addMediaToTimeline: (media: MediaAsset, trackId?: TrackId, at?: Ticks) => void;
 }
@@ -206,7 +221,14 @@ export function createAppStore(bridge: PlatformBridge) {
     activePanel: 'media',
     inspectorTab: 'transform',
     dialog: null,
-    pixelsPerSecond: 60,
+    /*
+     * Default timeline zoom. 30px/s rather than 60 shows twice as much of a cut at rest, which
+     * is the scale most editing decisions are made at — where clips sit relative to each other,
+     * not where a single frame boundary falls. It is a view setting only: nothing about clip
+     * timing or media depends on it, the zoom controls still span the full 8-400 range, and
+     * scrubbing stays frame-precise because the playhead is stored in ticks, not pixels.
+     */
+    pixelsPerSecond: 30,
     snapEnabled: true,
     rippleEnabled: preferences.rippleByDefault,
     snapGuide: null,
@@ -215,6 +237,7 @@ export function createAppStore(bridge: PlatformBridge) {
     toast: null,
     recovery: null,
     pendingImport: false,
+    pendingFiles: null,
 
     sequence: () => getActiveSequence(get().project),
     selectedClip: () => {
@@ -240,8 +263,22 @@ export function createAppStore(bridge: PlatformBridge) {
 
     splitAtPlayhead: () => {
       const s = get();
-      const time = s.playhead;
       const seq = s.sequence();
+      /*
+       * Cut on the frame the user is actually looking at.
+       *
+       * Scrubbing turns a pixel position straight into ticks, so the playhead habitually rests
+       * part-way through a frame. The preview and the timecode both round to that frame, so a
+       * raw cut lands somewhere the user cannot see and did not choose — and, within half a
+       * frame of a clip's edge, it carves off a sliver clip too short to ever show a frame.
+       * Snapping first makes the cut land where the eye says it will, and makes a second cut at
+       * the same displayed frame land on the same tick as the first instead of a hair off it.
+       *
+       * The move is sub-frame, so it is invisible: it is the difference between the playhead
+       * being at a frame and merely looking like it. Only Split snaps — a plain scrub stays
+       * continuous, so nothing tugs at the playhead while the user is dragging it.
+       */
+      const time = snapToFrame(s.playhead, seq.fps);
       const selected = new Set(s.selectedClipIds);
       const restrict = selected.size > 0;
       const specs: { clipId: ClipId; rightId: ClipId }[] = [];
@@ -256,7 +293,23 @@ export function createAppStore(bridge: PlatformBridge) {
       }
       if (specs.length === 0) return;
       get().dispatch(splitClipsAt(specs, time));
-      set({ selectedClipIds: specs.map((x) => x.rightId) }); // select the new right halves
+      /*
+       * The new right halves start exactly at `time`, so parking the playhead there puts it on
+       * the first frame of the new section rather than the last frame of the old one — the
+       * clip lookup is half-open (`start <= t < end`), so the preview already resolves the
+       * boundary to the right half, and selecting them keeps the inspector on the piece the
+       * user just made.
+       *
+       * Writing the playhead to the store is enough to move it everywhere: the playback engine
+       * subscribes and seeks its clock to match, so the preview and the transport agree without
+       * the store needing a reference to the engine. Undo is unaffected — history stores the
+       * project only, so undoing restores the clips and leaves the playhead at the cut, which
+       * is where the user is looking and where a re-cut should happen.
+       */
+      set({
+        selectedClipIds: specs.map((x) => x.rightId), // select the new right halves
+        playhead: time,
+      });
     },
 
     selectTransition: (selectedTransition) =>
@@ -310,6 +363,7 @@ export function createAppStore(bridge: PlatformBridge) {
     setInspectorTab: (inspectorTab) => set({ inspectorTab }),
     openDialog: (dialog) => set({ dialog }),
     setPendingImport: (pendingImport) => set({ pendingImport }),
+    setPendingFiles: (pendingFiles) => set({ pendingFiles }),
     setPixelsPerSecond: (pps) => set({ pixelsPerSecond: Math.max(8, Math.min(400, pps)) }),
     toggleSnap: () => set({ snapEnabled: !get().snapEnabled }),
     toggleRipple: () => set({ rippleEnabled: !get().rippleEnabled }),
@@ -403,6 +457,18 @@ export function createAppStore(bridge: PlatformBridge) {
       // from History's snapshot and drops the media, leaving clips with no resolvable asset
       // (black preview + silent audio).
       if (assets.length > 0) get().dispatch(addMediaCommand(assets));
+    },
+    removeMedia: (ids) => {
+      if (ids.length === 0) return;
+      const removed = new Set(ids);
+      // Same reason as addMedia: through History, so the change survives the next dispatch().
+      get().dispatch(removeMediaCommand(ids as MediaId[]));
+      // Selection is keyed by id, so anything just removed has to be dropped from it too or the
+      // panel keeps a highlight on a card that no longer exists.
+      set((st) => ({
+        selectedMediaIds: st.selectedMediaIds.filter((id) => !removed.has(id)),
+        selectedClipIds: [],
+      }));
     },
     setImportProgress: (importProgress) => set({ importProgress }),
     addMediaToTimeline: (media, trackId, at) => {

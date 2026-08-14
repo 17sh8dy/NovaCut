@@ -191,6 +191,144 @@ export const TEXT_PRESETS: readonly TextPreset[] = [
       curve: 42, fill: SOLID('#ffffff'), stroke: stroke(8, '#111827'),
     },
   },
+
+  /*
+   * ── Second wave ──
+   *
+   * The photo editor is where text gets fussed over — it has the layer stack, the curve and skew
+   * controls and no timeline to fight for room — so it carries a deliberately wider set than the
+   * video side's, rather than the two lists mirroring each other.
+   *
+   * These lean on families Windows and macOS actually ship (Impact, Arial Black, Georgia,
+   * Trebuchet MS, Consolas, Comic Sans MS, Segoe Script). Open Cut bundles no webfonts and runs
+   * under a CSP with no network, so a preset naming a Google font renders as the default sans —
+   * a look that is not its own name. The distinctiveness here comes from the paint (gradient,
+   * stroke, glow, offset shadow, skew, curve), which always renders as specified.
+   */
+  {
+    id: 'hard-shadow',
+    label: 'Hard Shadow',
+    sample: 'POP',
+    style: {
+      fontFamily: 'Arial Black', fontWeight: 900, transform: 'uppercase', lineHeight: 1,
+      // blur 0 — a crisp offset block, not a soft drop. This is the look, not a cheap shadow.
+      fill: SOLID('#ffffff'), stroke: stroke(6, '#111827'),
+      shadow: { color: '#ff2e63', blur: 0, offsetX: 8, offsetY: 8, opacity: 1 },
+      glow: null,
+    },
+  },
+  {
+    id: 'chrome',
+    label: 'Chrome',
+    sample: 'STEEL',
+    style: {
+      fontFamily: 'Impact', fontWeight: 900, transform: 'uppercase', letterSpacing: 1,
+      fill: gradient('#f8fafc', '#64748b', 90), stroke: stroke(7, '#0f172a'),
+      shadow: shadow(10, 4, 0.5), glow: null,
+    },
+  },
+  {
+    id: 'fire',
+    label: 'Fire',
+    sample: 'HOT',
+    style: {
+      fontFamily: 'Impact', fontWeight: 900, transform: 'uppercase', lineHeight: 0.95,
+      fill: gradient('#fde047', '#dc2626', 90), stroke: stroke(9, '#450a0a'),
+      glow: glow('#f97316', 26, 0.75), shadow: shadow(16, 6, 0.5),
+    },
+  },
+  {
+    id: 'frost',
+    label: 'Frost',
+    sample: 'CHILL',
+    style: {
+      fontFamily: 'Impact', fontWeight: 800, transform: 'uppercase', letterSpacing: 2,
+      fill: gradient('#ffffff', '#7dd3fc', 90), stroke: stroke(5, '#0c4a6e'),
+      glow: glow('#38bdf8', 30, 0.8), shadow: null,
+    },
+  },
+  {
+    id: 'extrude-3d',
+    label: '3D Extrude',
+    sample: 'DEPTH',
+    style: {
+      fontFamily: 'Arial Black', fontWeight: 900, transform: 'uppercase', lineHeight: 1,
+      // A long, unblurred, fully opaque offset reads as an extruded side wall. One shadow is all
+      // the model has, so this fakes the depth rather than stacking copies of the layer.
+      fill: SOLID('#facc15'), stroke: stroke(5, '#1c1917'),
+      shadow: { color: '#1c1917', blur: 0, offsetX: 0, offsetY: 14, opacity: 1 },
+      glow: null,
+    },
+  },
+  {
+    id: 'vintage',
+    label: 'Vintage',
+    sample: 'Classic',
+    style: {
+      fontFamily: 'Georgia', fontWeight: 700, transform: 'uppercase', letterSpacing: 6,
+      lineHeight: 1.3, fill: SOLID('#f5e6c8'), stroke: null, shadow: shadow(8, 3, 0.4), glow: null,
+    },
+  },
+  {
+    id: 'magazine',
+    label: 'Magazine',
+    sample: 'ISSUE',
+    style: {
+      fontFamily: 'Times New Roman', fontWeight: 700, transform: 'uppercase', letterSpacing: -2,
+      lineHeight: 0.9, fill: SOLID('#ffffff'), stroke: null, shadow: shadow(14, 4, 0.35), glow: null,
+    },
+  },
+  {
+    id: 'handwritten',
+    label: 'Handwritten',
+    sample: 'note',
+    style: {
+      fontFamily: 'Segoe Script', fontWeight: 400, italic: true, transform: 'none',
+      letterSpacing: 0, lineHeight: 1.35, fill: SOLID('#fdfdfd'),
+      stroke: null, shadow: shadow(10, 3, 0.45), glow: null,
+    },
+  },
+  {
+    id: 'comic',
+    label: 'Comic',
+    sample: 'BAM!',
+    style: {
+      fontFamily: 'Comic Sans MS', fontWeight: 700, transform: 'uppercase', skew: -6,
+      fill: SOLID('#ffd400'), stroke: stroke(12, '#1a1423'), shadow: shadow(0, 8, 1, '#1a1423'),
+      glow: null,
+    },
+  },
+  {
+    id: 'minimal-caps',
+    label: 'Minimal Caps',
+    sample: 'MINIMAL',
+    style: {
+      fontFamily: 'Inter', fontWeight: 300, transform: 'uppercase', letterSpacing: 12,
+      lineHeight: 1.4, fill: SOLID('#ffffff'), stroke: null, shadow: null, glow: null,
+    },
+  },
+  {
+    id: 'pastel-soft',
+    label: 'Soft Pastel',
+    sample: 'sweet',
+    style: {
+      fontFamily: 'Trebuchet MS', fontWeight: 700, transform: 'none', letterSpacing: 1,
+      lineHeight: 1.2, fill: gradient('#fbc2eb', '#a6c1ee', 60),
+      stroke: stroke(6, '#ffffff'), shadow: shadow(14, 5, 0.25), glow: null,
+    },
+  },
+  {
+    id: 'blueprint',
+    label: 'Blueprint',
+    sample: 'PLAN',
+    style: {
+      fontFamily: 'Consolas', fontWeight: 400, transform: 'uppercase', letterSpacing: 8,
+      // Hollow, like a drafting stencil: transparent fill with a centred hairline around it.
+      fill: SOLID('#00000000'),
+      stroke: { width: 3, color: '#7dd3fc', align: 'center', join: 'miter' },
+      glow: glow('#38bdf8', 16, 0.5), shadow: null,
+    },
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

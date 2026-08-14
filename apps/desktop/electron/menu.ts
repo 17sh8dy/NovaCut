@@ -23,6 +23,9 @@ import { CH } from './ipc-types.js';
 
 const isMac = process.platform === 'darwin';
 
+/** Community invite, surfaced under Help. */
+const DISCORD_INVITE = 'https://discord.gg/XBhER9Z6EB';
+
 export type MenuId = 'file' | 'edit' | 'view' | 'help';
 
 function send(command: string): void {
@@ -89,6 +92,9 @@ function submenus(): Record<MenuId, MenuItemConstructorOptions[]> {
     ],
     help: [
       owned('Keyboard Shortcuts', 'shortcuts'),
+      { type: 'separator' },
+      // openExternal, not openPath: this must hand the invite to the user's browser/Discord app.
+      { label: 'Join the Discord', click: () => void shell.openExternal(DISCORD_INVITE) },
       { type: 'separator' },
       { label: 'Open App Data Folder', click: () => void shell.openPath(app.getPath('userData')) },
       {

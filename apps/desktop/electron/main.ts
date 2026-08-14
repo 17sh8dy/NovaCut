@@ -10,7 +10,7 @@
 
 import { app, BrowserWindow, dialog, nativeTheme, protocol, shell } from 'electron';
 import { join, extname, resolve as resolvePath } from 'node:path';
-import { createReadStream } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { registerHandlers, disposeHandlers } from './handlers.js';
@@ -30,6 +30,13 @@ const CONTENT_TYPES: Record<string, string> = {
 
 /** Renderer console forwarding is a debugging aid, not a feature: opt in with OPENCUT_TRACE=1. */
 const TRACE = process.env['OPENCUT_TRACE'] === '1' || !app.isPackaged;
+
+/**
+ * The window icon used when running from source. __dirname is out/main at runtime, so this
+ * climbs back to apps/desktop/build — the directory electron-builder.yml already points every
+ * platform's `icon:` key at, rather than a second copy that could drift out of sync with it.
+ */
+const DEV_ICON = join(__dirname, '../../build/icon.ico');
 
 /**
  * Serve a local media file over the custom protocol, **with real HTTP Range support**.
@@ -200,6 +207,15 @@ function createWindow(): void {
     minHeight: 680,
     backgroundColor: windowBackground(),
     show: false,
+    /*
+     * A packaged Windows/macOS build takes its taskbar and dock icon from the executable itself,
+     * which electron-builder stamps from build/icon.ico / .icns. Nothing does that in dev, so
+     * without this the running app wears Electron's default atom — the one icon guaranteed not to
+     * be ours. Point it at the same committed .ico the installer uses, so what we look at all day
+     * is what ships. `icon` is ignored where it is not needed, and a missing file would throw, so
+     * the path is only passed when it actually resolves.
+     */
+    ...(existsSync(DEV_ICON) ? { icon: DEV_ICON } : {}),
     /*
      * The app draws its own title bar, so the native one is hidden. On macOS the traffic lights
      * are simply inset over it; on Windows and Linux the app draws its own minimise / maximise /

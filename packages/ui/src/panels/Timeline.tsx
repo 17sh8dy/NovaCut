@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   Eye,
   EyeOff,
@@ -18,16 +18,13 @@ import {
   addTransition,
   formatTimecode,
   getTransitionDef,
-  moveClip,
   nextClipOnTrack,
   removeTransition,
   renameTrack,
   resolvedTransitions,
   seconds,
-  snapTargets,
   toSeconds,
   toggleTrackFlag,
-  trimClip,
   type Clip,
   type Sequence,
   type Ticks,
@@ -37,6 +34,13 @@ import { IconButton, Tooltip } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
 import { usePlayback } from '../state/playbackContext.js';
 import { ClipContextMenu } from './ClipContextMenu.js';
+import {
+  beginClipDrag,
+  clipDragReadout,
+  isClipDragging,
+  subscribeClipDrag,
+  type ClipDragMode,
+} from './clipDrag.js';
 
 /**
  * How tall to draw a track.
@@ -74,7 +78,6 @@ export function Timeline() {
   const store = useAppStore();
   const seq = useStore((s) => s.sequence());
   const pps = useStore((s) => s.pixelsPerSecond);
-  const snap = useStore((s) => s.snapEnabled);
   const scrollRef = useRef<HTMLDivElement>(null);
   const headersRef = useRef<HTMLDivElement>(null);
   const { toPx, toTicks } = useScale();
@@ -153,7 +156,7 @@ export function Timeline() {
           <div className="oc-timeline__content" style={{ width: contentWidth }}>
             <Ruler sequence={seq} pps={pps} onSeek={seekFromEvent} width={contentWidth} />
             {seq.tracks.map((track) => (
-              <Lane key={track.id} track={track} snap={snap} toPx={toPx} toTicks={toTicks} />
+              <Lane key={track.id} track={track} toPx={toPx} toTicks={toTicks} />
             ))}
             <SnapGuide toPx={toPx} />
             <Playhead toPx={toPx} onSeek={seekFromEvent} />
@@ -360,12 +363,10 @@ const TrackHeader = memo(function TrackHeader({ track }: { track: Track }) {
 
 const Lane = memo(function Lane({
   track,
-  snap,
   toPx,
   toTicks,
 }: {
   track: Track;
-  snap: boolean;
   toPx: (t: Ticks) => number;
   toTicks: (px: number) => Ticks;
 }) {
@@ -415,7 +416,7 @@ const Lane = memo(function Lane({
       onDrop={onDrop}
     >
       {track.clips.map((clip) => (
-        <TimelineClip key={clip.id} clip={clip} track={track} snap={snap} toPx={toPx} toTicks={toTicks} />
+        <TimelineClip key={clip.id} clip={clip} track={track} toPx={toPx} />
       ))}
       {joins.map((j) => (
         <TransitionMarker key={j.transition.id} track={track} join={j} toPx={toPx} />
@@ -512,15 +513,11 @@ export function applyTransitionAtTime(
 const TimelineClip = memo(function TimelineClip({
   clip,
   track,
-  snap,
   toPx,
-  toTicks,
 }: {
   clip: Clip;
   track: Track;
-  snap: boolean;
   toPx: (t: Ticks) => number;
-  toTicks: (px: number) => Ticks;
 }) {
   const store = useAppStore();
   const selected = useStore((s) => s.selectedClipIds.includes(clip.id));
@@ -528,97 +525,40 @@ const TimelineClip = memo(function TimelineClip({
   const media = useStore((s) =>
     clip.mediaId ? s.project.media.find((m) => m.id === clip.mediaId) : undefined,
   );
-  const drag = useRef<{ mode: 'move' | 'in' | 'out'; startX: number; origStart: Ticks; origDur: Ticks } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const [readout, setReadout] = useState<string | null>(null); // live duration/position while dragging
 
-  const beginDrag = (mode: 'move' | 'in' | 'out') => (e: React.PointerEvent) => {
-    if (track.locked) return;
-    e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    store.getState().selectClip(clip.id, e.shiftKey);
-    drag.current = { mode, startX: e.clientX, origStart: clip.start, origDur: clip.duration };
-  };
-
-  /**
-   * Find the nearest magnetic snap target to `t` within the snap threshold. Returns the snapped
-   * value and the tick it snapped to (for the guide line), or null when nothing is in range or
-   * snapping is disabled (globally off, or Alt held to temporarily bypass). The live playhead is
-   * included alongside clip edges / in-out marks from snapTargets().
-   *
-   * The threshold is the `snapStrength` preference, read from the store at drag time rather than
-   * captured in the dependency list: it can be changed from Settings while a project is open, and
-   * a stale closure would keep snapping at the old distance until something forced a re-render.
+  /*
+   * The live readout comes from the drag session, not from this component's state: the session
+   * outlives a remount and this component does not, so a clip dragged onto another track keeps
+   * its readout instead of losing it at the lane boundary.
    */
-  const snapResult = useCallback(
-    (t: Ticks, disabled: boolean): { value: Ticks; guide: Ticks | null } => {
-      if (!snap || disabled) return { value: t, guide: null };
-      const s = store.getState();
-      const threshold = toTicks(s.preferences.snapStrength);
-      let best = t;
-      let bestDist = threshold;
-      let guide: Ticks | null = null;
-      for (const target of [s.playhead, ...snapTargets(s.sequence(), clip.id)]) {
-        const d = Math.abs(target - t);
-        if (d < bestDist) {
-          bestDist = d;
-          best = target;
-          guide = target;
-        }
-      }
-      return { value: best, guide };
-    },
-    [snap, clip.id, toTicks, store],
-  );
+  const readout = useSyncExternalStore(subscribeClipDrag, () => clipDragReadout(clip.id));
+  // Drives `cursor: grabbing` for the whole gesture, including the stretches where the pointer
+  // has outrun the clip and is no longer over it.
+  const dragging = useSyncExternalStore(subscribeClipDrag, () => isClipDragging(clip.id));
 
-  const onMove = (e: React.PointerEvent) => {
-    const d = drag.current;
-    if (!d) return;
-    const alt = e.altKey; // hold Alt to temporarily disable snapping
-    const deltaTicks = toTicks(e.clientX - d.startX);
-    const state = store.getState();
-    if (d.mode === 'move') {
-      // Detect a target track under the cursor for vertical (cross-track) moves.
-      const laneEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-track-id]');
-      const targetTrackId = laneEl?.getAttribute('data-track-id') as string | null;
-      const raw = Math.max(0, d.origStart + deltaTicks);
-      // Snap either the leading OR trailing edge — whichever lands closest to a target.
-      const lead = snapResult(raw, alt);
-      const trail = snapResult(raw + clip.duration, alt);
-      let newStart = raw;
-      let guide: Ticks | null = null;
-      const leadDist = lead.guide != null ? Math.abs(lead.value - raw) : Infinity;
-      const trailDist = trail.guide != null ? Math.abs(trail.value - (raw + clip.duration)) : Infinity;
-      if (leadDist <= trailDist && lead.guide != null) {
-        newStart = Math.max(0, lead.value);
-        guide = lead.guide;
-      } else if (trail.guide != null) {
-        newStart = Math.max(0, trail.value - clip.duration);
-        guide = trail.guide;
-      }
-      state.setSnapGuide(guide);
-      state.dispatch(moveClip(clip.id, newStart, (targetTrackId ?? undefined) as never, true));
-      setReadout(formatTimecode(newStart, state.sequence().fps));
-    } else if (d.mode === 'in') {
-      const desired = snapResult(d.origStart + deltaTicks, alt);
-      state.setSnapGuide(desired.guide);
-      state.dispatch(trimClip(clip.id, 'in', desired.value - clip.start));
-    } else {
-      const desired = snapResult(d.origStart + d.origDur + deltaTicks, alt);
-      state.setSnapGuide(desired.guide);
-      const newDur = Math.max(seconds(0.05), desired.value - clip.start);
-      state.dispatch(trimClip(clip.id, 'out', newDur - clip.duration));
-    }
-    // Show the resulting duration (trim) or start position (move) while dragging.
-    if (d.mode !== 'move') {
-      const cur = store.getState().selectedClip();
-      if (cur && cur.id === clip.id) setReadout(formatTimecode(cur.duration, store.getState().sequence().fps));
-    }
-  };
-  const endDrag = () => {
-    drag.current = null;
-    setReadout(null);
-    store.getState().setSnapGuide(null); // hide the guide line when the drag ends
+  const beginDrag = (mode: ClipDragMode) => (e: React.PointerEvent) => {
+    if (track.locked) return;
+    // Only the primary button drags. Right-click belongs to the context menu, and letting it
+    // arm a drag left the gesture half-open when the menu swallowed the matching release.
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    store.getState().selectClip(clip.id, e.shiftKey);
+    /*
+     * Deliberately no `setPointerCapture`: capture binds the gesture to this element, and this
+     * element is exactly what disappears when the clip crosses to another track. The session
+     * listens on the window instead, which survives the remount.
+     */
+    beginClipDrag({
+      store,
+      clipId: clip.id,
+      mode,
+      pointerId: e.pointerId,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      origStart: clip.start,
+      origDur: clip.duration,
+    });
   };
 
   const left = toPx(clip.start);
@@ -630,10 +570,29 @@ const TimelineClip = memo(function TimelineClip({
         className="oc-clip"
         data-kind={clip.kind}
         data-selected={selected}
+        data-dragging={dragging}
         style={{ left, width }}
+        /*
+         * Only the press is bound here. Everything that continues or ends the gesture —
+         * pointermove, pointerup, pointercancel, lostpointercapture, losing the window — is
+         * handled by the drag session on the window, so none of it depends on this element
+         * still existing. That is what lets a drag cross tracks: this component is unmounted
+         * and rebuilt in the new lane mid-gesture, and the drag does not notice.
+         */
         onPointerDown={beginDrag('move')}
-        onPointerMove={onMove}
-        onPointerUp={endDrag}
+        /*
+         * Kill the browser's native drag-and-drop on the clip.
+         *
+         * `<img>` is draggable by default, and the clip's thumbnail covers its whole body — so
+         * pressing the clip and moving handed the gesture to HTML5 drag-and-drop instead of us:
+         * the browser lifted a translucent ghost of the thumbnail, showed a no-drop cursor, and
+         * fired `pointercancel`, which correctly ended our drag. The clip stopped dead while the
+         * ghost followed the mouse, which is the "stuck / fighting the cursor" behaviour.
+         *
+         * The image also carries `draggable={false}`, but this guard is what makes it safe: it
+         * covers anything droppable added to a clip later, not just today's thumbnail.
+         */
+        onDragStart={(e) => e.preventDefault()}
         onContextMenu={(e) => {
           e.preventDefault();
           store.getState().selectClip(clip.id);
@@ -641,10 +600,19 @@ const TimelineClip = memo(function TimelineClip({
         }}
         onDoubleClick={() => store.getState().setInspectorTab(clip.kind === 'text' ? 'text' : 'transform')}
       >
-        <div className="oc-clip__handle oc-clip__handle--in" onPointerDown={beginDrag('in')} onPointerMove={onMove} onPointerUp={endDrag} />
+        {/*
+          The handles own only the press that picks the edge. They once carried their own
+          pointermove/pointerup as well as bubbling into the body's copies, so a single event ran
+          the trim twice — same delta applied twice, and the edge tore away at double the
+          cursor's speed. With the session on the window there is exactly one handler for the
+          whole timeline, so that class of double-application cannot recur.
+        */}
+        <div className="oc-clip__handle oc-clip__handle--in" onPointerDown={beginDrag('in')} />
         <div className="oc-clip__label">{clip.name}</div>
         <div className="oc-clip__body">
-          {showThumb && media?.thumbnail && clip.kind !== 'audio' && <img className="oc-clip__thumb" src={media.thumbnail} alt="" />}
+          {showThumb && media?.thumbnail && clip.kind !== 'audio' && (
+            <img className="oc-clip__thumb" src={media.thumbnail} alt="" draggable={false} />
+          )}
           {clip.kind === 'audio' && <Waveform seed={clip.id} />}
         </div>
         {clip.effects.length > 0 && (
@@ -652,7 +620,7 @@ const TimelineClip = memo(function TimelineClip({
             <span style={{ fontSize: 9, fontWeight: 700 }}>fx {clip.effects.length}</span>
           </div>
         )}
-        <div className="oc-clip__handle oc-clip__handle--out" onPointerDown={beginDrag('out')} onPointerMove={onMove} onPointerUp={endDrag} />
+        <div className="oc-clip__handle oc-clip__handle--out" onPointerDown={beginDrag('out')} />
         {readout && <div className="oc-clip__readout">{readout}</div>}
       </div>
       {menu && <ClipContextMenu x={menu.x} y={menu.y} clip={clip} onClose={() => setMenu(null)} />}

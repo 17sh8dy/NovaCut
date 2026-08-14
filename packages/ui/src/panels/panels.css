@@ -15,6 +15,20 @@
 .oc-titlebar > * {
   -webkit-app-region: no-drag;
 }
+/*
+ * Tooltip wraps its child in a display:contents div. That wrapper generates no box, so an
+ * app-region set on it via the rule above is dropped on the floor — a tooltipped control sitting
+ * directly in the bar then inherits the bar's `drag` and Windows swallows its clicks as
+ * window-drags rather than delivering them. (This is why Settings and Project Settings were dead
+ * while the identical buttons inside .oc-menu-row worked: that div is a real box.) Naming the
+ * interactive elements themselves keeps them clickable however deeply a wrapper nests them.
+ */
+.oc-titlebar button,
+.oc-titlebar input,
+.oc-titlebar select,
+.oc-titlebar [role='button'] {
+  -webkit-app-region: no-drag;
+}
 /* macOS puts its traffic lights at the LEFT, over the brand. */
 [data-os='mac'] .oc-titlebar {
   padding-left: 80px;
@@ -278,6 +292,43 @@
   height: 100%;
   object-fit: cover;
 }
+/*
+ * Remove-from-project affordance. Hidden until the card is hovered or focused so the grid stays a
+ * wall of thumbnails rather than a wall of controls, but always present for keyboard users.
+ * Scrimmed dark for the same reason as the duration badge: it sits on the user's own image.
+ */
+.oc-media-card__remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.oc-media-card:hover .oc-media-card__remove,
+.oc-media-card:focus-within .oc-media-card__remove {
+  opacity: 1;
+}
+.oc-media-card__remove:hover {
+  background: var(--danger, #dc2626);
+}
+.oc-media-card__remove:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .oc-media-card__badge {
   position: absolute;
   bottom: 4px;
@@ -507,11 +558,21 @@
   color: var(--text-primary);
   background: var(--surface-3);
 }
+/*
+ * Inspector rows are denser vertically than horizontally on purpose.
+ *
+ * The Transform tab is six rows tall and measured 479px inside a 425px panel body, so the last
+ * two controls — Opacity among them — sat below the fold and could only be reached by scrolling.
+ * The horizontal padding is what gives the panel its breathing room and is unchanged; only the
+ * vertical rhythm is tightened, which is enough to bring the whole tab inside the panel at the
+ * editor's default layout. Scrolling remains available for the taller tabs (Effects, Text) that
+ * genuinely need it.
+ */
 .oc-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: var(--space-3);
+  gap: 4px;
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
 }
 .oc-field__row {
@@ -963,13 +1024,50 @@
  * The test image. Hardcoded hues for the same reason `.oc-fx-demo` is: it stands in for the
  * user's footage, and a grade needs saturated colour, a bright end and a dark end to read at
  * all. A theme-coloured swatch would make every filter look like a slightly different grey.
+ *
+ * Every band uses HARD colour stops. The previous version was two smooth gradients, which is
+ * why the swatches read as blurry: there was no edge anywhere in the image to be sharp, so
+ * every filter came out a soft wash of colour and two looks were hard to tell apart. Nothing
+ * here is a bitmap, so there is no resolution to raise and nothing is ever upscaled — the fix
+ * is detail, not pixels, and it stays free to paint across a scrolling grid of thirty.
+ *
+ * The three zones are chosen for what a grade actually does, at 44px tall:
+ *   - a hue strip, so saturation and hue-rotate are legible;
+ *   - a scene with a HARD horizon and a specular sun, so exposure and contrast have an edge and
+ *     a clipping point to act on;
+ *   - a step wedge from true black to true white, so lift, fade and crush are readable as the
+ *     steps collapsing at one end.
  */
 .oc-filtprev__img {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 78% 22%, #ffe08a 0%, transparent 42%),
-    linear-gradient(160deg, #123 0%, #2b5f8a 38%, #c96a3a 72%, #f2d9a8 100%);
+    /* hue strip (top 20%) */
+    linear-gradient(
+        90deg,
+        #e02f2f 0 16.6%,
+        #e0912f 16.6% 33.3%,
+        #d9e02f 33.3% 50%,
+        #35c94a 50% 66.6%,
+        #2f8fe0 66.6% 83.3%,
+        #8f3fe0 83.3% 100%
+      )
+      top / 100% 20% no-repeat,
+    /* step wedge, true black to true white (bottom 26%) */
+    linear-gradient(
+        90deg,
+        #000 0 16.6%,
+        #333 16.6% 33.3%,
+        #666 33.3% 50%,
+        #999 50% 66.6%,
+        #ccc 66.6% 83.3%,
+        #fff 83.3% 100%
+      )
+      bottom / 100% 26% no-repeat,
+    /* specular sun — a small hard core so highlight roll-off is visible */
+    radial-gradient(circle at 74% 42%, #fff 0 7%, #ffe9a8 7% 13%, transparent 13%),
+    /* scene: sky over ground, split by a hard horizon rather than a fade */
+    linear-gradient(180deg, #17375c 0 34%, #4a86b8 34% 52%, #d9964f 52% 68%, #7d3f22 68% 86%, #1d120c 86% 100%);
 }
 .oc-filtprev__wash { position: absolute; inset: 0; mix-blend-mode: soft-light; pointer-events: none; }
 

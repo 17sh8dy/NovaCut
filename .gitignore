@@ -11,6 +11,7 @@ build/
 .verify/dist-ui/
 .verify/dist-export/
 .verify/dist-browsers/
+.verify/dist-pointer/
 # Screenshots the browser harness captures on every run — evidence for the run that produced
 # them, not source. Committing them would mean a diff on every verification.
 .verify/shots/

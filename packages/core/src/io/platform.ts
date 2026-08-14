@@ -44,6 +44,25 @@ export interface ImportedFile {
  */
 export type ImportKind = 'video' | 'audio' | 'image';
 
+/**
+ * Is this file a still (or an animated GIF)?
+ *
+ * Lives here, next to the import contract, because it is the rule that DECIDES A WORKSPACE:
+ * Home routes a chosen file to the Photo Editor or the Video Editor on this answer alone, and
+ * the Media Library uses the same test to refuse stills. Two copies of it drifting apart would
+ * mean a file the launcher sends to the timeline that the timeline then rejects.
+ *
+ * Extension as well as MIME: a drag-and-drop never goes near a picker, and hosts report an empty
+ * or wrong `type` often enough that trusting it alone loses real files.
+ *
+ * GIFs count as stills even though they move — they are the Photo Editor's territory, and a GIF
+ * on a video timeline decodes as a single frame through the <img> path anyway.
+ */
+export function isStillFile(mime: string, name: string): boolean {
+  const lower = name.toLowerCase();
+  return mime.startsWith('image/') || /\.(png|jpe?g|webp|bmp|tiff?|gif|avif|heic)$/.test(lower);
+}
+
 export interface RecentProject {
   path: string;
   name: string;

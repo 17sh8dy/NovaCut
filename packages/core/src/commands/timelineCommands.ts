@@ -6,7 +6,7 @@
  * UI or platform APIs.
  */
 
-import { newClipId, newId, newTrackId, type ClipId, type SequenceId, type TrackId } from '../model/ids.js';
+import { newClipId, newId, newTrackId, type ClipId, type MediaId, type SequenceId, type TrackId } from '../model/ids.js';
 import { getActiveSequence } from '../model/queries.js';
 import { clampTicks, type Ticks } from '../model/time.js';
 import { getTransitionDef } from '../effects/registry.js';
@@ -241,6 +241,38 @@ export function addMedia(assets: MediaAsset[]): Command {
     label: assets.length > 1 ? `Import ${assets.length} Media` : 'Import Media',
     apply: (project) =>
       assets.length === 0 ? project : { ...project, media: [...project.media, ...assets] },
+  };
+}
+
+/**
+ * Drop media assets from the project library.
+ *
+ * This removes them from OPEN CUT ONLY — nothing is deleted from disk. The library holds
+ * references (`src` is a path the host reads on demand), so forgetting the reference is the
+ * whole operation; the user's file is untouched and can be re-imported.
+ *
+ * Clips built from a removed asset go with it, across every sequence rather than just the
+ * active one. Leaving them behind would strand clips whose `mediaId` resolves to nothing, which
+ * is exactly the state that renders a black frame with silent audio and no way to tell why.
+ */
+export function removeMedia(ids: MediaId[]): Command {
+  const doomed = new Set<string>(ids);
+  return {
+    label: ids.length > 1 ? `Remove ${ids.length} Media` : 'Remove Media',
+    apply: (project) => {
+      if (doomed.size === 0) return project;
+      return {
+        ...project,
+        media: project.media.filter((m) => !doomed.has(m.id)),
+        sequences: project.sequences.map((seq) => ({
+          ...seq,
+          tracks: seq.tracks.map((t) => ({
+            ...t,
+            clips: t.clips.filter((c) => !(c.mediaId !== undefined && doomed.has(c.mediaId))),
+          })),
+        })),
+      };
+    },
   };
 }
 

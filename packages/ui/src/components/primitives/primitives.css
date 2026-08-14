@@ -148,7 +148,9 @@
 .oc-slider {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  /* The readout labels the track directly beneath it; 4px keeps them read as one control and
+     buys the Inspector a little headroom before its taller tabs need to scroll. */
+  gap: 4px;
 }
 .oc-slider__top {
   display: flex;
@@ -164,9 +166,19 @@
   font-size: var(--text-sm);
   color: var(--text-primary);
 }
+/*
+ * The track is inset by half a thumb on each side.
+ *
+ * The thumb is centred on its value (`left: pct%` with a -50% translate), so at 0% and 100% half
+ * of it hangs outside the track. Full-bleed, that overhang lands under the panel's edge and the
+ * endpoints of the range — the two values users most want to confirm they have hit — are the
+ * ones clipped from view. Insetting the track keeps the whole control inside the panel while
+ * `setFromClientX` still measures against the track's own rect, so 0-100% maps exactly as before.
+ */
 .oc-slider__track {
   position: relative;
   height: 4px;
+  margin: 0 7px;
   border-radius: var(--radius-full);
   background: var(--surface-4);
   cursor: pointer;

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Film, ImageIcon, Music, Search, Upload, Loader2 } from 'lucide-react';
+import { Film, ImageIcon, Music, Search, Upload, Loader2, X } from 'lucide-react';
 import {
   formatClock,
+  isStillFile,
   newMediaId,
   seconds,
   type MediaAsset,
@@ -51,7 +52,7 @@ export function MediaLibrary() {
     }
   };
 
-  // Home's "Import Media" enters the editor with this flag set; open the dialog once, here.
+  // File → Import Media (and Ctrl+I) enter the editor with this flag set; open the dialog here.
   const pendingImport = useStore((s) => s.pendingImport);
   useEffect(() => {
     if (pendingImport) {
@@ -60,6 +61,20 @@ export function MediaLibrary() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingImport]);
+
+  /*
+   * Home's "Import Media" is different: it already ran the picker, decided from the chosen files
+   * that this was the right workspace, and routed here. Re-opening a dialog would ask the user
+   * the same question twice — so these files skip the picker and go straight into ingest.
+   */
+  const pendingFiles = useStore((s) => s.pendingFiles);
+  useEffect(() => {
+    if (pendingFiles?.target !== 'editor') return;
+    const { files } = pendingFiles;
+    store.getState().setPendingFiles(null);
+    void ingest(files.map((f) => ({ src: f.src, name: f.name, mime: f.mime, size: f.size })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFiles]);
 
   /**
    * Turn imported file descriptors into probed MediaAssets, streaming progress.
@@ -70,9 +85,9 @@ export function MediaLibrary() {
    */
   const ingest = async (files: { src: string; name: string; mime: string; size: number }[]) => {
     if (files.length === 0) return;
-    const stills = files.filter((f) => isStill(f.mime, f.name));
+    const stills = files.filter((f) => isStillFile(f.mime, f.name));
     if (stills.length > 0) {
-      files = files.filter((f) => !isStill(f.mime, f.name));
+      files = files.filter((f) => !isStillFile(f.mime, f.name));
       const names = stills.slice(0, 3).map((f) => f.name).join(', ');
       store.getState().notify(
         stills.length === 1 ? 'Images open in the Photo Editor' : `${stills.length} images skipped`,
@@ -162,6 +177,30 @@ export function MediaLibrary() {
       `${names} — Open Cut needs FFmpeg to read duration and dimensions, to make thumbnails, and ` +
         'to export. Install it and make sure ffmpeg and ffprobe are on your PATH, then re-import.',
     );
+  };
+
+  /**
+   * Remove assets from the library. Open Cut only — the files stay on disk.
+   *
+   * Confirmed first because it is not a free action: clips built from the asset are removed from
+   * the timeline with it, so this can delete visible work. Undo covers it, but a prompt naming
+   * the consequence is cheaper than discovering it.
+   */
+  const removeFromLibrary = (ids: string[], label: string) => {
+    if (ids.length === 0) return;
+    const usedBy = store
+      .getState()
+      .project.sequences.flatMap((seq) => seq.tracks.flatMap((t) => t.clips))
+      .filter((c) => c.mediaId !== undefined && ids.includes(c.mediaId)).length;
+    const detail = usedBy > 0 ? ` and ${usedBy} clip${usedBy > 1 ? 's' : ''} using it from the timeline` : '';
+    const ok = window.confirm(
+      `Remove ${label} from this project${detail}?
+
+The file stays on your device — this only removes it from Open Cut.`,
+    );
+    if (!ok) return;
+    store.getState().removeMedia(ids);
+    store.getState().notify(`Removed ${label} from the project`, 'success', 'The file on your device was not touched.');
   };
 
   const onDrop = async (e: React.DragEvent) => {
@@ -262,11 +301,35 @@ export function MediaLibrary() {
                   onClick={() => store.getState().selectMedia([m.id])}
                   onDoubleClick={() => store.getState().addMediaToTimeline(m)}
                   onDragStart={(e) => e.dataTransfer.setData('application/x-opencut-media', m.id)}
+                  /* Delete/Backspace on a focused card, for anyone who reaches for the key first. */
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+                    e.preventDefault();
+                    const ids = selected.includes(m.id) ? selected : [m.id];
+                    removeFromLibrary(ids, ids.length > 1 ? `${ids.length} items` : m.name);
+                  }}
                   title={m.name}
                 >
                   <div className="oc-media-card__thumb">
                     {m.thumbnail ? <img src={m.thumbnail} alt="" /> : <Icon size={26} />}
                     {m.duration > 0 && <span className="oc-media-card__badge">{formatClock(m.duration)}</span>}
+                    {/*
+                      Removes from the library, not from the disk — the wording in the confirm and
+                      the toast carries that, since a bare X on a file is easy to read as "delete".
+                      stopPropagation so the click does not also select or open the asset.
+                    */}
+                    <button
+                      className="oc-media-card__remove"
+                      title={`Remove ${m.name} from the project (your file is not deleted)`}
+                      aria-label={`Remove ${m.name} from the project`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFromLibrary([m.id], m.name);
+                      }}
+                    >
+                      <X size={13} />
+                    </button>
                   </div>
                   <div className="oc-media-card__name">{m.name}</div>
                 </div>
@@ -277,18 +340,6 @@ export function MediaLibrary() {
       </div>
     </div>
   );
-}
-
-/**
- * Is this a still (or an animated GIF)?
- *
- * GIFs count as stills for this purpose even though they move: they are the Photo Editor's
- * territory by the user's own division, and a GIF on a video timeline decodes as a single
- * frame through the `<img>` path anyway.
- */
-function isStill(mime: string, name: string): boolean {
-  const lower = name.toLowerCase();
-  return mime.startsWith('image/') || /\.(png|jpe?g|webp|bmp|tiff?|gif|avif|heic)$/.test(lower);
 }
 
 function mimeToKind(mime: string, name: string): MediaKind {

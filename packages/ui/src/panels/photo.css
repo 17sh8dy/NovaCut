@@ -607,21 +607,31 @@
   border-top: 1px solid var(--border-subtle);
 }
 
-.oc-field {
+/*
+ * Renamed from the class the video Inspector also used.
+ *
+ * Both stylesheets ship in one bundle, so the two rules cascaded into each other: this one
+ * declares `align-items: center` and the Inspector's rule does not, so the Inspector's fields —
+ * a COLUMN flex container — centred their children instead of stretching them. Every slider
+ * there collapsed to the width of its own value text, which is why Scale and Opacity showed a
+ * stub of track with the fill running off the panel and the handle nowhere to be seen. Two
+ * components with different layouts must not share a class name.
+ */
+.oc-pfield {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
 }
 
-.oc-field__label {
+.oc-pfield__label {
   flex: 0 0 auto;
   min-width: 26px;
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
-.oc-field__control {
+.oc-pfield__control {
   flex: 1;
   min-width: 0;
 }

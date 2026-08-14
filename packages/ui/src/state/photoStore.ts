@@ -23,9 +23,11 @@
 import { create } from 'zustand';
 import {
   History,
+  isStillFile,
   newMediaId,
   registerBuiltins,
   type Command,
+  type ImportedFile,
   type MediaAsset,
   type PlatformBridge,
   defaultProjectName,
@@ -236,6 +238,13 @@ interface PhotoState {
   // ── Import ──
   /** Open the host's file picker and add each chosen image as a layer. */
   importImages: () => Promise<void>;
+  /**
+   * Add already-chosen files as layers, skipping the picker.
+   *
+   * Home runs the file dialog itself so it can route a .png here and a .mp4 to the timeline;
+   * by the time this workspace mounts the question has been asked and answered.
+   */
+  importChosen: (files: readonly ImportedFile[]) => Promise<void>;
   /** Add dropped or pasted browser Files as layers. */
   importFiles: (files: readonly File[]) => Promise<void>;
 }
@@ -434,7 +443,12 @@ export function createPhotoStore({ bridge, notify, overlayDefaults, newDocumentB
 
     importImages: async () => {
       const files = await bridge.importDialog(['image']);
-      const images = files.filter((f) => isImage(f.mime, f.name));
+      if (files.length === 0) return; // user canceled
+      await get().importChosen(files);
+    },
+
+    importChosen: async (files) => {
+      const images = files.filter((f) => isStillFile(f.mime, f.name));
       if (images.length === 0) {
         if (files.length > 0) notify('No images in that selection', 'error');
         return;
@@ -459,7 +473,7 @@ export function createPhotoStore({ bridge, notify, overlayDefaults, newDocumentB
     },
 
     importFiles: async (files) => {
-      const images = [...files].filter((f) => isImage(f.type, f.name));
+      const images = [...files].filter((f) => isStillFile(f.type, f.name));
       if (images.length === 0) {
         notify('No images in that drop', 'error');
         return;
@@ -567,9 +581,6 @@ function decodeSize(url: string): Promise<{ width: number; height: number }> {
     img.src = url;
   });
 }
-
-const isImage = (mime: string, name: string): boolean =>
-  mime.startsWith('image/') || /\.(png|jpe?g|webp|bmp|tiff?|gif|avif)$/i.test(name);
 
 /** Serialize the current document (used by save + autosave). */
 export const photoDocToJson = (doc: PhotoDocument): string => serializePhotoDocument(doc);

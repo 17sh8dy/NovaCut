@@ -271,7 +271,28 @@ function AnimatedRow({
           <Diamond size={13} />
         </button>
       </div>
-      <Slider value={current} min={min} max={max} step={step} unit={unit} onChange={setValue} />
+      {/*
+        min/max/step are declared in MODEL units while `current` is already in DISPLAY units
+        (Scale and Opacity multiply by 100 to read as a percentage). Handing the Slider that
+        mixture put the thumb at `value / (max - min)` of a range it does not belong to: Opacity
+        at 100% resolved to 10000% of a 0-1 track, so the fill was permanently wider than the
+        bar and the thumb sat far outside the panel. The control looked full at every value and
+        its endpoint was unreachable.
+
+        Converting the bounds through the same `toValue` the display uses puts all four numbers
+        in one unit system. `setValue` already expects display units and converts back with
+        `fromValue`, so behaviour is unchanged — only the geometry is now truthful. The step is
+        converted as a DELTA rather than a point, which is what keeps it correct for the rows
+        whose transform has an offset rather than a pure scale.
+      */}
+      <Slider
+        value={current}
+        min={toValue(min)}
+        max={toValue(max)}
+        step={toValue(min + step) - toValue(min)}
+        unit={unit}
+        onChange={setValue}
+      />
     </div>
   );
 }

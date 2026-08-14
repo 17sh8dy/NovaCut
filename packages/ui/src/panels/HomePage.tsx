@@ -13,7 +13,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Film,
   Image,
-  SlidersHorizontal,
+  Settings,
   Sparkles,
   Check,
   FolderOpen,
@@ -25,7 +25,7 @@ import {
   RotateCcw,
   ArrowRight,
 } from 'lucide-react';
-import type { RecentProject } from '@opencut/core';
+import { isStillFile, type ImportedFile, type RecentProject } from '@opencut/core';
 import { useAppStore, useStore } from '../state/context.js';
 import { AnimatedContent, BrandText, CardButton } from '../components/animated/index.js';
 import { AppMenuBar } from './AppMenuBar.js';
@@ -137,10 +137,49 @@ export function HomePage() {
       enterEditor();
     }
   };
-  const importMedia = () => {
-    store.getState().newProject();
-    store.getState().setPendingImport(true); // Media Library opens the import dialog on mount
-    enterEditor();
+  /**
+   * Pick files first, THEN pick the workspace that suits them.
+   *
+   * This used to head straight for the timeline and open the picker there, which made "Import
+   * Media" quietly mean "import video": choosing a .png landed you in the video editor, where the
+   * Media Library refused the still and told you to go to the Photo Editor instead. The file the
+   * user chose is the clearest statement of intent available, so route on it.
+   *
+   * The dialog is unfiltered here for the same reason — at Home, before a workspace exists, every
+   * supported file is a legitimate answer.
+   */
+  const importMedia = async () => {
+    let files: ImportedFile[];
+    try {
+      files = await store.getState().bridge.importDialog();
+    } catch (err) {
+      store.getState().notify('Import failed', 'error', String(err));
+      return;
+    }
+    if (files.length === 0) return; // user canceled
+
+    const stills = files.filter((f) => isStillFile(f.mime, f.name));
+    const footage = files.filter((f) => !isStillFile(f.mime, f.name));
+
+    // A mixed selection cannot open in two places at once. Footage wins — it is the one the
+    // timeline alone can handle — and the stills are named rather than silently dropped.
+    if (footage.length > 0) {
+      if (stills.length > 0) {
+        const names = stills.slice(0, 3).map((f) => f.name).join(', ');
+        store.getState().notify(
+          stills.length === 1 ? '1 image was left out' : `${stills.length} images were left out`,
+          'info',
+          `${names}${stills.length > 3 ? '…' : ''} — open images in the Photo Editor.`,
+        );
+      }
+      store.getState().newProject();
+      store.getState().setPendingFiles({ target: 'editor', files: footage });
+      enterEditor();
+      return;
+    }
+
+    store.getState().setPendingFiles({ target: 'photo', files: stills });
+    store.getState().setView('photo');
   };
   const openRecent = async (path: string) => {
     try {
@@ -172,115 +211,126 @@ export function HomePage() {
         <AppMenuBar />
         <div className="oc-home__chrome-spacer" />
         <button
-          className="oc-home__chrome-btn"
+          className="oc-home__chrome-btn oc-home__chrome-btn--gear"
           onClick={() => store.getState().openDialog('settings')}
           title="Settings"
           aria-label="Settings"
         >
-          <SlidersHorizontal size={16} />
+          {/*
+            A gear, not the slider icon it used to be. Sliders read as "adjust these values";
+            a cog is the near-universal sign for "this is where the settings are", and Home is
+            the one screen a first-time user meets with no other context to go on.
+
+            Deliberately NOT the flat blue of the reference image: the colour comes from theme
+            tokens so it follows light/dark and the accent chosen in Settings → Appearance,
+            which a baked-in gradient could not do.
+          */}
+          <Settings size={16} />
         </button>
         <WindowControls />
       </div>
       <div className="oc-home__scroll">
-        {/* Hero */}
-        <header className="oc-home__hero">
-          <AnimatedContent direction="scale">
-            <div className="oc-home__logo" />
-          </AnimatedContent>
-          <AnimatedContent delay={70}>
-            <h1 className="oc-home__title">
-              <BrandText>Open&nbsp;Cut</BrandText>
-            </h1>
-          </AnimatedContent>
-          <AnimatedContent delay={130}>
-            <p className="oc-home__tagline">Choose a workspace</p>
+        <div className="oc-home__scroll-inner">
+          {/* Hero */}
+          <header className="oc-home__hero">
+            <AnimatedContent direction="scale">
+              <div className="oc-home__logo" />
+            </AnimatedContent>
+            <AnimatedContent delay={70}>
+              <h1 className="oc-home__title">
+                <BrandText>Open&nbsp;Cut</BrandText>
+              </h1>
+            </AnimatedContent>
+            <AnimatedContent delay={130}>
+              <p className="oc-home__tagline">Choose a workspace</p>
+            </AnimatedContent>
+
+            <AnimatedContent delay={190}>
+              <div className="oc-home__actions">
+                <button className="oc-home__btn oc-home__btn--sm" onClick={openProject}>
+                  <FolderOpen size={16} /> Open Project
+                </button>
+                <button className="oc-home__btn oc-home__btn--sm" onClick={() => void importMedia()}>
+                  <Upload size={16} /> Import Media
+                </button>
+              </div>
+            </AnimatedContent>
+          </header>
+
+          {/* Workspace chooser */}
+          <div className="oc-workspaces">
+            {WORKSPACES.map((ws, i) => (
+              <AnimatedContent key={ws.id} delay={230 + i * 55}>
+                <WorkspaceCard ws={ws} onSelect={() => selectWorkspace(ws)} />
+              </AnimatedContent>
+            ))}
+          </div>
+
+          {/* Recover (only after an unclean shutdown) */}
+          {recovery && (
+            <AnimatedContent delay={140}>
+              <section className="oc-home__recover">
+                <div className="oc-home__recover-icon">
+                  <RotateCcw size={18} />
+                </div>
+                <div className="oc-home__recover-text">
+                  <strong>Recover autosaved project</strong>
+                  <span>
+                    “{recovery.projectName}” from {new Date(recovery.savedAt).toLocaleString()} can be restored.
+                  </span>
+                </div>
+                <button className="oc-home__btn oc-home__btn--primary" onClick={recover}>
+                  Restore <ArrowRight size={16} />
+                </button>
+              </section>
+            </AnimatedContent>
+          )}
+
+          {/* Recent Projects */}
+          <AnimatedContent delay={560}>
+            <Section icon={Clock} title="Recent Projects">
+              {recents.length === 0 ? (
+                <p className="oc-home__empty">No recent projects yet. Open a workspace to get started.</p>
+              ) : (
+                <div className="oc-home__grid">
+                  {recents.map((r) => (
+                    <CardButton
+                      key={r.path}
+                      className="oc-home__card"
+                      onClick={() => openRecent(r.path)}
+                      title={r.path}
+                    >
+                      <div className="oc-home__card-thumb">
+                        <LayoutTemplate size={22} />
+                      </div>
+                      <div className="oc-home__card-name">{r.name}</div>
+                      <div className="oc-home__card-meta">{new Date(r.modifiedAt).toLocaleDateString()}</div>
+                    </CardButton>
+                  ))}
+                </div>
+              )}
+            </Section>
           </AnimatedContent>
 
-          <AnimatedContent delay={190}>
-            <div className="oc-home__actions">
-              <button className="oc-home__btn oc-home__btn--sm" onClick={openProject}>
-                <FolderOpen size={16} /> Open Project
-              </button>
-              <button className="oc-home__btn oc-home__btn--sm" onClick={importMedia}>
-                <Upload size={16} /> Import Media
-              </button>
+          <AnimatedContent delay={620}>
+            <div className="oc-home__cols">
+              <Section icon={Rocket} title="What's New">
+                <ul className="oc-home__list">
+                  {WHATS_NEW.map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ul>
+              </Section>
+              <Section icon={Lightbulb} title="Helpful Tips">
+                <ul className="oc-home__list">
+                  {TIPS.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+              </Section>
             </div>
           </AnimatedContent>
-        </header>
-
-        {/* Workspace chooser */}
-        <div className="oc-workspaces">
-          {WORKSPACES.map((ws, i) => (
-            <AnimatedContent key={ws.id} delay={230 + i * 55}>
-              <WorkspaceCard ws={ws} onSelect={() => selectWorkspace(ws)} />
-            </AnimatedContent>
-          ))}
         </div>
-
-        {/* Recover (only after an unclean shutdown) */}
-        {recovery && (
-          <AnimatedContent delay={140}>
-            <section className="oc-home__recover">
-              <div className="oc-home__recover-icon">
-                <RotateCcw size={18} />
-              </div>
-              <div className="oc-home__recover-text">
-                <strong>Recover autosaved project</strong>
-                <span>
-                  “{recovery.projectName}” from {new Date(recovery.savedAt).toLocaleString()} can be restored.
-                </span>
-              </div>
-              <button className="oc-home__btn oc-home__btn--primary" onClick={recover}>
-                Restore <ArrowRight size={16} />
-              </button>
-            </section>
-          </AnimatedContent>
-        )}
-
-        {/* Recent Projects */}
-        <AnimatedContent delay={560}>
-          <Section icon={Clock} title="Recent Projects">
-            {recents.length === 0 ? (
-              <p className="oc-home__empty">No recent projects yet. Open a workspace to get started.</p>
-            ) : (
-              <div className="oc-home__grid">
-                {recents.map((r) => (
-                  <CardButton
-                    key={r.path}
-                    className="oc-home__card"
-                    onClick={() => openRecent(r.path)}
-                    title={r.path}
-                  >
-                    <div className="oc-home__card-thumb">
-                      <LayoutTemplate size={22} />
-                    </div>
-                    <div className="oc-home__card-name">{r.name}</div>
-                    <div className="oc-home__card-meta">{new Date(r.modifiedAt).toLocaleDateString()}</div>
-                  </CardButton>
-                ))}
-              </div>
-            )}
-          </Section>
-        </AnimatedContent>
-
-        <AnimatedContent delay={620}>
-          <div className="oc-home__cols">
-            <Section icon={Rocket} title="What's New">
-              <ul className="oc-home__list">
-                {WHATS_NEW.map((n) => (
-                  <li key={n}>{n}</li>
-                ))}
-              </ul>
-            </Section>
-            <Section icon={Lightbulb} title="Helpful Tips">
-              <ul className="oc-home__list">
-                {TIPS.map((t) => (
-                  <li key={t}>{t}</li>
-                ))}
-              </ul>
-            </Section>
-          </div>
-        </AnimatedContent>
       </div>
     </div>
   );

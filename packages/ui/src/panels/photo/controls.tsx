@@ -59,9 +59,9 @@ export function Section({
 /** A labelled row. The label column is fixed so stacked rows line up down the panel. */
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="oc-field">
-      <span className="oc-field__label">{label}</span>
-      <div className="oc-field__control">{children}</div>
+    <label className="oc-pfield">
+      <span className="oc-pfield__label">{label}</span>
+      <div className="oc-pfield__control">{children}</div>
     </label>
   );
 }

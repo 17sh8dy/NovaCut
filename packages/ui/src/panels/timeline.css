@@ -165,13 +165,40 @@
   border-radius: var(--radius-sm);
   background: var(--surface-3);
   border: 1px solid var(--border-strong);
-  border-left: 3px solid var(--label-blue);
   overflow: hidden;
   cursor: grab;
   display: flex;
   flex-direction: column;
   user-select: none;
   transition: box-shadow var(--dur-fast) var(--ease-out);
+  --clip-stripe: var(--label-blue);
+}
+/*
+ * The kind stripe is PAINTED, not a border.
+ *
+ * It used to be `border-left: 3px`, against 1px on the other three sides — and since the trim
+ * handles are absolutely positioned against the padding box, that border sat OUTSIDE the left
+ * handle. The leftmost 3px of every clip therefore hit the clip body and started a move, while
+ * the right edge had only 1px of the same dead zone. That asymmetry is why trimming appeared to
+ * work from the right edge and to "just move the clip" from the left.
+ *
+ * As a pseudo-element it looks identical, takes no pointer events, and leaves the two edges
+ * symmetric so both handles are reachable at the very edge of the clip.
+ */
+.oc-clip::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--clip-stripe);
+  pointer-events: none;
+  z-index: 4;
+}
+/* While the pointer is down the cursor must not flick back to `grab` on every re-render. */
+.oc-clip[data-dragging='true'] {
+  cursor: grabbing;
 }
 .oc-clip:hover {
   border-color: var(--border-strong);
@@ -182,22 +209,22 @@
   z-index: 2;
 }
 /*
- * The kind stripe. These rules sit AFTER [data-selected] on purpose and at equal specificity, so
- * they win the left edge: a selected audio clip is still an audio clip, and the accent ring
- * around it says everything selection needs to say.
+ * The kind stripe's colour. These rules sit AFTER [data-selected] on purpose and at equal
+ * specificity, so they win the left edge: a selected audio clip is still an audio clip, and the
+ * accent ring around it says everything selection needs to say.
  */
 .oc-clip[data-kind='audio'] {
-  border-left-color: var(--label-teal);
+  --clip-stripe: var(--label-teal);
 }
 .oc-clip[data-kind='text'] {
-  border-left-color: var(--label-purple);
+  --clip-stripe: var(--label-purple);
 }
 .oc-clip[data-kind='image'],
 .oc-clip[data-kind='shape'] {
-  border-left-color: var(--label-orange);
+  --clip-stripe: var(--label-orange);
 }
 .oc-clip[data-kind='adjustment'] {
-  border-left-color: var(--label-green);
+  --clip-stripe: var(--label-green);
 }
 .oc-clip__label {
   padding: 3px 7px;
@@ -214,11 +241,16 @@
   position: relative;
   min-height: 0;
 }
+/* Decoration only. It must never take a pointer event or start a native image drag — the clip
+   body underneath owns the whole gesture. */
 .oc-clip__thumb {
   width: 100%;
   height: 100%;
   object-fit: cover;
   opacity: 0.5;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 .oc-clip__wave {
   position: absolute;
@@ -238,9 +270,9 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 8px;
+  width: 10px;
   cursor: ew-resize;
-  z-index: 3;
+  z-index: 5; /* above the kind stripe, so the very edge of the clip still trims */
 }
 .oc-clip__handle--in {
   left: 0;

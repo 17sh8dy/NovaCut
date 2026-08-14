@@ -33,6 +33,11 @@
 .oc-home__chrome > * {
   -webkit-app-region: no-drag;
 }
+/* Same display:contents caveat as the editor title bar — see panels.css. */
+.oc-home__chrome button,
+.oc-home__chrome [role='button'] {
+  -webkit-app-region: no-drag;
+}
 /* The spacer must stay draggable — it IS the strip you grab to move the window, and marking
    every child no-drag above would otherwise leave almost nothing to grab. */
 .oc-home__chrome-spacer {
@@ -58,6 +63,33 @@
   background: var(--surface-3);
   color: var(--text-primary);
 }
+
+/*
+ * The settings gear.
+ *
+ * Colour is a token, never a literal: --text-secondary at rest and --accent on approach, so the
+ * icon follows light/dark AND whatever accent the user picked in Settings → Appearance. The
+ * reference for this was a fixed blue gradient, which would have looked wrong the moment either
+ * changed.
+ *
+ * The turn is one settled half-rotation, not a loop. A gear's teeth land back in register at
+ * 180deg, and the house motion rule is that things arrive and settle rather than run forever —
+ * an icon spinning for as long as the pointer rests on it reads as a busy spinner, which is a
+ * thing this button is not doing. Reduced motion needs no rule here: the global
+ * `:root[data-reduce-motion] *` in panels.css collapses this transition to ~0 with everything
+ * else, so the colour still lands and the rotation simply does not animate.
+ */
+.oc-home__chrome-btn--gear svg {
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+.oc-home__chrome-btn--gear:hover,
+.oc-home__chrome-btn--gear:focus-visible {
+  color: var(--accent);
+}
+.oc-home__chrome-btn--gear:hover svg,
+.oc-home__chrome-btn--gear:focus-visible svg {
+  transform: rotate(180deg);
+}
 [data-os='mac'] .oc-home__chrome {
   padding-left: 80px;
 }
@@ -68,9 +100,43 @@
   min-height: 0;
   width: 100%;
   overflow-y: auto;
-  padding: clamp(24px, 6vh, 72px) clamp(20px, 6vw, 96px) 64px;
+}
+/*
+ * The scroller runs the full width of the window while the content column stays centred here.
+ * Keeping the max-width on an inner wrapper is what moves the scrollbar out to the window edge:
+ * on a constrained scroller it renders at the edge of the 1120px column, reading as a stray
+ * grey line floating beside the cards rather than as window chrome.
+ */
+.oc-home__scroll-inner {
   max-width: 1120px;
   margin: 0 auto;
+  padding: clamp(24px, 6vh, 72px) clamp(20px, 6vw, 96px) 64px;
+}
+/*
+ * Home is a landing screen, so the scrollbar stays invisible until the pointer is actually in
+ * the area — the cards do the talking, not the chrome. Same 6px thumb as the rest of the app
+ * (see global.css) so it matches once it does appear.
+ */
+.oc-home__scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.oc-home__scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.oc-home__scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background var(--dur) var(--ease-out);
+}
+.oc-home__scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--border);
+  background-clip: padding-box;
+}
+.oc-home__scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+  background-clip: padding-box;
 }
 
 /* Hero */

@@ -65,7 +65,7 @@ import {
   type StrokePoint,
   type Transform2D,
 } from '@opencut/photo';
-import { Button, EmptyState } from '../../components/primitives/index.js';
+import { EmptyState } from '../../components/primitives/index.js';
 import { usePhoto, usePhotoStore } from '../../state/photoContext.js';
 import type { PhotoEngine } from '../../state/usePhotoEngine.js';
 import { cornersOf, hitTest, hitTestDeep, matrixOf, naturalSizeOf, snapMove, type SnapGuide } from './layerGeometry.js';
@@ -929,9 +929,6 @@ export function CanvasStage({ engine }: { engine: PhotoEngine }) {
             title="Start with an image — or don't"
             hint="Drop a file here, paste from the clipboard, or add text and shapes to an empty canvas."
           />
-          <Button variant="primary" onClick={() => void store.getState().importImages()}>
-            <ImagePlus size={16} /> Add Image
-          </Button>
         </div>
       )}
     </div>

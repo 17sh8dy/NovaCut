@@ -100,7 +100,21 @@ export async function ffprobeMedia(src: string): Promise<ProbeResult> {
   };
 }
 
-/** Extract a single JPEG frame and return it as a data URL for the library thumbnail. */
+/**
+ * Extract a single JPEG frame and return it as a data URL for the library thumbnail.
+ *
+ * 640 wide, not 320. The same still backs both the library tile and the strip drawn across a
+ * timeline clip, and that clip is the demanding one: it is laid out `object-fit: cover`, so a
+ * clip wider than the source gets the frame scaled UP and reads as visibly soft. At a few hundred
+ * pixels per clip — the common case — 640 lands at or above 1:1 and the blur disappears.
+ *
+ * -q:v 4 rather than mjpeg's default (~q13, built for speed over a wire): at thumbnail sizes the
+ * default's ringing around high-contrast edges is plainly visible. 4 is near-transparent quality
+ * and still small.
+ *
+ * Both numbers cost bytes, and thumbnails ride along in the recovery snapshot that goes to
+ * localStorage — writeSnapshot already prunes on quota, which is what absorbs the increase.
+ */
 export async function ffmpegThumbnail(src: string, atSeconds: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(
@@ -109,7 +123,10 @@ export async function ffmpegThumbnail(src: string, atSeconds: number): Promise<s
         '-ss', String(atSeconds),
         '-i', src,
         '-frames:v', '1',
-        '-vf', 'scale=320:-1',
+        // Never upscale past the source: `min(640,iw)` keeps a small clip at its native width
+        // instead of blowing it up and baking softness into the cache.
+        '-vf', "scale='min(640,iw)':-2:flags=lanczos",
+        '-q:v', '4',
         '-f', 'image2pipe',
         '-vcodec', 'mjpeg',
         'pipe:1',

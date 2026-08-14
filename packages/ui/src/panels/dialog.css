@@ -267,6 +267,14 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /*
+   * min-height, not just min-width. As a grid item this defaults to `min-height: auto`, which
+   * refuses to shrink below its content — so a long category grew this column past the window's
+   * fixed height and .oc-settings' `overflow: hidden` simply cut the rest off. The content pane
+   * below asks for `overflow-y: auto`, but an element that is never constrained never scrolls,
+   * so the overflow was unreachable rather than scrollable.
+   */
+  min-height: 0;
 }
 .oc-settings__header {
   display: flex;
@@ -284,7 +292,15 @@
 }
 .oc-settings__content {
   padding: var(--space-4) var(--space-5);
+  /* Take the leftover column height and be allowed to shrink under it: together these are what
+     turn the `overflow-y` below from a no-op into a real scroller that ends exactly where the
+     settings end. */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  /* The dialog is the end of the line for a scroll gesture — without this, flicking past the
+     last setting chains out to whatever is behind the backdrop. */
+  overscroll-behavior: contain;
 }
 
 .oc-setting-row {

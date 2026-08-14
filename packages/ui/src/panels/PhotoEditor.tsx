@@ -31,7 +31,7 @@ import {
 import type { Layer, PhotoDocument } from '@opencut/photo';
 import { renameDocument, rotateCanvas } from '@opencut/photo';
 import { Button, IconButton, Panel, ResizablePanels } from '../components/primitives/index.js';
-import { useAppStore } from '../state/context.js';
+import { useAppStore, useStore } from '../state/context.js';
 import { usePhoto, usePhotoStore } from '../state/photoContext.js';
 import { clearAutosave, readAutosave, writeAutosave, type PhotoAutosave, type PhotoDock } from '../state/photoStore.js';
 import { usePhotoEngine, type PhotoEngine } from '../state/usePhotoEngine.js';
@@ -53,6 +53,7 @@ export function PhotoEditor() {
   const dialog = usePhoto((s) => s.dialog);
   usePhotoShortcuts(store);
   useAutosave();
+  usePendingImport(store);
 
   return (
     <div className="app-shell">
@@ -76,6 +77,25 @@ export function PhotoEditor() {
       {dialog === 'export' && <ExportPhotoDialog engine={engine} />}
     </div>
   );
+}
+
+/**
+ * Take delivery of files Home already picked.
+ *
+ * Home runs the file dialog before choosing a workspace — a .png routes here, a .mp4 to the
+ * timeline — so the selection arrives as app state rather than through this editor's own picker.
+ * Cleared before ingesting so a re-render cannot import the same files twice, and the `target`
+ * check means the timeline's share of a mixed selection is never consumed here by mistake.
+ */
+function usePendingImport(store: ReturnType<typeof usePhotoStore>): void {
+  const app = useAppStore();
+  const pendingFiles = useStore((s) => s.pendingFiles);
+  useEffect(() => {
+    if (pendingFiles?.target !== 'photo') return;
+    const { files } = pendingFiles;
+    app.getState().setPendingFiles(null);
+    void store.getState().importChosen(files);
+  }, [pendingFiles, app, store]);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
