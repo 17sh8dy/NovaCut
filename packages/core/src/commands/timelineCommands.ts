@@ -172,54 +172,100 @@ export function splitClipsAt(specs: SplitSpec[], time: Ticks): Command {
   };
 }
 
-export function deleteClip(clipId: ClipId): Command {
+/**
+ * Delete every clip in `clipIds` as ONE undo step.
+ *
+ * The plural form is the real one and the singular delegates to it, because the timeline has
+ * supported shift-click multi-select from the start while Delete only ever removed
+ * `selectedClipIds[0]` — select five clips, press Delete, watch one disappear and the other four
+ * stay highlighted. One command rather than a loop of them so a multi-clip delete is a single
+ * press of Ctrl+Z, which is what the user thinks they did.
+ */
+export function deleteClips(clipIds: readonly ClipId[]): Command {
   return {
-    label: 'Delete Clip',
-    apply: (project) => removeClip(project, activeSeqId(project), clipId),
+    label: clipIds.length > 1 ? `Delete ${clipIds.length} Clips` : 'Delete Clip',
+    apply: (project) =>
+      clipIds.reduce((p, id) => removeClip(p, activeSeqId(p), id), project),
   };
+}
+
+export function deleteClip(clipId: ClipId): Command {
+  return deleteClips([clipId]);
 }
 
 /**
  * Ripple-delete: remove the clip and pull everything after it on the same track left by
  * the clip's duration, closing the gap.
  */
-export function rippleDeleteClip(clipId: ClipId): Command {
+export function rippleDeleteClips(clipIds: readonly ClipId[]): Command {
+  const ids = new Set(clipIds);
   return {
-    label: 'Ripple Delete',
+    label: clipIds.length > 1 ? `Ripple Delete ${clipIds.length} Clips` : 'Ripple Delete',
     apply: (project) => {
       const seq = getActiveSequence(project);
-      const track = seq.tracks.find((t) => t.clips.some((c) => c.id === clipId));
-      if (!track) return project;
-      const clip = track.clips.find((c) => c.id === clipId)!;
-      const gap = clip.duration;
-      const gapStart = clip.start;
-      return updateTrack(project, seq.id, track.id, (t) => ({
-        ...t,
-        clips: t.clips
-          .filter((c) => c.id !== clipId)
-          .map((c) => (c.start >= gapStart ? { ...c, start: c.start - gap } : c)),
-      }));
+      let next = project;
+      /*
+       * Per track, because a ripple closes a gap along ONE track and a multi-selection can span
+       * several. Each survivor shifts left by the total duration of the removed clips that
+       * started at or before it — the single-clip rule summed, which is the only generalisation
+       * that leaves two clips deleted one after another in the same place as two separate ripple
+       * deletes would have.
+       */
+      for (const track of seq.tracks) {
+        const removed = track.clips.filter((c) => ids.has(c.id));
+        if (removed.length === 0) continue;
+        next = updateTrack(next, seq.id, track.id, (t) => ({
+          ...t,
+          clips: t.clips
+            .filter((c) => !ids.has(c.id))
+            .map((c) => {
+              const gap = removed
+                .filter((r) => c.start >= r.start)
+                .reduce((sum, r) => sum + r.duration, 0);
+              return gap > 0 ? { ...c, start: (c.start - gap) as Ticks } : c;
+            }),
+        }));
+      }
+      return next;
+    },
+  };
+}
+
+export function rippleDeleteClip(clipId: ClipId): Command {
+  return rippleDeleteClips([clipId]);
+}
+
+export function duplicateClips(clipIds: readonly ClipId[]): Command {
+  return {
+    label: clipIds.length > 1 ? `Duplicate ${clipIds.length} Clips` : 'Duplicate Clip',
+    apply: (project) => {
+      /*
+       * The originals are located against the ORIGINAL sequence, not the one being built up:
+       * each copy lands directly after its own source, and reading positions from a sequence
+       * that already has earlier copies in it would stack them.
+       */
+      const seq = getActiveSequence(project);
+      const index = new Map(
+        seq.tracks.flatMap((t) => t.clips.map((c) => [c.id, { track: t, clip: c }] as const)),
+      );
+      let next = project;
+      for (const id of clipIds) {
+        const found = index.get(id);
+        if (!found) continue;
+        const copy: Clip = {
+          ...structuredClone(found.clip),
+          id: newClipId(),
+          start: (found.clip.start + found.clip.duration) as Ticks,
+        };
+        next = insertClip(next, seq.id, found.track.id, copy);
+      }
+      return next;
     },
   };
 }
 
 export function duplicateClip(clipId: ClipId): Command {
-  return {
-    label: 'Duplicate Clip',
-    apply: (project) => {
-      const seq = getActiveSequence(project);
-      const found = seq.tracks
-        .flatMap((t) => t.clips.map((c) => ({ track: t, clip: c })))
-        .find((x) => x.clip.id === clipId);
-      if (!found) return project;
-      const copy: Clip = {
-        ...structuredClone(found.clip),
-        id: newClipId(),
-        start: found.clip.start + found.clip.duration,
-      };
-      return insertClip(project, seq.id, found.track.id, copy);
-    },
-  };
+  return duplicateClips([clipId]);
 }
 
 /** Add a clip built elsewhere (e.g. from a dropped media asset) to a track. */

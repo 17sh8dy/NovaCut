@@ -33,13 +33,19 @@ export function TitleBar() {
 
       <div className="oc-menu-row">
         <Tooltip label="New Project" shortcut="Ctrl N">
-          <IconButton onClick={() => store.getState().newProject()}>
+          <IconButton
+            onClick={async () => {
+              if (!(await store.getState().guardUnsaved())) return;
+              store.getState().newProject();
+            }}
+          >
             <FilePlus2 size={17} />
           </IconButton>
         </Tooltip>
         <Tooltip label="Open Project" shortcut="Ctrl O">
           <IconButton
             onClick={async () => {
+              if (!(await store.getState().guardUnsaved())) return;
               const res = await store.getState().bridge.openProjectDialog();
               if (res) store.getState().loadProjectData(res.project, res.path);
             }}

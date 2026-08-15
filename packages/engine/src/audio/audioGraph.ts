@@ -113,6 +113,8 @@ export class AudioEngine {
   ): void {
     const soloed = sequence.tracks.some((t) => t.solo);
     let audibleClips = 0;
+    /** Every clip this sequence still has a node for; anything else is pruned below. */
+    const live = new Set<string>();
     // Iterate every track: audio clips AND video clips that carry embedded audio.
     for (const track of sequence.tracks) {
       const audible = !track.muted && (!soloed || track.solo);
@@ -121,6 +123,7 @@ export class AudioEngine {
         const media = getMedia(clip.mediaId);
         if (!media) continue;
         const node = this.nodeFor(clip, media);
+        live.add(clip.id);
         const inClip = time >= clip.start && time < clip.start + clip.duration;
 
         if (inClip && audible && !clip.audio.muted) {
@@ -156,11 +159,41 @@ export class AudioEngine {
         }
       }
     }
+    this.prune(live);
     // The ground truth: is PCM actually reaching the device?
     dthrottle('outlevel', 500, 'audio', () => [
       'OUTPUT master RMS',
       { rms: Number(this.measureOutput().toFixed(5)), ctxState: this.ctx.state, engPlaying: this.playing, audibleClips },
     ]);
+  }
+
+  /**
+   * Drop the nodes of clips that no longer exist.
+   *
+   * `update()` reconciles by walking the CLIPS, so a clip that has been deleted is simply not
+   * visited — and its element, which `update()` had already started, was therefore never told to
+   * stop. Deleting a clip mid-playback left its audio playing on over the timeline until the
+   * transport was paused, with nothing on screen it could be traced back to.
+   *
+   * The map is keyed by clip id and every split mints new ones, so an editing session also grew
+   * an `<audio>` element, a MediaElementSource and a GainNode per discarded clip, all still
+   * wired to the master bus. Pruning is what makes the graph match the timeline rather than the
+   * history of it.
+   *
+   * A source node cannot be reconnected to another element once created, so a pruned clip that
+   * comes back (undo) correctly gets a fresh node from `nodeFor`.
+   */
+  private prune(live: Set<string>): void {
+    for (const [clipId, node] of this.nodes) {
+      if (live.has(clipId)) continue;
+      node.el.pause();
+      node.el.removeAttribute('src');
+      node.el.load(); // release the decoder; pause() alone keeps the download alive
+      node.source.disconnect();
+      node.gain.disconnect();
+      this.nodes.delete(clipId);
+      dlog('audio', 'clip audio node pruned', { clip: clipId });
+    }
   }
 
   /** Volume automation × fade envelope for a clip at a local time. */

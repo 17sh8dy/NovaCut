@@ -56,6 +56,7 @@ const api: OpenCutApi = {
   encoderWrite: (jobId, frame) => ipcRenderer.invoke(CH.encoderWrite, jobId, frame),
   encoderFinish: (jobId) => ipcRenderer.invoke(CH.encoderFinish, jobId),
   encoderAbort: (jobId) => ipcRenderer.invoke(CH.encoderAbort, jobId),
+  confirmDiscard: (projectName) => ipcRenderer.invoke(CH.confirmDiscard, projectName),
   notify: (title, body) => ipcRenderer.send(CH.notify, title, body),
   revealFile: (path) => ipcRenderer.send(CH.revealFile, path),
 

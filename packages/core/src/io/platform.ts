@@ -123,6 +123,24 @@ export interface PlatformBridge {
   ): Promise<FrameEncoder>;
 
   // ── Misc host services ──
+  /**
+   * Ask about unsaved work before an action that throws it away, and say what to do.
+   *
+   * The window's close handler has guarded this since the shell was built, but it guards
+   * exactly one exit. New Project, Open Project and picking a recent replace the open project
+   * just as completely, from six call sites, with no prompt at all — so an edit could be lost
+   * to Ctrl+N with nothing to undo it and no recovery offer, because a deliberate New is a
+   * clean shutdown and crash recovery never runs.
+   *
+   * Three answers, not two, and the same three the close guard offers: 'save' means write
+   * first and proceed only if that succeeded, which is the answer people actually want and
+   * which a plain confirm() cannot express. Callers must treat 'cancel' — and a failed save —
+   * as "do not proceed".
+   *
+   * Optional: a host with no native dialogs omits it and the caller falls back to a confirm().
+   * Never called when there is nothing unsaved.
+   */
+  confirmDiscard?(projectName: string): Promise<'save' | 'discard' | 'cancel'>;
   notify(title: string, body: string): void;
   /**
    * Show a file in the host's file manager, selected, in whatever folder it actually landed in.

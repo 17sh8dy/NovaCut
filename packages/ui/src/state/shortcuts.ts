@@ -19,6 +19,8 @@ export type ShortcutId =
   | 'delete'
   | 'rippleDelete'
   | 'duplicate'
+  | 'selectAll'
+  | 'deselectAll'
   | 'save'
   | 'open'
   | 'new';
@@ -38,9 +40,11 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'undo', label: 'Undo', category: 'Editing', defaultCombo: 'mod+z' },
   { id: 'redo', label: 'Redo', category: 'Editing', defaultCombo: 'mod+shift+z' },
   { id: 'redoAlt', label: 'Redo (alternate)', category: 'Editing', defaultCombo: 'mod+y' },
-  { id: 'delete', label: 'Delete Clip', category: 'Editing', defaultCombo: 'delete' },
-  { id: 'rippleDelete', label: 'Ripple Delete Clip', category: 'Editing', defaultCombo: 'shift+delete' },
-  { id: 'duplicate', label: 'Duplicate Clip', category: 'Editing', defaultCombo: 'mod+d' },
+  { id: 'delete', label: 'Delete Selected', category: 'Editing', defaultCombo: 'delete' },
+  { id: 'rippleDelete', label: 'Ripple Delete Selected', category: 'Editing', defaultCombo: 'shift+delete' },
+  { id: 'duplicate', label: 'Duplicate Selected', category: 'Editing', defaultCombo: 'mod+d' },
+  { id: 'selectAll', label: 'Select All Clips', category: 'Editing', defaultCombo: 'mod+a' },
+  { id: 'deselectAll', label: 'Deselect All', category: 'Editing', defaultCombo: 'escape' },
   { id: 'save', label: 'Save Project', category: 'File', defaultCombo: 'mod+s' },
   { id: 'open', label: 'Open Project', category: 'File', defaultCombo: 'mod+o' },
   { id: 'new', label: 'New Project', category: 'File', defaultCombo: 'mod+n' },

@@ -72,6 +72,15 @@ export function ExportDialog() {
   const [progress, setProgress] = useState<ExportProgress | null>(null);
 
   const durationSec = toSeconds(seq.duration) || 1;
+  /*
+   * There is nothing to export until something is on the timeline.
+   *
+   * An empty sequence has duration 0, and the render loop floors its frame count at 1 — so
+   * Export ran, wrote a single black frame, and reported "Export complete" over a file that
+   * plays as an instant of nothing. Reported success is the part that makes it a bug rather
+   * than a curiosity: it is indistinguishable from a real export having gone wrong.
+   */
+  const isEmpty = seq.tracks.every((t) => t.clips.length === 0);
   const patch = (p: Partial<ExportSettings>) => setSettings((s) => ({ ...s, ...p }));
 
   // Keep codec valid for the chosen container.
@@ -138,6 +147,14 @@ export function ExportDialog() {
         });
       });
       /*
+       * Past this line the encoder has settled itself and the catch must not touch it: `run`
+       * calls finish() when it completes and abort() when it is cancelled, in both cases before
+       * returning. Dropping the handle matters because abort() DELETES the output file — so a
+       * throw from any of the announce/reveal/remember steps below, long after a good export was
+       * written, would otherwise erase the very file it had just finished.
+       */
+      encoder = null;
+      /*
        * A cancelled run resolves normally — it is not a failure — so it has to be detected
        * rather than caught. Everything below this point announces a finished file and opens a
        * folder on it, and neither is true of an export the user stopped part-way.
@@ -165,9 +182,10 @@ export function ExportDialog() {
       if (s2.preferences.notifyExport) s2.bridge.notify('Export complete', job.filename);
       if (s2.preferences.rememberExportSettings) writeLastExport({ ...settings, videoCodec: activeCodec });
     } catch (err) {
-      // Kill the encoder before reporting, so the process is gone by the time the user reads the
-      // message and goes to look at the file. Its own failure is swallowed: the export has
-      // already failed, and "abort failed" on top of that tells the user nothing they can act on.
+      // Kill the encoder before reporting, so the process is gone — and its partial file with
+      // it — by the time the user reads the message and goes to look. Null once `run` returned,
+      // so this only ever fires for a genuine mid-render failure. Its own failure is swallowed:
+      // the export has already failed, and "abort failed" on top tells the user nothing.
       await encoder?.abort().catch(() => {});
       setProgress({ jobId: job.id, status: 'error', progress: 0, message: String(err) });
       store.getState().notify('Export failed', 'error');
@@ -176,7 +194,12 @@ export function ExportDialog() {
     }
   };
 
-  /** Stop a render in flight; falls back to closing the dialog when nothing is running. */
+  /**
+   * Stop a render in flight; falls back to closing the dialog when nothing is running.
+   *
+   * The ONLY way to abort an export, on purpose — see the note on the Modal's onClose for why
+   * the backdrop, Escape and the X deliberately do nothing instead while one is running.
+   */
   const cancel = () => {
     if (running.current) {
       running.current.abort();
@@ -190,17 +213,42 @@ export function ExportDialog() {
   return (
     <Modal
       title="Export Video"
-      onClose={() => store.getState().openDialog(null)}
+      /*
+       * While a render is in flight the dialog cannot be dismissed by the backdrop, Escape or
+       * the X — only the explicit "Cancel Export" button stops it.
+       *
+       * Those three used to call openDialog(null) directly, which unmounted the component while
+       * the render carried on: the handle in `running` went with it, so nothing could stop the
+       * export short of quitting, no progress was left to watch it by, and on completion it
+       * still announced success and revealed a file the user believed they had cancelled.
+       *
+       * Ignoring them is deliberately not the same as routing them to cancel(). A stray click on
+       * the backdrop or a reflexive Escape would then destroy a render that may be twenty
+       * minutes in — trading a silently orphaned export for a silently destroyed one. Throwing
+       * away that much work should take a button that says so.
+       */
+      onClose={() => {
+        if (progress?.status === 'rendering') return;
+        store.getState().openDialog(null);
+      }}
       footer={
         <>
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>
-            {width}×{height} · {activeCodec.toUpperCase()} · {effectiveBitrate} Mbps
+          <span style={{ fontSize: 'var(--text-sm)', color: isEmpty ? 'var(--warning)' : 'var(--text-tertiary)' }}>
+            {isEmpty
+              ? 'Nothing on the timeline to export'
+              : `${width}×${height} · ${activeCodec.toUpperCase()} · ${effectiveBitrate} Mbps`}
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             <Button variant="ghost" onClick={cancel}>
               {progress?.status === 'rendering' ? 'Cancel Export' : 'Cancel'}
             </Button>
-            <Button variant="primary" icon={<Download size={16} />} onClick={startExport} disabled={progress?.status === 'rendering'}>
+            <Button
+              variant="primary"
+              icon={<Download size={16} />}
+              onClick={startExport}
+              disabled={progress?.status === 'rendering' || isEmpty}
+              title={isEmpty ? 'Add something to the timeline first' : undefined}
+            >
               {progress?.status === 'rendering' ? 'Exporting…' : 'Export'}
             </Button>
           </div>

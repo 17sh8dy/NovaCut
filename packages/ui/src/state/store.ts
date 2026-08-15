@@ -135,6 +135,8 @@ interface AppState {
   splitAtPlayhead: () => void;
 
   selectClip: (id: ClipId | null, additive?: boolean) => void;
+  /** Select every clip in the sequence that an edit could actually act on. */
+  selectAllClips: () => void;
   selectTransition: (sel: { trackId: TrackId; id: string } | null) => void;
   selectMedia: (ids: string[]) => void;
 
@@ -167,6 +169,15 @@ interface AppState {
   dismissRecovery: () => void;
 
   // Project lifecycle
+  /**
+   * Ask before an action that would throw away unsaved work. True means "go ahead".
+   *
+   * Every path that REPLACES the open project has to await this first — New, Open, and
+   * opening a recent, from the title bar, the menu, the shortcut and Home alike. Without it
+   * Ctrl+N was silent, instant data loss: History is reset so there is nothing to undo, and a
+   * deliberate New is a clean shutdown, so crash recovery never offers the session back.
+   */
+  guardUnsaved: () => Promise<boolean>;
   newProject: (name?: string) => void;
   loadProjectData: (project: Project, path: string | null) => void;
   save: () => Promise<void>;
@@ -327,6 +338,19 @@ export function createAppStore(bridge: PlatformBridge) {
         set({ selectedClipIds: [id], inspectorTab: get().inspectorTab });
       }
     },
+    selectAllClips: () => {
+      /*
+       * Locked tracks are skipped, because the point of selecting everything is to then do
+       * something to it — and every edit refuses locked tracks anyway. Including them would
+       * report a selection larger than the one Delete is about to act on, which is the kind of
+       * mismatch that makes a user think the delete half-failed.
+       */
+      const ids = get()
+        .sequence()
+        .tracks.filter((t) => !t.locked)
+        .flatMap((t) => t.clips.map((c) => c.id));
+      set({ selectedClipIds: ids, selectedTransition: null });
+    },
     selectMedia: (ids) => set({ selectedMediaIds: ids }),
 
     setPlaying: (isPlaying) => set({ isPlaying }),
@@ -388,10 +412,37 @@ export function createAppStore(bridge: PlatformBridge) {
         playhead: snap.playhead,
         pixelsPerSecond: snap.pixelsPerSecond,
         selectedClipIds: snap.selectedClipIds as ClipId[],
+        selectedTransition: null,
       });
       get().notify('Previous session restored', 'success');
     },
 
+    guardUnsaved: async () => {
+      const s = get();
+      if (!s.dirty) return true;
+      const name = s.project.name;
+      /*
+       * The host box offers three answers; a plain confirm() can only offer two, so the
+       * fallback maps to the two that are safe to express — discard or cancel. It is never
+       * the desktop path, which is the one that ships.
+       */
+      const answer = s.bridge.confirmDiscard
+        ? await s.bridge.confirmDiscard(name)
+        : window.confirm(`Discard unsaved changes to “${name}”?`)
+          ? ('discard' as const)
+          : ('cancel' as const);
+      if (answer === 'cancel') return false;
+      if (answer === 'discard') return true;
+      /*
+       * Save, and proceed ONLY if it actually landed. `save()` clears `dirty` on a successful
+       * write and leaves it set otherwise — a rejected write (it toasts) and a cancelled save
+       * dialog (it returns early) both leave it set. So the flag is an exact answer to "is the
+       * work on disk", and reading it back is what stops "Save" from discarding the file when
+       * saving it was impossible.
+       */
+      await get().save();
+      return !get().dirty;
+    },
     newProject: (name) => {
       // Build the sequence from the Projects preferences rather than the library default, so
       // "Default resolution" and "Default frame rate" mean something the moment they are set.
@@ -404,11 +455,11 @@ export function createAppStore(bridge: PlatformBridge) {
         fps: Number(p.defaultFrameRate) || 30,
       });
       get().history.reset(project, 'New Project');
-      set({ project, projectPath: null, dirty: false, selectedClipIds: [], playhead: 0 });
+      set({ project, projectPath: null, dirty: false, selectedClipIds: [], selectedTransition: null, playhead: 0 });
     },
     loadProjectData: (project, path) => {
       get().history.reset(project, 'Open');
-      set({ project, projectPath: path, dirty: false, selectedClipIds: [], playhead: 0 });
+      set({ project, projectPath: path, dirty: false, selectedClipIds: [], selectedTransition: null, playhead: 0 });
     },
     /**
      * Write the project to disk.

@@ -103,6 +103,12 @@ export class ElectronBridge implements PlatformBridge {
     };
   }
 
+  /** Native three-way unsaved-changes prompt. See PlatformBridge.confirmDiscard.
+   */
+  confirmDiscard(projectName: string): Promise<'save' | 'discard' | 'cancel'> {
+    return this.api.confirmDiscard(projectName);
+  }
+
   notify(title: string, body: string): void {
     this.api.notify(title, body);
   }

@@ -237,6 +237,34 @@ export function registerHandlers(hooks: HandlerHooks): void {
   });
 
   // ── Misc ──
+  /*
+   * "Save changes?" for an in-app action that replaces the open project (New, Open, a recent).
+   *
+   * Deliberately the SAME native box as the window close guard in main.ts — same three buttons,
+   * same default, same cancel — because to the user these are one question asked in one voice,
+   * and answering ‘Save’ must mean the same thing whichever way the project is about to go
+   * away. It lives in main because the renderer cannot show a modal, OS-native, window-parented
+   * dialog, and a page-level confirm() offers only two of the three answers.
+   *
+   * Modal to the requesting window (found from the sender, so no window handle has to be
+   * threaded through the hooks). The renderer decides what to do with the answer; main only
+   * asks the question.
+   */
+  ipcMain.handle(CH.confirmDiscard, async (e, projectName: string): Promise<'save' | 'discard' | 'cancel'> => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const opts = {
+      type: 'warning' as const,
+      title: 'Unsaved changes',
+      message: `Save changes to “${projectName}” before continuing?`,
+      detail: 'Your changes will be lost if you don’t save them.',
+      buttons: ['Save', "Don't Save", 'Cancel'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    };
+    const { response } = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+    return response === 0 ? 'save' : response === 1 ? 'discard' : 'cancel';
+  });
   ipcMain.on(CH.notify, (_e, title: string, body: string) => {
     if (Notification.isSupported()) new Notification({ title, body }).show();
   });

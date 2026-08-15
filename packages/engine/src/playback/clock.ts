@@ -69,6 +69,23 @@ export class PlaybackClock {
 
   play(): void {
     if (this.playing) return;
+    /*
+     * Pressing Play at the end of the timeline REWINDS rather than doing nothing.
+     *
+     * Playback stops by parking the position exactly on `duration`, so the next play() used to
+     * advance past the end on its very first frame, emit one tick and pause again — the button
+     * flickered to Pause and back and the picture never moved. Watching a cut to the end and
+     * pressing Play again is the most ordinary thing an editor does, and it read as a dead
+     * transport.
+     *
+     * Back to the loop start rather than a hard zero: with a loop range set, "the beginning" is
+     * the beginning of that range, which is where a wrap would have put it anyway.
+     */
+    const from = this.opts.loopStart ?? 0;
+    if (this.position >= this.opts.duration && this.opts.duration > from) {
+      this.position = from;
+      this.emitTick();
+    }
     this.playing = true;
     this.lastTs = 0;
     dlog('clock', 'play', { position: this.position, duration: this.opts.duration, fps: this.opts.fps, speed: this.speed });

@@ -145,8 +145,20 @@ export function usePlaybackEngine(): PlaybackEngine {
     // Re-render when the project or playhead changes while paused (e.g. scrubbing, edits).
     let lastPlayhead = store.getState().playhead;
     let lastProject = store.getState().project;
+    /*
+     * Media list identity, so decoders can be released when an asset leaves the library.
+     * Compared by reference: every command produces a new project, and `media` is only a new
+     * array when the library itself changed — so this stays a pointer compare on the vast
+     * majority of ticks, where the edit was to a clip and not to the media.
+     */
+    let lastMedia = store.getState().project.media;
     const unsub = store.subscribe((s) => {
       c.configure({ fps: s.sequence().fps, duration: s.sequence().duration, loop: s.loop });
+      if (s.project.media !== lastMedia) {
+        lastMedia = s.project.media;
+        const dropped = pool.current?.pruneTo(lastMedia.map((m) => m.id)) ?? 0;
+        if (dropped > 0) dlog('engine', 'pruned frame sources for removed media', { dropped });
+      }
       if (!c.isPlaying && (s.playhead !== lastPlayhead || s.project !== lastProject)) {
         lastPlayhead = s.playhead;
         lastProject = s.project;

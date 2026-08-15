@@ -24,6 +24,7 @@
     "verify:export": "vite build --config .verify/export-profile.config.ts && electron .verify/export-host.cjs export-profile.html",
     "verify:pointer": "vite build --config .verify/pointer.config.ts && electron .verify/main.cjs pointer.html 1400 900",
     "verify:split": "esbuild .verify/split-playhead.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --alias:@opencut/ui=./packages/ui/src/state/store.ts --loader:.css=empty --loader:.svg=empty --outfile=.verify/dist/split-playhead.js && node .verify/dist/split-playhead.js",
+    "verify:guards": "esbuild .verify/guards.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --alias:@opencut/engine=./packages/engine/src/index.ts --alias:@opencut/ui=./packages/ui/src/state/store.ts --loader:.css=empty --loader:.svg=empty --outfile=.verify/dist/guards.js && node .verify/dist/guards.js",
     "verify:timeline": "esbuild .verify/timeline-invariants.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --outfile=.verify/dist/timeline-invariants.js && node .verify/dist/timeline-invariants.js",
     "verify:browsers": "vite build --config .verify/browsers.config.ts && electron .verify/browsers-host.cjs",
     "verify:textanim": "esbuild .verify/text-animations.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --outfile=.verify/dist/text-animations.js && node .verify/dist/text-animations.js",

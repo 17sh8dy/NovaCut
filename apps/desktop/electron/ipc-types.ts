@@ -87,6 +87,11 @@ export interface OpenCutApi {
   encoderWrite(jobId: string, frame: ArrayBuffer): Promise<void>;
   encoderFinish(jobId: string): Promise<void>;
   encoderAbort(jobId: string): Promise<void>;
+  /**
+   * Native "save changes?" box for an in-app action that would discard unsaved work.
+   * Same three answers, wording and default as the window close guard in main.ts.
+   */
+  confirmDiscard(projectName: string): Promise<'save' | 'discard' | 'cancel'>;
   notify(title: string, body: string): void;
   revealFile(path: string): void;
 
@@ -178,6 +183,7 @@ export const CH = {
   encoderWrite: 'encoder:write',
   encoderFinish: 'encoder:finish',
   encoderAbort: 'encoder:abort',
+  confirmDiscard: 'app:confirmDiscard',
   notify: 'app:notify',
   revealFile: 'app:revealFile',
   // Shell integration (main → renderer for the first two, renderer → main for the rest).

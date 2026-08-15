@@ -294,6 +294,8 @@ export class FfmpegEncoder {
   readonly width: number;
   readonly height: number;
   private audioPath?: string;
+  /** Where ffmpeg is writing, so an aborted run can take its half-written file with it. */
+  private readonly outputPath: string;
 
   /**
    * @param inWidth/inHeight   size of the raw RGBA frames written to stdin (sequence resolution)
@@ -311,6 +313,7 @@ export class FfmpegEncoder {
     this.width = inWidth;
     this.height = inHeight;
     this.audioPath = audioPath;
+    this.outputPath = job.outputPath;
     const s = job.settings;
     const bitrate = s.bitrateMbps ? `${s.bitrateMbps}M` : '8M';
     const isGif = s.container === 'gif';
@@ -466,6 +469,25 @@ export class FfmpegEncoder {
     } catch {
       /* ignore */
     }
+    /*
+     * Wait for the process to actually be gone before deleting its output.
+     *
+     * SIGKILL is delivered asynchronously and on Windows the file stays locked until the handle
+     * closes, so unlinking immediately after kill() races and usually loses. `closed` rejects on
+     * a non-zero exit — which a killed ffmpeg always is — so the rejection is expected here and
+     * swallowed rather than treated as a second failure.
+     */
+    await this.closed.catch(() => {});
+    /*
+     * Take the partial file with it.
+     *
+     * An aborted export is either a failure or a cancellation, and neither promises a file. What
+     * it used to leave was a truncated, unplayable video sitting in the export folder under the
+     * name the finished one would have had — indistinguishable from a real export until it was
+     * opened, and easy to mistake for the render having half-worked. Deleting is safe because
+     * ffmpeg was given `-y` and created this path itself; nothing else can be at it.
+     */
+    await unlink(this.outputPath).catch(() => {});
     await this.cleanup();
   }
 

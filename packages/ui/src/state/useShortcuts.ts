@@ -8,7 +8,7 @@
  */
 
 import { useEffect } from 'react';
-import { deleteClip, duplicateClip, rippleDeleteClip } from '@opencut/core';
+import { deleteClips, duplicateClips, rippleDeleteClips } from '@opencut/core';
 import { useAppStore } from './context.js';
 import { usePlayback } from './playbackContext.js';
 import { comboFromEvent, comboToId } from './shortcuts.js';
@@ -23,7 +23,25 @@ export function useShortcuts() {
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
 
       const s = store.getState();
-      const selected = s.selectedClipIds[0];
+      /*
+       * Nothing here fires while a modal is open.
+       *
+       * These listen on the window, so they ran straight through an open dialog: Space started
+       * playback behind the Export window, and Delete destroyed the selected clip while the user
+       * was choosing a codec — with the timeline covered, so the only evidence was a clip that
+       * had gone missing by the time the dialog closed. A modal is a modal.
+       *
+       * Escape is the exception in spirit but not in code: Modal owns its own Escape handler, so
+       * leaving early here is exactly what lets Escape close the dialog and nothing else.
+       */
+      if (s.dialog !== null) return;
+      /*
+       * The WHOLE selection, not just its first member. Shift-clicking builds a multi-selection
+       * and every clip in it draws as selected, but Delete / Ripple Delete / Duplicate each read
+       * `selectedClipIds[0]` and acted on one clip — the other four stayed put, still highlighted,
+       * looking like the key had not registered.
+       */
+      const selected = s.selectedClipIds;
 
       // ── Editable shortcuts (from the registry) ──
       const combo = comboFromEvent(e);
@@ -40,18 +58,37 @@ export function useShortcuts() {
           case 'redo':
           case 'redoAlt':
             return s.redo();
+          /*
+           * Deselect after a delete. The ids would otherwise outlive the clips, and a second
+           * Delete on that stale selection dispatches a command that removes nothing — which
+           * still rebuilds the project object, so History's `next === prev` junk guard does not
+           * catch it and the user gets an undo step that undoes nothing.
+           */
           case 'delete':
-            return selected ? s.dispatch(deleteClip(selected)) : undefined;
+            if (!selected.length) return;
+            s.dispatch(deleteClips(selected));
+            return s.selectClip(null);
           case 'rippleDelete':
-            return selected ? s.dispatch(rippleDeleteClip(selected)) : undefined;
+            if (!selected.length) return;
+            s.dispatch(rippleDeleteClips(selected));
+            return s.selectClip(null);
           case 'duplicate':
-            return selected ? s.dispatch(duplicateClip(selected)) : undefined;
+            return selected.length ? s.dispatch(duplicateClips(selected)) : undefined;
+          case 'selectAll':
+            return s.selectAllClips();
+          case 'deselectAll':
+            return s.selectClip(null);
           case 'save':
             return void s.save();
+          // Both replace the open project, so both ask about unsaved work first.
           case 'new':
-            return s.newProject();
+            return void (async () => {
+              if (!(await s.guardUnsaved())) return;
+              s.newProject();
+            })();
           case 'open':
             return void (async () => {
+              if (!(await s.guardUnsaved())) return;
               const res = await s.bridge.openProjectDialog();
               if (res) s.loadProjectData(res.project, res.path);
             })();

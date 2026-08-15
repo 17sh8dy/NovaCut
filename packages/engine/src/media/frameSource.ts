@@ -378,6 +378,26 @@ export class FrameSourcePool {
     this.sources.delete(mediaId);
   }
 
+  /**
+   * Drop the sources for media the project no longer has, and report how many went.
+   *
+   * Sources are created on demand and were only ever released by `disposeAll` at teardown, so
+   * removing an asset from the library left its decoder alive for the rest of the session — a
+   * hidden `<video>` still attached to the document, holding the file open and its frames in
+   * memory, for a clip the user had deleted. Called from the playback engine whenever the
+   * project's media list changes.
+   */
+  pruneTo(liveMediaIds: Iterable<string>): number {
+    const live = new Set(liveMediaIds);
+    let dropped = 0;
+    for (const id of [...this.sources.keys()]) {
+      if (live.has(id)) continue;
+      this.dispose(id);
+      dropped++;
+    }
+    return dropped;
+  }
+
   disposeAll(): void {
     for (const s of this.sources.values()) s.dispose();
     this.sources.clear();

@@ -126,11 +126,19 @@ export function HomePage() {
 
   const enterEditor = () => store.getState().setView('editor');
 
-  const openVideoEditor = () => {
+  /*
+   * Every card below that starts a DIFFERENT project asks about unsaved work first.
+   *
+   * Home is reachable from inside a session, not only at launch — the workspace stays loaded
+   * behind it — so "New Video Project" here replaces real work exactly as Ctrl+N does.
+   */
+  const openVideoEditor = async () => {
+    if (!(await store.getState().guardUnsaved())) return;
     store.getState().newProject();
     enterEditor();
   };
   const openProject = async () => {
+    if (!(await store.getState().guardUnsaved())) return;
     const res = await store.getState().bridge.openProjectDialog();
     if (res) {
       store.getState().loadProjectData(res.project, res.path);
@@ -149,6 +157,9 @@ export function HomePage() {
    * supported file is a legitimate answer.
    */
   const importMedia = async () => {
+    // Asked BEFORE the picker: this path ends in newProject(), and learning that the work was
+    // about to be discarded only after choosing files is the question asked too late.
+    if (!(await store.getState().guardUnsaved())) return;
     let files: ImportedFile[];
     try {
       files = await store.getState().bridge.importDialog();
@@ -182,6 +193,7 @@ export function HomePage() {
     store.getState().setView('photo');
   };
   const openRecent = async (path: string) => {
+    if (!(await store.getState().guardUnsaved())) return;
     try {
       const project = await store.getState().bridge.loadProject(path);
       store.getState().loadProjectData(project, path);
