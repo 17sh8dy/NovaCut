@@ -1,7 +1,7 @@
 /**
  * Versioned project serialization.
  *
- * A `.opencut` file is JSON: `{ schemaVersion, project }`. On load we run any migrations
+ * A `.novacut` file is JSON: `{ schemaVersion, project }`. On load we run any migrations
  * from the file's version up to the current one, so old projects keep opening as the model
  * evolves. This is the contract that lets us change the schema without breaking users.
  */

@@ -1,7 +1,7 @@
 /**
  * @opencut/engine — public API.
  *
- * Rendering + playback for Open Cut. Browser APIs only (WebGL2, Web Audio, rAF). Depends
+ * Rendering + playback for Nova Cut. Browser APIs only (WebGL2, Web Audio, rAF). Depends
  * on @opencut/core for the domain model but knows nothing about React or Electron.
  */
 

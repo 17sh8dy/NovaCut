@@ -1,7 +1,7 @@
 /**
  * @opencut/core — public API.
  *
- * The platform-agnostic heart of Open Cut: domain model, command system, registries, and
+ * The platform-agnostic heart of Nova Cut: domain model, command system, registries, and
  * IO contracts. Import from here, never from deep paths, so internal layout can change.
  */
 

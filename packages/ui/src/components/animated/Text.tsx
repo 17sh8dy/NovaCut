@@ -7,7 +7,7 @@ interface TextFxProps {
 }
 
 /**
- * BrandText — the "Open Cut" wordmark, clipped to the brand gradient.
+ * BrandText — the "Nova Cut" wordmark, clipped to the brand gradient.
  *
  * It reads from --brand-gradient rather than the accent on purpose: the accent is a user
  * preference and the mark is not, so someone running an orange accent still sees the wordmark in

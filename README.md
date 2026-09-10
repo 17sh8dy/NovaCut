@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎬 Open Cut
+# 🎬 Nova Cut
 
 **A modern, professional non-linear video editor.**
 Desktop-first, architected to grow into web and mobile from the same core.
@@ -9,7 +9,7 @@ Desktop-first, architected to grow into web and mobile from the same core.
 
 ---
 
-Open Cut is a fast, beautiful NLE built like a product, not a demo. It has a real layered
+Nova Cut is a fast, beautiful NLE built like a product, not a demo. It has a real layered
 architecture: a platform-agnostic domain core, a WebGL2/Web-Audio rendering engine, a
 polished React design system, and a thin Electron shell that supplies native file access
 and FFmpeg export. The same editor renders whether the host is desktop, web, or mobile —
@@ -66,7 +66,7 @@ npm run typecheck  # type-check every package
 ```bash
 npm run pack       # unpacked app in apps/desktop/release/win-unpacked (fast, for testing)
 npm run dist       # installers for the current OS, in apps/desktop/release
-npm run icon       # re-render every icon from assets/OpenCut.svg
+npm run icon       # re-render every icon from assets/NovaCut.svg
 ```
 
 `npm run dist` produces an NSIS installer **and** a portable `.exe` on Windows, a DMG on macOS,
@@ -74,7 +74,7 @@ and an AppImage + deb on Linux. Configuration lives in `apps/desktop/electron-bu
 
 ## The logo
 
-**`assets/OpenCut.svg` and `assets/OpenCut-small.svg` are the single source of truth** — small
+**`assets/NovaCut.svg` and `assets/NovaCut-small.svg` are the single source of truth** — small
 hand-authored vectors: no metadata, no filters, no embedded rasters, transparent everywhere the
 mark isn't. `npm run icon` (`scripts/make-icons.cjs`) rasterises them through Chromium and writes:
 

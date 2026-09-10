@@ -174,13 +174,13 @@ export function MediaLibrary() {
         ? `Could not read ${unreadable.length === 1 ? 'that file' : 'those files'}`
         : `${unreadable.length} of ${assets.length} files could not be read`,
       'error',
-      `${names} — Open Cut needs FFmpeg to read duration and dimensions, to make thumbnails, and ` +
+      `${names} — Nova Cut needs FFmpeg to read duration and dimensions, to make thumbnails, and ` +
         'to export. Install it and make sure ffmpeg and ffprobe are on your PATH, then re-import.',
     );
   };
 
   /**
-   * Remove assets from the library. Open Cut only — the files stay on disk.
+   * Remove assets from the library. Nova Cut only — the files stay on disk.
    *
    * Confirmed first because it is not a free action: clips built from the asset are removed from
    * the timeline with it, so this can delete visible work. Undo covers it, but a prompt naming
@@ -196,7 +196,7 @@ export function MediaLibrary() {
     const ok = window.confirm(
       `Remove ${label} from this project${detail}?
 
-The file stays on your device — this only removes it from Open Cut.`,
+The file stays on your device — this only removes it from Nova Cut.`,
     );
     if (!ok) return;
     store.getState().removeMedia(ids);

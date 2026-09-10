@@ -1,7 +1,7 @@
 /**
  * Time utilities.
  *
- * Open Cut stores all timeline positions and durations as **ticks**, an integer unit,
+ * Nova Cut stores all timeline positions and durations as **ticks**, an integer unit,
  * to avoid floating-point drift when clips are split, trimmed, and snapped thousands of
  * times. We use a high, highly-divisible tick rate so common frame rates (24/25/30/50/60/
  * 120/144/240) and audio sample boundaries all land on whole ticks.

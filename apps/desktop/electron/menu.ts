@@ -72,7 +72,7 @@ function submenus(): Record<MenuId, MenuItemConstructorOptions[]> {
       { role: 'paste' },
       { role: 'selectAll' },
       { type: 'separator' },
-      mirrored('Split at Playhead', 'split', `${mod}+K`),
+      mirrored('Split at Playhead', 'split', `${mod}+B`),
       mirrored('Duplicate', 'duplicate', `${mod}+D`),
       mirrored('Delete', 'delete', 'Delete'),
     ],
@@ -98,12 +98,12 @@ function submenus(): Record<MenuId, MenuItemConstructorOptions[]> {
       { type: 'separator' },
       { label: 'Open App Data Folder', click: () => void shell.openPath(app.getPath('userData')) },
       {
-        label: 'About Open Cut',
+        label: 'About Nova Cut',
         click: () => {
           void dialog.showMessageBox({
             type: 'info',
-            title: 'About Open Cut',
-            message: `Open Cut ${app.getVersion()}`,
+            title: 'About Nova Cut',
+            message: `Nova Cut ${app.getVersion()}`,
             detail: [
               'A professional non-linear video and photo editor.',
               '',

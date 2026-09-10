@@ -167,7 +167,7 @@ export function instantiateEffect(type: string): EffectInstance {
 // ─────────────────────────────────────────────────────────────────────────────
 // Non-shader lanes: transform Animations & Text Animations
 //
-// OpenCut renders effects at four different layers (see EFFECTS_FRAMEWORK.md): GPU pixel
+// Nova Cut renders effects at four different layers (see EFFECTS_FRAMEWORK.md): GPU pixel
 // shaders (effects), two-clip GPU blends (transitions), the transform matrix (animations),
 // and the DOM text overlay (text animations). The first two are GLSL, described by
 // EffectDefinition / TransitionDefinition above. The last two are NOT pixel shaders, so

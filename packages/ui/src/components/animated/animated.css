@@ -2,7 +2,7 @@
  * Motion primitives.
  *
  * ── WHAT BELONGS HERE ────────────────────────────────────────────────────────────
- * Motion in Open Cut is a way of explaining a change, not of decorating a surface. Every
+ * Motion in Nova Cut is a way of explaining a change, not of decorating a surface. Every
  * animation below answers one of exactly three questions:
  *
  *   "where did this come from?"  → reveal / view transition (fade + a few px of travel)
@@ -56,7 +56,7 @@
 
 /* ── BrandText: the wordmark ───────────────────────────────────────────────────
    --brand-gradient, not --accent: this is branding. Someone running a green accent still sees
-   "Open Cut" in the brand blue, because the accent preference recolours the controls and never
+   "Nova Cut" in the brand blue, because the accent preference recolours the controls and never
    the mark. Static, too — a wordmark that animates forever is a logo that never settles.
 
    The ramp is a shade and a tint of the mark's single blue, not three colours of its own; see
@@ -210,7 +210,7 @@
 }
 
 /* The app's own motion preference is a document attribute, and it must win over the OS query
-   for a user who turned motion down inside Open Cut on a machine that reports no preference. */
+   for a user who turned motion down inside Nova Cut on a machine that reports no preference. */
 :root[data-reduce-motion] .oc-borderglow:hover::after,
 :root[data-reduce-motion] .oc-borderglow:focus-within::after {
   animation: none;

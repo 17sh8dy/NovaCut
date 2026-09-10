@@ -128,7 +128,7 @@ export function formatExportFilename(
  * Reduce a display name to something every mainstream filesystem will accept.
  *
  * Shared by the export filename pattern and the Save Project dialog's suggested name, because
- * a project called "OpenCut Video File at 1.42 PM" has to survive being offered as a filename
+ * a project called "Nova Cut Video File at 1.42 PM" has to survive being offered as a filename
  * in both places, and two copies of these rules would drift the first time one was tightened.
  *
  * Spaces become underscores rather than being stripped: a filename with no word boundaries at

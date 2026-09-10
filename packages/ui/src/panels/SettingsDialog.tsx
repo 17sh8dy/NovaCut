@@ -523,7 +523,7 @@ function InfoValue({ id }: { id: string }) {
   if (id === 'telemetry') {
     return (
       <span className="oc-setting-value oc-setting-value--good">
-        None collected — Open Cut has no analytics, crash reporting or network calls.
+        None collected — Nova Cut has no analytics, crash reporting or network calls.
       </span>
     );
   }

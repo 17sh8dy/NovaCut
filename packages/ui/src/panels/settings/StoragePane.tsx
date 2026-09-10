@@ -1,5 +1,5 @@
 /**
- * Storage — what Open Cut is actually using on disk.
+ * Storage — what Nova Cut is actually using on disk.
  *
  * Every figure is measured, not estimated: the host walks the real directories and reports byte
  * totals. A storage page that guesses is worse than no storage page, because the number it shows
@@ -17,7 +17,7 @@ import type { StorageUsage } from '@opencut/core';
 
 const LABELS: Record<keyof StorageUsage['buckets'], { title: string; desc: string }> = {
   cache: { title: 'Cache', desc: 'GPU shader cache and Chromium’s own caches. Safe to clear — all of it is regenerated on demand.' },
-  projects: { title: 'Projects', desc: 'Your .opencut files in the default project folder.' },
+  projects: { title: 'Projects', desc: 'Your .novacut files in the default project folder.' },
   autosaves: { title: 'Autosaves', desc: 'Recovery snapshots written while you edit, including the thumbnails stored inside them.' },
   logs: { title: 'Preferences & logs', desc: 'Settings, the recent-project list, window state and diagnostics.' },
 };
@@ -62,7 +62,7 @@ export function StoragePane() {
       <div className="oc-storage__head">
         <div>
           <div className="oc-storage__total">{state === 'loading' ? 'Measuring…' : human(total)}</div>
-          <div className="oc-storage__totallabel">used by Open Cut</div>
+          <div className="oc-storage__totallabel">used by Nova Cut</div>
         </div>
         <Button variant="ghost" icon={<RefreshCw size={14} />} disabled={state === 'loading'} onClick={() => void measure()}>
           Recalculate
@@ -112,7 +112,7 @@ export function StoragePane() {
           {clearing ? 'Clearing…' : 'Clear cache'}
         </Button>
         <span className="oc-setting-note" style={{ margin: 0 }}>
-          Clearing the cache never touches your projects — only files Open Cut can regenerate.
+          Clearing the cache never touches your projects — only files Nova Cut can regenerate.
         </span>
       </div>
 

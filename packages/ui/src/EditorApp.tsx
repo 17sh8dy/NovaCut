@@ -172,7 +172,7 @@ function RecoveryPrompt() {
       <div className="oc-recovery__body">
         <strong>Restore your previous session?</strong>
         <span>
-          Open Cut may have closed unexpectedly. A recovery of “{recovery.projectName}” from {when} is
+          Nova Cut may have closed unexpectedly. A recovery of “{recovery.projectName}” from {when} is
           available (timeline, media, effects, playhead, zoom &amp; selection).
         </span>
       </div>

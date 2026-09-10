@@ -1,5 +1,5 @@
 /**
- * Motion primitives — a lightweight, dependency-free polish layer for Open Cut.
+ * Motion primitives — a lightweight, dependency-free polish layer for Nova Cut.
  *
  * Small, composable, GPU-friendly components covering the motion the interface actually needs:
  * reveal-on-mount, the wordmark, and loading states. Styles live in ./animated.css, which

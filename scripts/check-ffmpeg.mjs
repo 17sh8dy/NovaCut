@@ -43,7 +43,7 @@ for (const e of EXES) {
   for (const flag of ['--enable-gpl', '--enable-nonfree']) {
     if (text.includes(flag)) {
       fail(
-        `${e} reports ${flag}.\n  Open Cut is MIT — shipping a GPL FFmpeg would force the ` +
+        `${e} reports ${flag}.\n  Nova Cut is MIT — shipping a GPL FFmpeg would force the ` +
           'combined work to GPL.\n  Replace it with the LGPL build.',
       );
     }

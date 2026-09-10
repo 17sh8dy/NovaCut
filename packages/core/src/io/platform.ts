@@ -190,7 +190,7 @@ export interface PlatformBridge {
   clearRecentProjects?(): Promise<void>;
   /** Reveal the app's data directory in the OS file browser. */
   openDataFolder?(): Promise<void>;
-  /** Start Open Cut when the user signs in. */
+  /** Start Nova Cut when the user signs in. */
   setLaunchOnStartup?(enabled: boolean): Promise<void>;
   /** Zoom the whole window, for the interface-scale setting. */
   setZoomFactor?(factor: number): void;

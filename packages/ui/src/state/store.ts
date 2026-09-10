@@ -185,7 +185,7 @@ interface AppState {
 
   // Media
   addMedia: (assets: MediaAsset[]) => void;
-  /** Forget media in Open Cut (and any clips built from it). Never touches the file on disk. */
+  /** Forget media in Nova Cut (and any clips built from it). Never touches the file on disk. */
   removeMedia: (ids: string[]) => void;
   setImportProgress: (p: ImportProgress | null) => void;
   addMediaToTimeline: (media: MediaAsset, trackId?: TrackId, at?: Ticks) => void;

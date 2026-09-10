@@ -2,7 +2,7 @@
 
 `ffmpeg.exe` and `ffprobe.exe` in this folder are shipped inside the installer, and
 `electron/ffmpeg.ts` resolves them from `process.resourcesPath/ffmpeg/` when the app is packaged.
-They are why a downloaded Open Cut can import and export without the user installing anything.
+They are why a downloaded Nova Cut can import and export without the user installing anything.
 
 **The two executables are not in git** — they are ~110 MB each and would be in the history
 forever. `npm run ffmpeg:fetch` downloads and verifies them; see below.
@@ -18,9 +18,9 @@ forever. `npm run ffmpeg:fetch` downloads and verifies them; see below.
 | Source | [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) release `latest` |
 | Licence | **LGPL v3** (`--enable-version3`, no `--enable-gpl`, no `--enable-nonfree`) |
 
-**The LGPL build specifically, not the GPL one.** Open Cut is MIT. The GPL build includes x264
+**The LGPL build specifically, not the GPL one.** Nova Cut is MIT. The GPL build includes x264
 and x265, and distributing GPL components alongside the application would force the combined work
-to GPL — which would contradict the licence Open Cut declares. The LGPL build can be shipped
+to GPL — which would contradict the licence Nova Cut declares. The LGPL build can be shipped
 beside MIT code provided the licence text travels with it, which is what `LICENSE.txt` here is
 for.
 
@@ -33,7 +33,7 @@ sha256  ffprobe.exe  3c44e846f625c231e4163633076d6f1edc94f8090d5ceb6d6239480ec38
 
 ## What it costs, in codecs
 
-No x264 and no x265. Every codec Open Cut offers still works, from different encoders:
+No x264 and no x265. Every codec Nova Cut offers still works, from different encoders:
 
 | Codec | Encoder in this build | Note |
 | --- | --- | --- |

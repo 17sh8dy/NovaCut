@@ -200,7 +200,7 @@ export const TEXT_PRESETS: readonly TextPreset[] = [
    * video side's, rather than the two lists mirroring each other.
    *
    * These lean on families Windows and macOS actually ship (Impact, Arial Black, Georgia,
-   * Trebuchet MS, Consolas, Comic Sans MS, Segoe Script). Open Cut bundles no webfonts and runs
+   * Trebuchet MS, Consolas, Comic Sans MS, Segoe Script). Nova Cut bundles no webfonts and runs
    * under a CSP with no network, so a preset naming a Google font renders as the default sans —
    * a look that is not its own name. The distinctiveness here comes from the paint (gradient,
    * stroke, glow, offset shadow, skew, curve), which always renders as specified.

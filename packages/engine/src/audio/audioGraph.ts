@@ -11,6 +11,7 @@
  */
 
 import {
+  resolvedTransitions,
   sample,
   toSeconds,
   type Clip,
@@ -118,13 +119,23 @@ export class AudioEngine {
     // Iterate every track: audio clips AND video clips that carry embedded audio.
     for (const track of sequence.tracks) {
       const audible = !track.muted && (!soloed || track.solo);
+      // Transition windows on this track. A transition straddles the cut between its two clips
+      // (see transitionWindow in queries.ts) — the compositor already renders both clips across
+      // that whole window, past their own start/end, so the audio has to follow the same window
+      // or one track hard-cuts mid-transition while the picture is still blending. See
+      // `crossfadeFor` below for the other half of this: not just WHEN a crossing clip is
+      // audible, but at what gain.
+      const transitions = resolvedTransitions(track);
       for (const clip of track.clips) {
         if (!clip.mediaId || !clip.audio) continue;
         const media = getMedia(clip.mediaId);
         if (!media) continue;
         const node = this.nodeFor(clip, media);
         live.add(clip.id);
-        const inClip = time >= clip.start && time < clip.start + clip.duration;
+        const crossing = transitions.find(
+          (t) => time >= t.start && time < t.end && (t.from.id === clip.id || t.to.id === clip.id),
+        );
+        const inClip = crossing ? true : time >= clip.start && time < clip.start + clip.duration;
 
         if (inClip && audible && !clip.audio.muted) {
           const localTicks = time - clip.start;
@@ -132,7 +143,7 @@ export class AudioEngine {
           if (Math.abs(node.el.currentTime - sourceTime) > 0.2) node.el.currentTime = sourceTime;
           // × preview speed so audio keeps pace with the playhead (same reason as video).
           node.el.playbackRate = Math.max(0.0625, Math.min(16, Math.abs(clip.speed.rate) * speed));
-          node.gain.gain.value = this.gainFor(clip, localTicks);
+          node.gain.gain.value = this.gainFor(clip, localTicks) * this.crossfadeFor(crossing, clip.id, time);
           const wasPaused = node.el.paused;
           if (this.playing && node.el.paused) void node.el.play().catch((e) => dlog('audio', 'el.play() rejected', { clip: clip.id, err: String(e) }));
           audibleClips++;
@@ -204,6 +215,28 @@ export class AudioEngine {
     const remaining = clip.duration - localTicks;
     if (a.fadeOut > 0 && remaining < a.fadeOut) g *= Math.max(0, remaining / a.fadeOut);
     return Math.max(0, g);
+  }
+
+  /**
+   * Multiplier for a clip that is crossing a transition boundary — 1 for everything else.
+   *
+   * Equal-power, not linear (`cos`/`sin` of the same quarter-turn rather than `1 - p`/`p`):
+   * a linear crossfade's two gains sum to 1 everywhere except the midpoint, where the
+   * perceptual loudness of two uncorrelated sources actually needs them to sum nearer
+   * √2 — so a linear fade audibly dips in the middle of every transition. This is the
+   * standard fix, and it costs nothing extra since the multiplier is only computed for
+   * the two clips actually inside a transition window right now.
+   */
+  private crossfadeFor(
+    crossing: ReturnType<typeof resolvedTransitions>[number] | undefined,
+    clipId: string,
+    time: Ticks,
+  ): number {
+    if (!crossing) return 1;
+    const span = Math.max(1, crossing.end - crossing.start);
+    const progress = Math.min(1, Math.max(0, (time - crossing.start) / span));
+    const outgoing = crossing.from.id === clipId;
+    return outgoing ? Math.cos((progress * Math.PI) / 2) : Math.sin((progress * Math.PI) / 2);
   }
 
   seek(): void {

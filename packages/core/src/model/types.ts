@@ -1,5 +1,5 @@
 /**
- * The Open Cut domain model.
+ * The Nova Cut domain model.
  *
  * These types describe *what a project is* — a serializable, UI-agnostic data structure.
  * They are the single source of truth shared by the timeline, compositor, exporter, and

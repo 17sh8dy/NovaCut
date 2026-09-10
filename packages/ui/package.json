@@ -2,7 +2,7 @@
   "name": "@opencut/ui",
   "version": "1.0.0",
   "private": true,
-  "description": "Open Cut React UI: design system, editor panels, and the app store. Platform-agnostic — receives a PlatformBridge via context.",
+  "description": "Nova Cut React UI: design system, editor panels, and the app store. Platform-agnostic — receives a PlatformBridge via context.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

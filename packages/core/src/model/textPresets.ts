@@ -9,7 +9,7 @@
  *
  * ## Why these font stacks and not the photo editor's
  *
- * The photo presets name Anton, Bebas Neue, Luckiest Guy and friends. Open Cut loads **no
+ * The photo presets name Anton, Bebas Neue, Luckiest Guy and friends. Nova Cut loads **no
  * webfonts at all** — there is no `@font-face` anywhere and the renderer runs under a strict CSP
  * with no network — so every one of those silently falls back to the default sans, and a preset
  * called "Retro Pop" renders as plain Inter. A preset that does not look like its own name is

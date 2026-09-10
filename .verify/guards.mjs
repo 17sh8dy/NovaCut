@@ -43,7 +43,7 @@ const check = (name, pass, detail) => {
  * counted — "was the question asked at all" is half of what is being asserted here, since a
  * guard that silently proceeds looks identical to one that asked and was told yes.
  */
-function makeBridge({ answer = 'discard', saveResult = { path: '/tmp/p.opencut' } } = {}) {
+function makeBridge({ answer = 'discard', saveResult = { path: '/tmp/p.novacut' } } = {}) {
   const calls = { confirmDiscard: 0, saveProject: 0 };
   return {
     calls,

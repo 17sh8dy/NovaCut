@@ -1,7 +1,7 @@
 /**
  * Home launcher — the "Choose a workspace" screen shown before a project is open.
  *
- * Presents Open Cut's editors as a grid of workspace cards. The Video Editor is live and flips
+ * Presents Nova Cut's editors as a grid of workspace cards. The Video Editor is live and flips
  * the store's `view` to 'editor'; the others are staged (Coming soon) or roadmap (Future) and
  * are non-navigating for now. Below the chooser: quick actions, crash recovery, recent
  * projects, and info sections. Purely presentational + store actions — no engine/playback
@@ -29,6 +29,7 @@ import { isStillFile, type ImportedFile, type RecentProject } from '@opencut/cor
 import { useAppStore, useStore } from '../state/context.js';
 import { AnimatedContent, BrandText, CardButton } from '../components/animated/index.js';
 import { AppMenuBar } from './AppMenuBar.js';
+import { NovaSwitcher } from './NovaSwitcher.js';
 import { WindowControls } from './WindowControls.js';
 import './home.css';
 
@@ -221,6 +222,7 @@ export function HomePage() {
       */}
       <div className="oc-home__chrome">
         <AppMenuBar />
+        <NovaSwitcher current="nova-cut" />
         <div className="oc-home__chrome-spacer" />
         <button
           className="oc-home__chrome-btn oc-home__chrome-btn--gear"
@@ -250,7 +252,7 @@ export function HomePage() {
             </AnimatedContent>
             <AnimatedContent delay={70}>
               <h1 className="oc-home__title">
-                <BrandText>Open&nbsp;Cut</BrandText>
+                <BrandText>Nova&nbsp;Cut</BrandText>
               </h1>
             </AnimatedContent>
             <AnimatedContent delay={130}>

@@ -288,7 +288,11 @@ export function TextPanel() {
   );
 }
 
-/** Presets that drop a styled text clip on a free track at the playhead. */
+/**
+ * Presets that drop a styled text clip on a free track — at the playhead on a click, or at
+ * wherever it's dropped when dragged onto the timeline (see Timeline.tsx's Lane `onDrop`, the
+ * `application/x-opencut-text` branch, which builds the clip the same way this does).
+ */
 function TextPresetsPanel() {
   const store = useAppStore();
 
@@ -320,7 +324,9 @@ function TextPresetsPanel() {
                 key={p.id}
                 className="oc-textpreset"
                 onClick={() => addText(p)}
-                title={`${p.label} — adds a text clip at the playhead`}
+                title={`${p.label} — click to add at the playhead, or drag onto the timeline`}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('application/x-opencut-text', p.id)}
               >
                 <span className="oc-textpreset__stage">
                   <TextPresetSwatch preset={p} />

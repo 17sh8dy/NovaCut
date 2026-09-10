@@ -1,5 +1,5 @@
 /*
- * Open Cut design tokens.
+ * Nova Cut design tokens.
  *
  * ── THE DESIGN SYSTEM IN ONE FILE ────────────────────────────────────────────────
  * One source of truth for colour, spacing, radius, type, motion and elevation. Panels and
@@ -35,7 +35,7 @@
 :root {
   /*
    * ── Brand ──
-   * --brand-blue is the logo's fill, verbatim from assets/OpenCut.svg. If that file's colour
+   * --brand-blue is the logo's fill, verbatim from assets/NovaCut.svg. If that file's colour
    * changes, this changes with it — it is the same number, and the mark and the UI around it
    * must not be able to disagree about what the brand colour is.
    *
@@ -45,7 +45,7 @@
    * fill reads as dead. Nothing that is meant to match the icon may use them — match the icon
    * with --brand-blue.
    *
-   * These are theme- AND accent-independent. This blue is Open Cut whatever the user has set
+   * These are theme- AND accent-independent. This blue is Nova Cut whatever the user has set
    * their accent to and whichever theme they are in.
    */
   --brand-deep: #0059b3;

@@ -10,7 +10,7 @@
  *
  * ── THE CHECK THAT MATTERS ───────────────────────────────────────────────────
  *
- * Open Cut is MIT. FFmpeg ships in two flavours and only one of them may be distributed
+ * Nova Cut is MIT. FFmpeg ships in two flavours and only one of them may be distributed
  * alongside MIT code: the GPL build contains x264 and x265 and would force the combined work to
  * GPL. So this does not trust the file name — it runs the downloaded binary and refuses it
  * unless its own `configuration:` line is free of `--enable-gpl` and `--enable-nonfree`.

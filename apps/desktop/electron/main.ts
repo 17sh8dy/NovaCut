@@ -1,10 +1,10 @@
 /**
- * Electron main process. Creates the editor window, registers a custom `opencut://`
+ * Electron main process. Creates the editor window, registers a custom `novacut://`
  * protocol for streaming local media under a strict CSP, and wires up all IPC handlers.
  *
  * Beyond that, this file is where "a web page in a frame" becomes an application: one instance
  * at a time, a window that remembers where it was, a menu, a guard against quitting on unsaved
- * work, .opencut files that open by double-click, and links that leave for the real browser
+ * work, .novacut files that open by double-click, and links that leave for the real browser
  * instead of hijacking the editor.
  */
 
@@ -118,10 +118,10 @@ function rangeNotSatisfiable(size: number, headers: Headers): Response {
   return new Response(null, { status: 416, headers });
 }
 
-// The renderer references media as opencut://media/<encoded-abs-path>. Declaring the scheme
+// The renderer references media as novacut://media/<encoded-abs-path>. Declaring the scheme
 // as privileged lets <video>/<img> stream it and support range requests (seeking).
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'opencut', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: false } },
+  { scheme: 'novacut', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: false } },
 ]);
 
 // ── Single instance ──────────────────────────────────────────────────────────
@@ -132,11 +132,11 @@ if (!gotLock) {
   app.quit();
 }
 
-/** The .opencut file a launch was asked to open, if any (double-click / "Open with"). */
+/** The .novacut file a launch was asked to open, if any (double-click / "Open with"). */
 function projectFromArgv(argv: string[]): string | null {
   // argv[0] is the executable; in dev, argv[1] is the app directory. Scan for the extension
   // rather than a fixed index, which is what makes this work in both.
-  const hit = argv.slice(1).find((a) => !a.startsWith('-') && a.toLowerCase().endsWith('.opencut'));
+  const hit = argv.slice(1).find((a) => !a.startsWith('-') && a.toLowerCase().endsWith('.novacut'));
   return hit ? resolvePath(hit) : null;
 }
 
@@ -304,7 +304,7 @@ function createWindow(): void {
     void dialog
       .showMessageBox(win, {
         type: 'error',
-        title: 'Open Cut stopped responding',
+        title: 'Nova Cut stopped responding',
         message: 'The editor crashed.',
         detail: `Reason: ${details.reason}. Reloading restores the last autosaved session.`,
         buttons: ['Reload', 'Quit'],
@@ -379,11 +379,11 @@ if (gotLock) {
 
   // Windows uses this to group taskbar windows and to attribute notifications; without it,
   // toasts are credited to "electron.app.Electron" and the taskbar icon can detach on pin.
-  app.setAppUserModelId('com.opencut.editor');
+  app.setAppUserModelId('com.novacut.editor');
 
   app.whenReady().then(() => {
-    // Serve local media (opencut://media/<encoded abs path>) with CORS + Range support.
-    protocol.handle('opencut', serveMedia);
+    // Serve local media (novacut://media/<encoded abs path>) with CORS + Range support.
+    protocol.handle('novacut', serveMedia);
 
     // `??=`, not `=`: on macOS an "Open with" delivered through the `open-file` event can land
     // before the app is ready, and overwriting it here would drop the file the user double-clicked.

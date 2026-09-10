@@ -36,7 +36,7 @@ export interface ShortcutDef {
 /** The editable shortcuts. (Transport arrows, Home/End and +/- zoom stay as fixed extras.) */
 export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'playPause', label: 'Play / Pause', category: 'Playback', defaultCombo: 'space' },
-  { id: 'split', label: 'Split Clip at Playhead', category: 'Editing', defaultCombo: 'mod+k' },
+  { id: 'split', label: 'Split Clip at Playhead', category: 'Editing', defaultCombo: 'mod+b' },
   { id: 'undo', label: 'Undo', category: 'Editing', defaultCombo: 'mod+z' },
   { id: 'redo', label: 'Redo', category: 'Editing', defaultCombo: 'mod+shift+z' },
   { id: 'redoAlt', label: 'Redo (alternate)', category: 'Editing', defaultCombo: 'mod+y' },

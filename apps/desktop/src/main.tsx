@@ -16,7 +16,7 @@ import { connectShell } from './shell.js';
 applyTheme(loadPreferences().theme);
 
 const store = createAppStore(new ElectronBridge());
-// Menu commands, .opencut file associations and the unsaved-changes quit guard. Connected before
+// Menu commands, .novacut file associations and the unsaved-changes quit guard. Connected before
 // the first render so a project handed over at launch is handled the moment it arrives.
 connectShell(store);
 

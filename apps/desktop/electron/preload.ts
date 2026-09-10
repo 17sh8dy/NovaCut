@@ -39,8 +39,8 @@ const api: OpenCutApi = {
   generateThumbnail: (src, atSeconds) => ipcRenderer.invoke(CH.generateThumbnail, src, atSeconds),
   // Custom protocol so <video>/<img> can load local files under a strict CSP.
   mediaUrl: (src) => {
-    if (/^(https?|blob|data|opencut):/.test(src)) return src;
-    return `opencut://media/${encodeURIComponent(src)}`;
+    if (/^(https?|blob|data|novacut):/.test(src)) return src;
+    return `novacut://media/${encodeURIComponent(src)}`;
   },
   // Electron removed File.path; this is the supported way to get a dropped file's path.
   getPathForFile: (file: File) => {

@@ -103,7 +103,7 @@ const hostPrefs = { maxRecentProjects: 12, defaultProjectDir: '', exportDir: '' 
 async function pushRecent(path: string): Promise<void> {
   const list = await readRecents();
   const next = [
-    { path, name: basename(path).replace(/\.opencut$/, ''), modifiedAt: Date.now() },
+    { path, name: basename(path).replace(/\.novacut$/, ''), modifiedAt: Date.now() },
     ...list.filter((r) => r.path !== path),
   ].slice(0, Math.max(1, hostPrefs.maxRecentProjects));
   await writeFile(recentsPath(), JSON.stringify(next), 'utf8').catch(() => {});
@@ -115,7 +115,7 @@ export function registerHandlers(hooks: HandlerHooks): void {
     const res = await dialog.showOpenDialog({
       title: 'Open Project',
       ...(hostPrefs.defaultProjectDir ? { defaultPath: hostPrefs.defaultProjectDir } : {}),
-      filters: [{ name: 'Open Cut Project', extensions: ['opencut'] }],
+      filters: [{ name: 'Nova Cut Project', extensions: ['novacut'] }],
       properties: ['openFile'],
     });
     if (res.canceled || !res.filePaths[0]) return null;
@@ -128,13 +128,13 @@ export function registerHandlers(hooks: HandlerHooks): void {
   ipcMain.handle(CH.saveProject, async (_e, json: string, path?: string, suggestedName?: string) => {
     let target = path;
     if (!target) {
-      // The project's own name, so a first save offers "OpenCut Video File at 1.42 PM.opencut"
+      // The project's own name, so a first save offers "Nova Cut Video File at 1.42 PM.novacut"
       // rather than proposing "Untitled" for every project the user has ever made.
-      const file = `${suggestedName || 'Untitled'}.opencut`;
+      const file = `${suggestedName || 'Untitled'}.novacut`;
       const res = await dialog.showSaveDialog({
         title: 'Save Project',
         defaultPath: hostPrefs.defaultProjectDir ? join(hostPrefs.defaultProjectDir, file) : file,
-        filters: [{ name: 'Open Cut Project', extensions: ['opencut'] }],
+        filters: [{ name: 'Nova Cut Project', extensions: ['novacut'] }],
       });
       if (res.canceled || !res.filePath) return null;
       target = res.filePath;

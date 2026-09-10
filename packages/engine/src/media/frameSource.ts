@@ -19,7 +19,7 @@ import { dlog, dthrottle } from '../debug.js';
  */
 const SEEK_WATCHDOG_MS = 4000;
 
-export type FrameBitmap = HTMLVideoElement | HTMLImageElement | ImageBitmap;
+export type FrameBitmap = HTMLVideoElement | HTMLImageElement | HTMLCanvasElement | ImageBitmap;
 
 /**
  * A single hidden, off-screen container that all decode elements live in. Chromium will
@@ -49,6 +49,15 @@ export class FrameSource {
   private lastSeekTarget = -1;
   /** Releases a seek that never completes; see the note in seekTo. */
   private seekWatchdog: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * A snapshot of the last frame the element actually had decoded, taken right before a seek is
+   * issued. See the note on `getFrame()` for why this exists: without it, every seek — which is
+   * every scrub tick, and every >0.5s drift correction during playback — has a window where
+   * `readyState` dips below HAVE_CURRENT_DATA and this source has nothing to give the compositor,
+   * which reads as a black flash because the canvas is cleared fresh every render().
+   */
+  private lastGoodFrame: HTMLCanvasElement | null = null;
+  private lastGoodFrameCtx: CanvasRenderingContext2D | null = null;
 
   /** Fired when a new drawable frame becomes available (decode/seek complete). */
   private onReady: () => void;
@@ -184,6 +193,7 @@ export class FrameSource {
       const target = toSeconds(sourceTime);
       // Correct only meaningful drift so playback stays smooth.
       if (Number.isFinite(target) && !this.seeking && Math.abs(v.currentTime - target) > 0.5) {
+        this.snapshotIfReady();
         this.seeking = true;
         try {
           v.currentTime = target;
@@ -239,6 +249,7 @@ export class FrameSource {
     // (data not buffered), re-seeking would cancel the in-flight seek forever → frozen/flash.
     if (Math.abs(v.currentTime - target) < 1 / 1000 || target === this.lastSeekTarget) return;
     this.lastSeekTarget = target;
+    this.snapshotIfReady();
     this.seeking = true;
 
     /*
@@ -305,7 +316,38 @@ export class FrameSource {
     });
   }
 
-  /** The current drawable frame, or null if not yet decodable. */
+  /**
+   * Copy the element's current pixels into `lastGoodFrame`, if it actually has a decoded frame
+   * right now. Called right before every seek — paused scrubbing and the playing-drift
+   * correction alike — so there is always something to fall back on for however long that seek
+   * takes to land. A plain `<canvas>`, not an ImageBitmap: texImage2D accepts it directly and,
+   * once drawn, its pixels do not depend on the source video's readyState the way the live
+   * element's do.
+   */
+  private snapshotIfReady(): void {
+    if (!(this.el instanceof HTMLVideoElement)) return;
+    const v = this.el;
+    if (v.readyState < 2 || !v.videoWidth || !v.videoHeight) return;
+    if (!this.lastGoodFrame) {
+      this.lastGoodFrame = document.createElement('canvas');
+      this.lastGoodFrameCtx = this.lastGoodFrame.getContext('2d', { alpha: false });
+    }
+    if (this.lastGoodFrame.width !== v.videoWidth) this.lastGoodFrame.width = v.videoWidth;
+    if (this.lastGoodFrame.height !== v.videoHeight) this.lastGoodFrame.height = v.videoHeight;
+    this.lastGoodFrameCtx?.drawImage(v, 0, 0);
+  }
+
+  /**
+   * The current drawable frame — the live decode when it has one, the snapshot taken right
+   * before the in-flight seek otherwise, or null if neither exists yet (nothing has ever
+   * decoded, e.g. the very first frame of a freshly-added clip).
+   *
+   * The fallback is what keeps a scrub or a drift-correction seek from reading as a black flash:
+   * every render() clears the whole canvas before compositing (see Compositor.render), so a clip
+   * that contributes nothing this pass does not hold its OWN last frame — the picture just goes
+   * background-coloured for however many frames the seek is in flight. Handing back the snapshot
+   * instead means the compositor still has a real, if momentarily stale, frame to draw.
+   */
   getFrame(): FrameBitmap | null {
     if (this.el instanceof HTMLImageElement) {
       dthrottle(`getFrame:${this.media.id}`, 500, 'decode', () => [
@@ -318,9 +360,10 @@ export class FrameSource {
     const ok = v.readyState >= 2;
     dthrottle(`getFrame:${this.media.id}`, 500, 'decode', () => [
       'getFrame(video)',
-      { id: this.media.id, readyState: v.readyState, ok, currentTime: Number(v.currentTime.toFixed(3)), w: v.videoWidth, h: v.videoHeight },
+      { id: this.media.id, readyState: v.readyState, ok, usingSnapshot: !ok && !!this.lastGoodFrame, currentTime: Number(v.currentTime.toFixed(3)), w: v.videoWidth, h: v.videoHeight },
     ]);
-    return ok ? v : null;
+    if (ok) return v;
+    return this.lastGoodFrame;
   }
 
   /** Native pixel dimensions, once known. */
@@ -339,6 +382,8 @@ export class FrameSource {
     // re-enter seekTo on it. Export disposes the whole pool in a finally, so this runs on the
     // failure path too.
     clearTimeout(this.seekWatchdog);
+    this.lastGoodFrame = null;
+    this.lastGoodFrameCtx = null;
     if (this.el instanceof HTMLVideoElement) {
       this.el.pause();
       this.el.removeAttribute('src');

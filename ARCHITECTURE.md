@@ -1,6 +1,6 @@
-# Open Cut — Architecture
+# Nova Cut — Architecture
 
-Open Cut is a non-linear video editor (NLE) built as a **layered monorepo** so the
+Nova Cut is a non-linear video editor (NLE) built as a **layered monorepo** so the
 same domain and rendering logic can power desktop today and web/mobile later.
 
 ## Guiding principles

@@ -14,8 +14,10 @@ import {
   Headphones,
 } from 'lucide-react';
 import {
+  addClipOnFreeTrack,
   addTrack,
   addTransition,
+  createTextClip,
   formatTimecode,
   getTransitionDef,
   nextClipOnTrack,
@@ -25,6 +27,7 @@ import {
   seconds,
   toSeconds,
   toggleTrackFlag,
+  VIDEO_TEXT_PRESETS,
   type Clip,
   type Sequence,
   type Ticks,
@@ -33,6 +36,7 @@ import {
 import { IconButton, Tooltip } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
 import { usePlayback } from '../state/playbackContext.js';
+import { formatCombo } from '../state/shortcuts.js';
 import { ClipContextMenu } from './ClipContextMenu.js';
 import {
   beginClipDrag,
@@ -82,12 +86,22 @@ export function Timeline() {
   const headersRef = useRef<HTMLDivElement>(null);
   const { toPx, toTicks } = useScale();
 
-  // Auto-scroll to keep the playhead in view during playback (pref-gated). Subscribes to the
-  // store directly (not via useStore) so this does NOT re-render the Timeline every frame.
+  // Keep the playhead in view. Subscribes to the store directly (not via useStore) so this does
+  // NOT re-render the Timeline every frame.
+  //
+  // This used to only run while playing, pref-gated. Outside playback — Home/End, an arrow-key
+  // step, restoring a crashed session, clicking a transport button in the Preview panel, any of
+  // it — the playhead could land wherever, scrolled clean out of view, with nothing to bring it
+  // back short of the user hunting for it by hand. There's no preference for that half: a
+  // playhead you can't see isn't an editing choice anyone would opt out of, so it only checks
+  // `autoScrollDuringPlayback` for the case that preference actually names — the continuous
+  // recentering DURING playback, which some editors do find distracting on a long timeline and
+  // is the one part of this that is a matter of taste.
   useEffect(() => {
     const unsub = store.subscribe((s) => {
       const el = scrollRef.current;
-      if (!el || !s.isPlaying || !s.preferences.autoScrollDuringPlayback) return;
+      if (!el) return;
+      if (s.isPlaying && !s.preferences.autoScrollDuringPlayback) return;
       const x = toPx(s.playhead);
       const left = el.scrollLeft;
       const right = left + el.clientWidth;
@@ -212,10 +226,12 @@ function TimelineToolbar() {
   const pps = useStore((s) => s.pixelsPerSecond);
   const snap = useStore((s) => s.snapEnabled);
   const ripple = useStore((s) => s.rippleEnabled);
+  // Read live, not hard-coded, so a rebind in Settings > Keyboard shows up here too.
+  const splitCombo = useStore((s) => s.shortcuts.split);
 
   return (
     <div className="oc-timeline__toolbar">
-      <Tooltip label="Split clip at playhead" shortcut="Ctrl+K">
+      <Tooltip label="Split clip at playhead" shortcut={formatCombo(splitCombo)}>
         <IconButton onClick={() => store.getState().splitAtPlayhead()}>
           <Scissors size={16} />
         </IconButton>
@@ -390,6 +406,29 @@ const Lane = memo(function Lane({
       const scroller = (e.currentTarget as HTMLElement).closest('.oc-timeline__scroll');
       const x = e.clientX - rect.left + (scroller?.scrollLeft ?? 0);
       applyTransitionAtTime(store, track, toTicks(x), transitionType);
+      return;
+    }
+
+    // A text preset dragged from the Text browser. Lands at the exact time the cursor dropped
+    // it at, on the topmost free VIDEO track from there — same rule `addClipOnFreeTrack` already
+    // enforces for the click-to-add path, and for the same reason: the compositor draws one clip
+    // per track per frame, so text has to land above the footage, never replace it.
+    const textPresetId = e.dataTransfer.getData('application/x-opencut-text');
+    if (textPresetId) {
+      if (track.kind === 'audio') {
+        return store.getState().notify('Drop text on a video track', 'info');
+      }
+      const preset = VIDEO_TEXT_PRESETS.find((p) => p.id === textPresetId);
+      if (!preset) return;
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const scroller = (e.currentTarget as HTMLElement).closest('.oc-timeline__scroll');
+      const x = e.clientX - rect.left + (scroller?.scrollLeft ?? 0);
+      const clip = createTextClip(Math.max(0, toTicks(x)), preset.defaultContent);
+      if (clip.text) clip.text = { ...clip.text, ...preset.style, content: preset.defaultContent };
+      clip.name = preset.label;
+      store.getState().dispatch(addClipOnFreeTrack(clip));
+      store.getState().selectClip(clip.id);
+      store.getState().setInspectorTab('text');
       return;
     }
 

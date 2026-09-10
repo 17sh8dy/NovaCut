@@ -189,7 +189,7 @@ export function defaultProjectName(kind: 'video' | 'photo' = 'video', at: Date =
     .replace(/[\s\u00a0\u202f\u2009]+/g, ' ')
     .replace(/:/g, '.')
     .trim();
-  return `OpenCut ${kind === 'photo' ? 'Photo' : 'Video'} File at ${time}`;
+  return `Nova Cut ${kind === 'photo' ? 'Photo' : 'Video'} File at ${time}`;
 }
 
 export function createProject(name = defaultProjectName('video'), preset = SEQUENCE_PRESETS['1080p30']!): Project {

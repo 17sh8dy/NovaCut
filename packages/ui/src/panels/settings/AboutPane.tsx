@@ -41,7 +41,7 @@ export function AboutPane() {
   return (
     <div className="oc-about">
       <div className="oc-about__mark" />
-      <h1>Open Cut</h1>
+      <h1>Nova Cut</h1>
       <p className="oc-about__tag">A professional non-linear video and photo editor.</p>
 
       <ul className="oc-about__highlights">

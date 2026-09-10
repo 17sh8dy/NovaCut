@@ -113,18 +113,18 @@ export const SETTINGS: SettingDef[] = [
   {
     id: 'accentColor', category: 'General', group: 'Appearance', control: 'accent', status: 'live',
     label: 'Accent colour',
-    desc: 'Primary buttons, active tools, selection, sliders and focus rings. The Open Cut logo always keeps its own blue.',
+    desc: 'Primary buttons, active tools, selection, sliders and focus rings. The Nova Cut logo always keeps its own blue.',
     keywords: 'accent colour color highlight brand blue purple green orange red pink gray theme',
   },
   {
     id: 'language', category: 'General', group: 'Appearance', control: 'select', status: 'planned',
-    blockedBy: 'Open Cut has no translations yet — the interface is English only.',
+    blockedBy: 'Nova Cut has no translations yet — the interface is English only.',
     label: 'Language', keywords: 'locale i18n translation english',
     options: [{ value: 'en', label: 'English' }],
   },
   {
     id: 'launchOnStartup', category: 'General', group: 'Startup', control: 'toggle', status: 'live',
-    label: 'Launch on startup', desc: 'Open Cut starts when you sign in.',
+    label: 'Launch on startup', desc: 'Nova Cut starts when you sign in.',
     keywords: 'boot login autostart startup',
   },
   {

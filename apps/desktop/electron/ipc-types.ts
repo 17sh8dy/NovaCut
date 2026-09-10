@@ -98,7 +98,7 @@ export interface OpenCutApi {
   // ── Shell integration ──
   /** Subscribe to application-menu commands. Returns an unsubscribe function. */
   onMenuCommand(handler: (command: MenuCommand) => void): () => void;
-  /** Subscribe to "open this .opencut file" (double-click, second instance). Returns unsubscribe. */
+  /** Subscribe to "open this .novacut file" (double-click, second instance). Returns unsubscribe. */
   onOpenProjectPath(handler: (path: string) => void): () => void;
   /** Tell main whether there are unsaved changes, so it can guard the quit. */
   setDirty(dirty: boolean, projectName: string): void;

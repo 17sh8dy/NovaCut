@@ -18,7 +18,7 @@ import type { StorageUsageDTO, SystemInfoDTO } from './ipc-types.js';
  * Chromium's own caches, which `session.clearCache()` owns and can regenerate.
  *
  * There is deliberately no "generated thumbnails" bucket. Thumbnails are ffmpeg-produced data
- * URLs held inside the MediaAsset, so they are serialised into the .opencut file and into the
+ * URLs held inside the MediaAsset, so they are serialised into the .novacut file and into the
  * recovery snapshots — they have no separate home on disk. A thumbnails row would either read
  * zero forever or double-count bytes already reported under Projects and Autosaves.
  */
@@ -55,7 +55,7 @@ async function sumDirs(root: string, names: string[]): Promise<number> {
   return sizes.reduce((a, b) => a + b, 0);
 }
 
-/** Bytes of `.opencut` files in a directory (non-recursive — projects aren't nested). */
+/** Bytes of `.novacut` files in a directory (non-recursive — projects aren't nested). */
 async function projectsSize(dir: string): Promise<number> {
   if (!dir) return 0;
   let entries;
@@ -66,7 +66,7 @@ async function projectsSize(dir: string): Promise<number> {
   }
   let total = 0;
   for (const e of entries) {
-    if (!e.isFile() || !e.name.toLowerCase().endsWith('.opencut')) continue;
+    if (!e.isFile() || !e.name.toLowerCase().endsWith('.novacut')) continue;
     try {
       total += (await stat(join(dir, e.name))).size;
     } catch { /* skip */ }

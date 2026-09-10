@@ -1,6 +1,6 @@
 /**
  * App-level user preferences — distinct from per-project settings (which live in
- * project.settings and are saved in the .opencut file). These are editor-wide and persist in
+ * project.settings and are saved in the .novacut file). These are editor-wide and persist in
  * localStorage across projects and sessions. Read/written by the Settings window.
  *
  * EVERY KEY HERE IS READ BY SOMETHING. The settings registry pairs each of these with a control
@@ -181,7 +181,7 @@ export interface AccentPreset {
 }
 
 export const ACCENT_PRESETS: AccentPreset[] = [
-  { value: '', label: 'Ocean Blue (Open Cut)', swatch: '#1565ff' },
+  { value: '', label: 'Ocean Blue (Nova Cut)', swatch: '#1565ff' },
   { value: '#7c5cf5', label: 'Purple', swatch: '#7c5cf5' },
   { value: '#0f9d63', label: 'Green', swatch: '#0f9d63' },
   { value: '#d97706', label: 'Orange', swatch: '#d97706' },

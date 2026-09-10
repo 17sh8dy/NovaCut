@@ -187,9 +187,17 @@ export const TRANSITION_FRAGMENTS: Record<string, string> = {
     uniform float u_softness;
     void main() {
       // Aspect-correct the distance or the "circle" is an ellipse on any non-square frame.
-      vec2 d = (v_uv - 0.5) * vec2(u_texel.y / u_texel.x, 1.0);
-      float dist = length(d) * 1.20;
-      float r = ease(u_progress) * 1.05;
+      float aspect = u_texel.y / u_texel.x;
+      vec2 d = (v_uv - 0.5) * vec2(aspect, 1.0);
+      float dist = length(d);
+      // The EXACT distance from centre to the farthest corner, in this same aspect-corrected
+      // space — not a hand-picked constant. The bug this replaces: fixed multipliers (1.20 on
+      // dist, 1.05 on r) happened to clear a square frame but fell short on 16:9 — this app's
+      // own default — so the reveal circle stopped growing at progress 1.0 while the frame's
+      // corners were still farther away than that, leaving slivers of the outgoing clip stuck
+      // in the corners forever instead of the transition ever actually finishing.
+      float maxDist = length(vec2(aspect, 1.0) * 0.5);
+      float r = ease(u_progress) * maxDist;
       float soft = max(0.001, u_softness);
       float k = smoothstep(r - soft, r + soft, dist);
       fragColor = mix(texture(u_to, v_uv), texture(u_from, v_uv), k);

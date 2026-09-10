@@ -460,7 +460,7 @@
 /*
  * The real mark, not an accent-coloured square standing in for one. It used to be
  * `linear-gradient(--accent, --accent-far)`, which meant the About box showed the user's chosen
- * accent and called it the Open Cut logo. No border-radius of our own: the artwork already is a
+ * accent and called it the Nova Cut logo. No border-radius of our own: the artwork already is a
  * rounded square, and clipping it to a second radius shaves the corners twice.
  */
 .oc-about__mark {

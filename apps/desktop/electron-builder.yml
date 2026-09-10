@@ -9,14 +9,14 @@
 #    directories. Keeping it out makes the package small AND correct.
 #
 # 2. Every icon is committed, not derived at package time. `npm run icon` renders them from
-#    `assets/OpenCut.svg` — the single source of truth — into `build/`, and the per-platform
+#    `assets/NovaCut.svg` — the single source of truth — into `build/`, and the per-platform
 #    `icon:` keys below point at those files explicitly. Letting electron-builder convert a PNG
 #    into an .ico instead would hand the most visible asset in the product to an implicit
 #    conversion nobody reviews, at sizes nobody chose.
 
-appId: com.opencut.editor
-productName: Open Cut
-copyright: Copyright © 2026 Open Cut
+appId: com.novacut.editor
+productName: Nova Cut
+copyright: Copyright © 2026 Nova Cut
 
 # package.json's description explains the module to a developer; this one is what Windows shows
 # in Task Manager and in the exe's tooltip, where a sentence about the PlatformBridge is noise.
@@ -38,11 +38,11 @@ files:
 # ── Bundled FFmpeg ───────────────────────────────────────────────────────────────────
 #
 # Copied to `resources/ffmpeg/` inside the installed app, which is exactly where
-# `electron/ffmpeg.ts` looks before falling back to PATH. This is what makes a downloaded Open
+# `electron/ffmpeg.ts` looks before falling back to PATH. This is what makes a downloaded Nova
 # Cut able to import and export without the user installing anything first — without it, a clean
 # machine gets a zero-length clip on import and no export at all.
 #
-# The build is LGPL, NOT GPL: Open Cut is MIT, and GPL components would force the combined work
+# The build is LGPL, NOT GPL: Nova Cut is MIT, and GPL components would force the combined work
 # to GPL. `LICENSE.txt` ships beside the executables because the LGPL requires it to.
 # `npm run ffmpeg:fetch` fetches and licence-checks them; see resources/ffmpeg/README.md.
 #
@@ -61,12 +61,12 @@ extraResources:
 # No native modules anywhere in the tree; skipping the rebuild pass saves a minute per build.
 npmRebuild: false
 
-# Double-clicking a .opencut project launches the app with it. Main reads the path off argv
+# Double-clicking a .novacut project launches the app with it. Main reads the path off argv
 # (Windows/Linux) or the `open-file` event (macOS) — see electron/main.ts `projectFromArgv`.
 fileAssociations:
-  - ext: opencut
-    name: Open Cut Project
-    description: Open Cut Project
+  - ext: novacut
+    name: Nova Cut Project
+    description: Nova Cut Project
     role: Editor
 
 win:
@@ -84,7 +84,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Open Cut
+  shortcutName: Nova Cut
   # The installer and uninstaller wear the app's icon too — the first thing a user sees is the
   # setup .exe, and a generic installer icon undoes the work the app icon is doing.
   installerIcon: build/icon.ico

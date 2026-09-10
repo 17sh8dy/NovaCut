@@ -3,7 +3,7 @@
  *
  *   npm run icon        (→ electron scripts/make-icons.cjs)
  *
- * SOURCE OF TRUTH: `assets/OpenCut.svg` and `assets/OpenCut-small.svg`. Nothing else is
+ * SOURCE OF TRUTH: `assets/NovaCut.svg` and `assets/NovaCut-small.svg`. Nothing else is
  * authored; everything below is a derivation. Change the logo there and re-run — never hand-edit
  * an output, or the taskbar icon and the in-app mark drift apart with nothing to say which one
  * is right.
@@ -24,7 +24,7 @@
  * triangle merges with the frame behind it. Rendered and compared before this was written — at
  * 16px the full artwork carries almost no information.
  *
- * So the small sizes get their own drawing (`OpenCut-small.svg`): one frame at full opacity, a
+ * So the small sizes get their own drawing (`NovaCut-small.svg`): one frame at full opacity, a
  * knocked-out triangle, no brackets, no rotation. Same idea, same colour, two shapes instead of
  * seven. This is ordinary practice for an icon set and the reason .ico is a multi-image format
  * in the first place — an icon is not one drawing scaled, it is a family drawn per size.
@@ -45,8 +45,8 @@ const { readFileSync, writeFileSync, mkdirSync, rmSync } = require('node:fs');
 const { join, dirname } = require('node:path');
 
 const ROOT = join(__dirname, '..');
-const SVG = join(ROOT, 'assets', 'OpenCut.svg');
-const SVG_SMALL = join(ROOT, 'assets', 'OpenCut-small.svg');
+const SVG = join(ROOT, 'assets', 'NovaCut.svg');
+const SVG_SMALL = join(ROOT, 'assets', 'NovaCut-small.svg');
 const BUILD = join(ROOT, 'apps', 'desktop', 'build');
 const ICONS = join(BUILD, 'icons');
 const UI_ASSET = join(ROOT, 'packages', 'ui', 'src', 'assets', 'logo.svg');
@@ -138,7 +138,7 @@ function buildICNS(entries) {
  * The choice is made HERE rather than by the caller so that there is exactly one place in the
  * build that knows which drawing a given pixel size gets — every output below (ico, icns, the
  * Linux set, the generic png) then inherits that decision for free and cannot disagree with the
- * others about what a 32px Open Cut icon looks like.
+ * others about what a 32px Nova Cut icon looks like.
  */
 async function rasterise(full, small) {
   const win = new BrowserWindow({ show: false, width: 64, height: 64 });
@@ -222,7 +222,7 @@ app.whenReady().then(async () => {
   const kb = (n) => `${(n / 1024).toFixed(1)} kB`;
   const smalls = SIZES.filter((s) => s <= SMALL_MAX);
   const fulls = SIZES.filter((s) => s > SMALL_MAX);
-  console.log(`source   assets/OpenCut.svg (${svg.length} B) · assets/OpenCut-small.svg (${svgSmall.length} B)`);
+  console.log(`source   assets/NovaCut.svg (${svg.length} B) · assets/NovaCut-small.svg (${svgSmall.length} B)`);
   console.log(`variant  small → ${smalls.join(', ')}   ·   full → ${fulls.join(', ')}`);
   console.log(`png      ${SIZES.join(', ')} → build/icons/  ·  build/icon.png ${kb(frames[1024].png.length)}`);
   console.log(`ico      ${ICO.map((i) => i.size).join(', ')} → build/icon.ico`);

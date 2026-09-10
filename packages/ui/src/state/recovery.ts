@@ -1,7 +1,7 @@
 /**
  * Crash recovery / session restore.
  *
- * Independent of the normal "save to .opencut file" flow (useAutosave). This keeps a small
+ * Independent of the normal "save to .novacut file" flow (useAutosave). This keeps a small
  * ring of recent snapshots in localStorage — project data PLUS editor state (playhead, zoom,
  * selection) — so an unexpected close can be recovered even for a project that was never
  * saved to disk. Renderer-only: no PlatformBridge or engine involvement.

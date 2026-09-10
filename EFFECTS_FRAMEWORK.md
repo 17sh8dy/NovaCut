@@ -1,4 +1,4 @@
-# Open Cut — Effects Framework & 50-Effect Roadmap
+# Nova Cut — Effects Framework & 50-Effect Roadmap
 
 Scalable architecture for the animations / text / filters / transitions library. This is the
 **framework + catalog** deliverable; the 5 Batch‑1 effects land in the next step and plug into
@@ -7,7 +7,7 @@ systems, or buffer swaps — every new capability is an **additive** branch.
 
 ---
 
-## 1. The core finding: Open Cut has four effect layers, not one
+## 1. The core finding: Nova Cut has four effect layers, not one
 
 Effects are applied at four different layers by design. A single "one function signature for all
 50" wrapper would fight the engine and risk exactly the inverted-frame / black-flash bugs we must

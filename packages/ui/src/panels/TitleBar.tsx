@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Button, IconButton, Tooltip } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
+import { formatCombo } from '../state/shortcuts.js';
 import { AppMenuBar } from './AppMenuBar.js';
 import { WindowControls } from './WindowControls.js';
 
@@ -21,18 +22,20 @@ export function TitleBar() {
   const dirty = useStore((s) => s.dirty);
   const canUndo = useStore((s) => s.history.canUndo);
   const canRedo = useStore((s) => s.history.canRedo);
+  // Read live, not hard-coded, so a rebind in Settings > Keyboard shows up here too.
+  const shortcuts = useStore((s) => s.shortcuts);
 
   return (
     <div className="oc-titlebar">
       <button className="oc-brand" onClick={() => store.getState().setView('home')} title="Back to Home">
         <div className="oc-brand__mark" />
-        Open&nbsp;Cut
+        Nova&nbsp;Cut
       </button>
 
       <AppMenuBar />
 
       <div className="oc-menu-row">
-        <Tooltip label="New Project" shortcut="Ctrl N">
+        <Tooltip label="New Project" shortcut={formatCombo(shortcuts.new)}>
           <IconButton
             onClick={async () => {
               if (!(await store.getState().guardUnsaved())) return;
@@ -42,7 +45,7 @@ export function TitleBar() {
             <FilePlus2 size={17} />
           </IconButton>
         </Tooltip>
-        <Tooltip label="Open Project" shortcut="Ctrl O">
+        <Tooltip label="Open Project" shortcut={formatCombo(shortcuts.open)}>
           <IconButton
             onClick={async () => {
               if (!(await store.getState().guardUnsaved())) return;
@@ -53,7 +56,7 @@ export function TitleBar() {
             <FolderOpen size={17} />
           </IconButton>
         </Tooltip>
-        <Tooltip label="Save" shortcut="Ctrl S">
+        <Tooltip label="Save" shortcut={formatCombo(shortcuts.save)}>
           <IconButton onClick={() => store.getState().save()}>
             <Save size={17} />
           </IconButton>
@@ -63,12 +66,12 @@ export function TitleBar() {
       <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
 
       <div className="oc-menu-row">
-        <Tooltip label="Undo" shortcut="Ctrl Z">
+        <Tooltip label="Undo" shortcut={formatCombo(shortcuts.undo)}>
           <IconButton disabled={!canUndo} onClick={() => store.getState().undo()}>
             <Undo2 size={17} />
           </IconButton>
         </Tooltip>
-        <Tooltip label="Redo" shortcut="Ctrl ⇧ Z">
+        <Tooltip label="Redo" shortcut={formatCombo(shortcuts.redo)}>
           <IconButton disabled={!canRedo} onClick={() => store.getState().redo()}>
             <Redo2 size={17} />
           </IconButton>
