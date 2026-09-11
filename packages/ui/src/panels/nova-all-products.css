@@ -1,0 +1,201 @@
+/*
+ * The full-screen "all Nova products" view. See NovaAllProducts.tsx for the rationale.
+ * Built from the same tokens as .oc-backdrop/.oc-modal (dialog.css) and the entrance keyframes
+ * in theme/global.css — a bigger room in the same house, not a second glass language.
+ */
+
+.oc-nova-all__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900; /* above .oc-backdrop's 800 — this can open from on top of a dropdown */
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: clamp(28px, 8vh, 96px) var(--space-6) var(--space-8);
+  background: rgba(9, 12, 18, 0.45);
+  backdrop-filter: blur(var(--blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(140%);
+  animation: oc-fade-in var(--dur) var(--ease-out);
+}
+
+.oc-nova-all__close {
+  position: fixed;
+  top: clamp(16px, 4vh, 32px);
+  right: clamp(16px, 4vw, 40px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.oc-nova-all__close:hover {
+  background: var(--surface-3);
+  transform: scale(1.05);
+}
+
+.oc-nova-all {
+  width: 100%;
+  max-width: 880px;
+  text-align: center;
+  animation: oc-scale-in var(--dur) var(--ease-out);
+}
+
+.oc-nova-all__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 var(--space-3);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.oc-nova-all__mark {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+.oc-nova-all__mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.oc-nova-all__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-2xl, 1.6rem);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+
+.oc-nova-all__subtitle {
+  max-width: 46ch;
+  margin: 0 auto var(--space-6);
+  color: var(--text-secondary);
+}
+
+.oc-nova-all__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-4);
+  text-align: left;
+}
+
+.oc-nova-all__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: var(--space-5) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl, 14px);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  text-decoration: none;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(14px) scale(0.97);
+  animation: oc-nova-all-pop 380ms var(--ease-out) both;
+}
+
+@keyframes oc-nova-all-pop {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+a.oc-nova-all__card {
+  transition:
+    transform var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+a.oc-nova-all__card:hover {
+  background: var(--surface-3);
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}
+
+.oc-nova-all__card--current {
+  cursor: default;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.oc-nova-all__card--soon {
+  cursor: default;
+  color: var(--text-tertiary);
+}
+
+.oc-nova-all__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+}
+.oc-nova-all__card--current .oc-nova-all__icon {
+  color: var(--accent-text);
+  background: var(--surface-0);
+}
+
+.oc-nova-all__label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.oc-nova-all__tagline {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.oc-nova-all__card--current .oc-nova-all__tagline {
+  color: var(--accent-text);
+}
+
+.oc-nova-all__badge {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+:root[data-reduce-motion] .oc-nova-all__backdrop,
+:root[data-reduce-motion] .oc-nova-all,
+:root[data-reduce-motion] .oc-nova-all__card {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+
+@media (max-width: 560px) {
+  .oc-nova-all__grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-3);
+  }
+}

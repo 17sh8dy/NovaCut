@@ -15,7 +15,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { ChevronDown, Gamepad2, Scissors, Sparkles } from 'lucide-react';
+import { ArrowRight, ChevronDown, Gamepad2, Scissors, Sparkles } from 'lucide-react';
+import { NovaAllProducts } from './NovaAllProducts';
 import './nova-switcher.css';
 
 interface NovaProduct {
@@ -54,6 +55,7 @@ function NovaMark() {
 
 export function NovaSwitcher({ current }: { current: string }) {
   const [open, setOpen] = useState(false);
+  const [allOpen, setAllOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -130,7 +132,25 @@ export function NovaSwitcher({ current }: { current: string }) {
             </a>
           );
         })}
+        <button
+          type="button"
+          className="oc-nova-switcher__viewall"
+          onClick={() => {
+            setOpen(false);
+            setAllOpen(true);
+          }}
+        >
+          <span>View all</span>
+          <ArrowRight size={13} />
+        </button>
       </div>
+      <NovaAllProducts
+        open={allOpen}
+        onClose={() => setAllOpen(false)}
+        current={current}
+        products={PRODUCTS}
+        mark={<NovaMark />}
+      />
     </div>
   );
 }

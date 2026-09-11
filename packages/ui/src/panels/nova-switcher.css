@@ -189,3 +189,40 @@ a.oc-nova-switcher__item:hover {
   font-size: 10px;
   font-weight: 600;
 }
+
+/* The dropdown's own footer row, opening NovaAllProducts — same stagger rhythm as the last item
+   above it. */
+.oc-nova-switcher__viewall {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 8px var(--space-2);
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.oc-nova-switcher__menu[data-open='true'] .oc-nova-switcher__viewall {
+  animation: oc-nova-switcher-item var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: 130ms;
+}
+.oc-nova-switcher__viewall:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+.oc-nova-switcher__viewall svg {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.oc-nova-switcher__viewall:hover svg {
+  transform: translateX(2px);
+}
