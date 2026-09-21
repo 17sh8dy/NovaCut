@@ -55,8 +55,9 @@ export function AccountPane() {
     }
   };
 
-  // The other Nova products this account can be used in. Nova Cut itself is left out.
-  const others = [...NOVA_APPS, ...NOVA_SITES].filter((p) => p.id !== 'nova-cut');
+  // The other Nova products this account can be used in. Nova Cut itself is left out, and so is
+  // Nova: it has its own section above, with the account links.
+  const others = [...NOVA_APPS, ...NOVA_SITES].filter((p) => p.id !== 'nova-cut' && p.id !== 'nova');
   const launch = (p: NovaProduct) => {
     const { bridge, notify } = store.getState();
     void openNovaProduct(bridge, notify, p);
