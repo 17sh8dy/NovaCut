@@ -17,7 +17,7 @@ import {
   Keyboard, HardDrive, Shield, Bell, FlaskConical, Info,
   RotateCcw, AlertTriangle, X, Search, Lock,
 } from 'lucide-react';
-import { Button, Segmented } from '../components/primitives/index.js';
+import { Button, Modal, Segmented } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
 import { SHORTCUT_DEFS, comboFromEvent, conflicts, formatCombo, type ShortcutId } from '../state/shortcuts.js';
 import {
@@ -229,19 +229,68 @@ function RegistryPane({ category, query }: { category: SettingsCategory; query: 
           ))}
         </div>
       ))}
-      <ResetAll category={category} />
+      <ResetAll />
     </>
   );
 }
 
-function ResetAll({ category }: { category: SettingsCategory }) {
+/**
+ * "Reset all settings to defaults", at the foot of every settings category.
+ *
+ * It resets EVERYTHING that is a setting (every category, the keyboard shortcuts, remembered
+ * export choices, the timeline view), so it asks first: one stray click must not wipe a person's
+ * whole setup. Projects, media and photos are never touched.
+ */
+function ResetAll() {
   const store = useAppStore();
-  if (category !== 'General') return null;
+  const [confirming, setConfirming] = useState(false);
+
+  // While the question is open, Escape answers IT and stops there. Without this the Settings window's
+  // own Escape handler would fire too and close the whole window behind the dialog.
+  useEffect(() => {
+    if (!confirming) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopImmediatePropagation();
+        setConfirming(false);
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [confirming]);
+
+  const doReset = () => {
+    store.getState().resetAllSettings();
+    setConfirming(false);
+    store.getState().notify('All settings were reset to their defaults', 'success');
+  };
+
   return (
     <div className="oc-setting-actions">
-      <Button variant="ghost" icon={<RotateCcw size={14} />} onClick={() => store.getState().resetPreferences()}>
+      <Button variant="ghost" icon={<RotateCcw size={14} />} onClick={() => setConfirming(true)}>
         Reset all settings to defaults
       </Button>
+      {confirming && (
+        <Modal
+          title="Reset all settings?"
+          maxWidth={460}
+          onClose={() => setConfirming(false)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setConfirming(false)}>Cancel</Button>
+              <Button variant="danger" icon={<RotateCcw size={14} />} onClick={doReset}>Reset everything</Button>
+            </>
+          }
+        >
+          <p style={{ margin: 0 }}>
+            This puts <strong>every</strong> setting back to its default, in every category. It also clears your
+            custom keyboard shortcuts, remembered export choices and the timeline zoom.
+          </p>
+          <p style={{ margin: '10px 0 0', color: 'var(--text-secondary)' }}>
+            Your projects, media and photos are not touched. This can’t be undone.
+          </p>
+        </Modal>
+      )}
     </div>
   );
 }

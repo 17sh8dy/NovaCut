@@ -264,13 +264,16 @@ function TimelineToolbar() {
         <IconButton size="sm" onClick={() => store.getState().setPixelsPerSecond(pps / 1.4)}>
           <ZoomOut size={15} />
         </IconButton>
+        {/* Logarithmic: 0.1 to 300 px/s is a 3000x range, which a linear slider would squeeze all of
+            the useful (zoomed-in) part into the last few pixels of. */}
         <input
           type="range"
-          min={8}
-          max={300}
-          value={pps}
-          onChange={(e) => store.getState().setPixelsPerSecond(+e.target.value)}
+          min={0}
+          max={1000}
+          value={ppsToSlider(pps)}
+          onChange={(e) => store.getState().setPixelsPerSecond(sliderToPps(+e.target.value))}
           style={{ width: 90 }}
+          aria-label="Timeline zoom"
         />
         <IconButton size="sm" onClick={() => store.getState().setPixelsPerSecond(pps * 1.4)}>
           <ZoomIn size={15} />
@@ -279,6 +282,12 @@ function TimelineToolbar() {
     </div>
   );
 }
+
+const SLIDER_MIN = 0.1;
+const SLIDER_MAX = 300;
+const ppsToSlider = (p: number) =>
+  Math.round((1000 * Math.log(Math.max(SLIDER_MIN, Math.min(SLIDER_MAX, p)) / SLIDER_MIN)) / Math.log(SLIDER_MAX / SLIDER_MIN));
+const sliderToPps = (v: number) => SLIDER_MIN * Math.pow(SLIDER_MAX / SLIDER_MIN, v / 1000);
 
 function Ruler({
   sequence,
@@ -294,8 +303,10 @@ function Ruler({
   // Choose a tick interval (seconds) that keeps labels ~80px apart at this zoom.
   const targetPx = 80;
   const rawSeconds = targetPx / pps;
-  const niceSteps = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
-  const stepSec = niceSteps.find((s) => s >= rawSeconds) ?? 600;
+  // Steps run up to four hours so a multi-hour timeline still gets a readable ruler when zoomed
+  // right out (at 0.1 px/s an 80px gap is over thirteen minutes).
+  const niceSteps = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 14400];
+  const stepSec = niceSteps.find((s) => s >= rawSeconds) ?? 14400;
   const totalSec = width / pps;
   const marks: number[] = [];
   for (let s = 0; s <= totalSec; s += stepSec) marks.push(s);

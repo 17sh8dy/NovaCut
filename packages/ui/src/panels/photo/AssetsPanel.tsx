@@ -16,7 +16,7 @@ import {
   SHAPE_KINDS,
   SHAPE_LABELS,
   SHAPE_PRESETS,
-  STICKER_EMOJI,
+  EMOJI_GROUPS,
   TEXT_PRESETS,
   addShapeLayer,
   addTextLayer,
@@ -132,30 +132,37 @@ export function AssetsPanel() {
         </div>
       </Section>
 
-      <Section title="Stickers" icon={<Smile size={14} />}>
+      <Section title="Emojis" icon={<Smile size={14} />}>
         {/*
           Emoji rather than bundled artwork: every platform ships a full colour emoji font, so
           these render exactly as the audience will see them elsewhere, weigh nothing, and never
           go stale. Inserted as ordinary TEXT layers, which means every text control — stroke,
-          shadow, glow, curve — works on them for free.
+          shadow, glow, curve — works on them for free. Grouped, and the search box matches the
+          group names ("food", "gaming", "arrows"), so a few hundred stay findable.
         */}
-        <div className="oc-emoji">
-          {STICKER_EMOJI.map((emoji) => (
-            <button
-              key={emoji}
-              className="oc-emoji__item"
-              onClick={() =>
-                add(() =>
-                  store.getState().dispatch(
-                    addTextLayer(emoji, { fontSize: 220, stroke: null, shadow: null, glow: null }),
-                  ),
-                )
-              }
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
+        {EMOJI_GROUPS.filter((g) => match(g.label) || match('emoji')).map((group) => (
+          <div key={group.id} className="oc-emoji-group">
+            <div className="oc-emoji-group__title">{group.label}</div>
+            <div className="oc-emoji">
+              {group.emoji.map((emoji) => (
+                <button
+                  key={emoji}
+                  className="oc-emoji__item"
+                  title={group.label}
+                  onClick={() =>
+                    add(() =>
+                      store.getState().dispatch(
+                        addTextLayer(emoji, { fontSize: 220, stroke: null, shadow: null, glow: null }),
+                      ),
+                    )
+                  }
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </Section>
     </div>
   );

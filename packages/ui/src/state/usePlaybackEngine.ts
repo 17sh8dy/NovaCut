@@ -7,6 +7,7 @@
  * engine is created once and reconfigured as the sequence changes — never rebuilt per edit.
  */
 
+import { recordFrame } from './frameStats.js';
 import { useEffect, useRef } from 'react';
 import { AudioEngine, Compositor, FrameSourcePool, PlaybackClock, dlog, dthrottle } from '@opencut/engine';
 import { findMedia, type Ticks } from '@opencut/core';
@@ -47,6 +48,7 @@ export function usePlaybackEngine(): PlaybackEngine {
       },
     ]);
     const speed = state.playbackSpeed;
+    const t0 = performance.now();
     compositor.current?.render({
       sequence: seq,
       time,
@@ -54,6 +56,7 @@ export function usePlaybackEngine(): PlaybackEngine {
       playing: clock.current?.isPlaying ?? false,
       speed,
     });
+    if (compositor.current) recordFrame(performance.now() - t0);
     audio.current?.update(seq, time, (id) => findMedia(state.project, id as never), speed);
   };
 

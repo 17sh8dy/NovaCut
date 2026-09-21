@@ -80,7 +80,9 @@ const WORKSPACES: Workspace[] = [
     icon: Image,
     title: 'Photo Editor',
     desc: 'Edit photos and design thumbnails, banners and social posts.',
-    accent: 'var(--label-blue)',
+    // The accent, like the Video card: a live workspace should follow the colour the person
+    // chose. (It used a fixed label blue, so it stayed blue whatever the accent was.)
+    accent: 'var(--accent)',
     status: 'live',
     features: [
       'Layers, masks & selections',

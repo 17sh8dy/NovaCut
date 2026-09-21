@@ -1502,3 +1502,18 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* ── Emoji groups ─────────────────────────────────────────────────────────── */
+
+.oc-emoji-group + .oc-emoji-group {
+  margin-top: 10px;
+}
+
+.oc-emoji-group__title {
+  margin: 0 0 4px 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}

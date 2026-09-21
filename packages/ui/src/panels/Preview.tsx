@@ -13,6 +13,7 @@ import { formatTimecode } from '@opencut/core';
 import { IconButton, Tooltip } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
 import { usePlayback } from '../state/playbackContext.js';
+import { FpsOverlay } from '../components/FpsOverlay.js';
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2];
 
@@ -28,6 +29,7 @@ export function Preview() {
   const isPlaying = useStore((s) => s.isPlaying);
   const speed = useStore((s) => s.playbackSpeed);
   const loop = useStore((s) => s.loop);
+  const fpsOverlay = useStore((s) => s.preferences.fpsOverlay);
 
   useEffect(() => {
     if (canvasRef.current) engine.attach(canvasRef.current);
@@ -53,6 +55,7 @@ export function Preview() {
             pixels by construction.
           */}
           <canvas ref={canvasRef} width={seq.width} height={seq.height} />
+          {fpsOverlay && <FpsOverlay />}
         </div>
       </div>
 

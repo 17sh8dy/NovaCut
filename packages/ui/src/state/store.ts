@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import type { RecoverySnapshot } from './recovery.js';
 import { restoreProject } from './recovery.js';
+import { clearLastExport } from './exportMemory.js';
 import {
   loadPreferences,
   savePreferences,
@@ -56,6 +57,10 @@ registerBuiltins();
 
 export type PanelId = 'media' | 'effects' | 'filters' | 'transitions' | 'text' | 'audio' | 'captions';
 export type InspectorTab = 'transform' | 'effects' | 'audio' | 'speed' | 'text';
+/** Timeline zoom limits, in pixels per second. Shared by the store and the zoom slider. */
+export const MIN_PPS = 0.1;
+export const MAX_PPS = 400;
+
 export type DialogId = 'export' | 'projectSettings' | 'newProject' | 'shortcuts' | 'settings' | null;
 /** Which top-level screen is showing: the Home launcher, or one of the editor workspaces. */
 export type AppView = 'home' | 'editor' | 'photo';
@@ -151,6 +156,7 @@ interface AppState {
   setShortcut: (id: ShortcutId, combo: string) => void;
   resetShortcut: (id: ShortcutId) => void;
   resetAllShortcuts: () => void;
+  resetAllSettings: () => void;
   setActivePanel: (p: PanelId) => void;
   setInspectorTab: (t: InspectorTab) => void;
   openDialog: (d: DialogId) => void;
@@ -383,12 +389,31 @@ export function createAppStore(bridge: PlatformBridge) {
       saveOverrides(shortcuts);
       set({ shortcuts });
     },
+    /**
+     * EVERYTHING that is a setting, back to its default: every preference in every category, the
+     * custom keyboard shortcuts, the remembered export choices and the timeline view (zoom, snap,
+     * ripple). Projects, media and photos are not settings and are never touched.
+     */
+    resetAllSettings: () => {
+      savePreferences(DEFAULT_PREFERENCES);
+      const shortcuts = defaultBindings();
+      saveOverrides(shortcuts);
+      clearLastExport();
+      set({
+        preferences: { ...DEFAULT_PREFERENCES },
+        shortcuts,
+        pixelsPerSecond: 30,
+        snapEnabled: true,
+        rippleEnabled: DEFAULT_PREFERENCES.rippleByDefault,
+      });
+    },
     setActivePanel: (activePanel) => set({ activePanel }),
     setInspectorTab: (inspectorTab) => set({ inspectorTab }),
     openDialog: (dialog) => set({ dialog }),
     setPendingImport: (pendingImport) => set({ pendingImport }),
     setPendingFiles: (pendingFiles) => set({ pendingFiles }),
-    setPixelsPerSecond: (pps) => set({ pixelsPerSecond: Math.max(8, Math.min(400, pps)) }),
+    // 0.1 px/s fits about three hours into a ~1000px timeline; 400 is the closest useful zoom.
+    setPixelsPerSecond: (pps) => set({ pixelsPerSecond: Math.max(MIN_PPS, Math.min(MAX_PPS, pps)) }),
     toggleSnap: () => set({ snapEnabled: !get().snapEnabled }),
     toggleRipple: () => set({ rippleEnabled: !get().rippleEnabled }),
     setSnapGuide: (snapGuide) => set({ snapGuide }),

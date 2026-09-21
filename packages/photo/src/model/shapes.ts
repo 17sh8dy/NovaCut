@@ -33,7 +33,26 @@ export type ShapeKind =
   | 'diamond'
   | 'chevron'
   | 'speech-bubble'
-  | 'callout';
+  | 'callout'
+  | 'plus'
+  | 'cross'
+  | 'lightning'
+  | 'cloud'
+  | 'crescent'
+  | 'ring'
+  | 'hexagon'
+  | 'octagon'
+  | 'parallelogram'
+  | 'trapezoid'
+  | 'right-triangle'
+  | 'double-arrow'
+  | 'checkmark'
+  | 'droplet'
+  | 'shield'
+  | 'ribbon'
+  | 'bookmark'
+  | 'pin'
+  | 'sparkle';
 
 /** Tuning knobs. Every shape reads only the ones that mean something for it. */
 export interface ShapeParams {
@@ -125,6 +144,67 @@ export function shapePath(kind: ShapeKind, w: number, h: number, params: ShapePa
       return bubble(w, h, p, true);
     case 'callout':
       return bubble(w, h, p, false);
+    case 'plus':
+      return plus(w, h, p);
+    case 'cross':
+      return cross(w, h, p);
+    case 'lightning':
+      return unitPoly(w, h, [
+        [0.6, 0], [0.14, 0.56], [0.46, 0.56], [0.32, 1], [0.9, 0.38], [0.56, 0.38], [0.78, 0],
+      ]);
+    case 'cloud':
+      return cloud(w, h);
+    case 'crescent':
+      return crescent(w, h);
+    case 'ring':
+      return ring(w, h, p);
+    case 'hexagon':
+      return regular(w, h, 6, 0);
+    case 'octagon':
+      return regular(w, h, 8, -Math.PI / 2 + Math.PI / 8);
+    case 'parallelogram':
+      return unitPoly(w, h, [[0.2, 0], [1, 0], [0.8, 1], [0, 1]]);
+    case 'trapezoid':
+      return unitPoly(w, h, [[0.2, 0], [0.8, 0], [1, 1], [0, 1]]);
+    case 'right-triangle':
+      return [M(0, 0), L(0, h), L(w, h), Z];
+    case 'double-arrow':
+      return doubleArrow(w, h, p);
+    case 'checkmark':
+      return unitPoly(w, h, [
+        [0.02, 0.55], [0.17, 0.4], [0.39, 0.62], [0.83, 0.1], [0.98, 0.25], [0.39, 0.92],
+      ]);
+    case 'droplet':
+      return unitPath(w, h, [
+        ['M', 0.5, 0],
+        ['C', 0.62, 0.22, 0.95, 0.5, 0.95, 0.68],
+        ['C', 0.95, 0.87, 0.74, 1, 0.5, 1],
+        ['C', 0.26, 1, 0.05, 0.87, 0.05, 0.68],
+        ['C', 0.05, 0.5, 0.38, 0.22, 0.5, 0],
+      ]);
+    case 'shield':
+      return unitPath(w, h, [
+        ['M', 0, 0.14],
+        ['C', 0.2, 0.14, 0.38, 0.08, 0.5, 0],
+        ['C', 0.62, 0.08, 0.8, 0.14, 1, 0.14],
+        ['L', 1, 0.5],
+        ['C', 1, 0.78, 0.75, 0.92, 0.5, 1],
+        ['C', 0.25, 0.92, 0, 0.78, 0, 0.5],
+      ]);
+    case 'ribbon':
+      return [M(0, 0), L(w, 0), L(w * 0.92, h / 2), L(w, h), L(0, h), L(w * 0.08, h / 2), Z];
+    case 'bookmark':
+      return unitPoly(w, h, [[0.2, 0], [0.8, 0], [0.8, 1], [0.5, 0.72], [0.2, 1]]);
+    case 'pin':
+      return pin(w, h);
+    case 'sparkle':
+      return unitPath(w, h, [
+        ['M', 0.5, 0],
+        ['C', 0.52, 0.3, 0.7, 0.48, 1, 0.5],
+        ['C', 0.7, 0.52, 0.52, 0.7, 0.5, 1],
+        ['C', 0.48, 0.7, 0.3, 0.52, 0, 0.5],
+        ['C', 0.3, 0.48, 0.48, 0.3, 0.5, 0],
+      ]);
   }
 }
 
@@ -273,6 +353,182 @@ function bubble(w: number, h: number, p: ShapeParams, rounded: boolean): PathCmd
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// More builders
+//
+// WINDING: every solid contour here is drawn clockwise (screen space) and every hole
+// counter-clockwise. The rasterizer fills with the default nonzero rule, so overlapping
+// same-direction contours UNION (a cloud is built from several circles) and an opposite-direction
+// contour cuts a hole (a ring, a pin). Mixing the directions by accident makes overlaps vanish.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A closed polygon from 0..1 coordinates scaled to the box. */
+function unitPoly(w: number, h: number, pts: readonly (readonly [number, number])[]): PathCmd[] {
+  return [...pts.map(([x, y], i) => (i === 0 ? M(x * w, y * h) : L(x * w, y * h))), Z];
+}
+
+/** A path from 0..1 coordinates ('M' 'L' 'C' segments), closed, scaled to the box. */
+function unitPath(w: number, h: number, segs: readonly (readonly (string | number)[])[]): PathCmd[] {
+  const out: PathCmd[] = [];
+  for (const s of segs) {
+    const n = s.slice(1) as number[];
+    if (s[0] === 'M') out.push(M(n[0]! * w, n[1]! * h));
+    else if (s[0] === 'L') out.push(L(n[0]! * w, n[1]! * h));
+    else out.push(C(n[0]! * w, n[1]! * h, n[2]! * w, n[3]! * h, n[4]! * w, n[5]! * h));
+  }
+  out.push(Z);
+  return out;
+}
+
+/** An ellipse wound the OTHER way, for cutting holes under the nonzero rule. */
+function ellipseHole(cx: number, cy: number, rx: number, ry: number): PathCmd[] {
+  const kx = rx * K;
+  const ky = ry * K;
+  return [
+    M(cx, cy - ry),
+    C(cx - kx, cy - ry, cx - rx, cy - ky, cx - rx, cy),
+    C(cx - rx, cy + ky, cx - kx, cy + ry, cx, cy + ry),
+    C(cx + kx, cy + ry, cx + rx, cy + ky, cx + rx, cy),
+    C(cx + rx, cy - ky, cx + kx, cy - ry, cx, cy - ry),
+    Z,
+  ];
+}
+
+/** A regular n-gon inscribed in the box, first vertex at `start` radians (0 = right). */
+function regular(w: number, h: number, n: number, start: number): PathCmd[] {
+  const cx = w / 2;
+  const cy = h / 2;
+  const cmds: PathCmd[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = start + (i * Math.PI * 2) / n;
+    const x = cx + Math.cos(a) * cx;
+    const y = cy + Math.sin(a) * cy;
+    cmds.push(i === 0 ? M(x, y) : L(x, y));
+  }
+  cmds.push(Z);
+  return cmds;
+}
+
+/** A "+": two bars crossing. `thickness` is the bar width as a fraction of the box. */
+function plus(w: number, h: number, p: ShapeParams): PathCmd[] {
+  const t = Math.max(0.08, Math.min(0.9, p.thickness));
+  const x0 = (w - w * t) / 2;
+  const x1 = x0 + w * t;
+  const y0 = (h - h * t) / 2;
+  const y1 = y0 + h * t;
+  return [
+    M(x0, 0), L(x1, 0), L(x1, y0), L(w, y0), L(w, y1), L(x1, y1),
+    L(x1, h), L(x0, h), L(x0, y1), L(0, y1), L(0, y0), L(x0, y0), Z,
+  ];
+}
+
+/**
+ * An "X" as ONE outline (16 vertices).
+ *
+ * Two overlapping bars would union under the nonzero fill, but a STROKE follows every contour, so
+ * the overlap would show as crossed lines inside the shape. A single outline strokes cleanly.
+ */
+function cross(w: number, h: number, p: ShapeParams): PathCmd[] {
+  const k = w * Math.max(0.06, Math.min(0.6, p.thickness * 0.6)); // horizontal bar width
+  const e = (h / w) * (k / 2); // the same half-thickness, measured vertically
+  const cx = w / 2;
+  const cy = h / 2;
+  return [
+    M(0, 0), L(k / 2, 0), L(cx, cy - e), L(w - k / 2, 0), L(w, 0), L(w, e), L(cx + k / 2, cy),
+    L(w, h - e), L(w, h), L(w - k / 2, h), L(cx, cy + e), L(k / 2, h), L(0, h), L(0, h - e),
+    L(cx - k / 2, cy), L(0, e), Z,
+  ];
+}
+
+/** A cloud as ONE outline (see `cross` for why it is not a union of circles). */
+function cloud(w: number, h: number): PathCmd[] {
+  return unitPath(w, h, [
+    ['M', 0.2, 0.95],
+    ['C', 0.08, 0.95, 0.01, 0.85, 0.01, 0.72],
+    ['C', 0.01, 0.58, 0.11, 0.49, 0.24, 0.49],
+    ['C', 0.25, 0.25, 0.41, 0.06, 0.6, 0.06],
+    ['C', 0.78, 0.06, 0.9, 0.21, 0.88, 0.4],
+    ['C', 0.96, 0.42, 1, 0.56, 1, 0.71],
+    ['C', 1, 0.85, 0.91, 0.95, 0.8, 0.95],
+  ]);
+}
+
+/** A circular arc as cubic Béziers, from angle a0 to a1 (radians, y-down), split at 90°. */
+function arcCubics(cx: number, cy: number, rx: number, ry: number, a0: number, a1: number): PathCmd[] {
+  const out: PathCmd[] = [];
+  const segs = Math.max(1, Math.ceil(Math.abs(a1 - a0) / (Math.PI / 2)));
+  const step = (a1 - a0) / segs;
+  const t = (4 / 3) * Math.tan(step / 4);
+  for (let i = 0; i < segs; i++) {
+    const s = a0 + i * step;
+    const e = s + step;
+    const cs = Math.cos(s), sn = Math.sin(s), ce = Math.cos(e), se = Math.sin(e);
+    out.push(
+      C(
+        cx + rx * (cs - t * sn), cy + ry * (sn + t * cs),
+        cx + rx * (ce + t * se), cy + ry * (se - t * ce),
+        cx + rx * ce, cy + ry * se,
+      ),
+    );
+  }
+  return out;
+}
+
+/** A crescent moon: the outer circle less a second circle shifted to the right. One contour. */
+function crescent(w: number, h: number): PathCmd[] {
+  const r0 = 0.5;
+  const d = 0.2;
+  const r1 = 0.42;
+  // Where the two circles cross, in 0..1 box coordinates (both centres are on y = 0.5).
+  const xi = (d * d + r0 * r0 - r1 * r1) / (2 * d);
+  const yi = Math.sqrt(Math.max(0, r0 * r0 - xi * xi));
+  const top: [number, number] = [0.5 + xi, 0.5 - yi];
+  const phi = Math.atan2(yi, xi);
+  const psi = Math.atan2(yi, xi - d);
+  return [
+    M(top[0] * w, top[1] * h),
+    // Outer circle, the long way round through the left...
+    ...arcCubics(0.5 * w, 0.5 * h, r0 * w, r0 * h, -phi, -2 * Math.PI + phi),
+    // ...then back along the inner circle's left edge.
+    ...arcCubics((0.5 + d) * w, 0.5 * h, r1 * w, r1 * h, psi, 2 * Math.PI - psi),
+    Z,
+  ];
+}
+
+/** A donut: the outer ellipse with a smaller one cut out of the middle. */
+function ring(w: number, h: number, p: ShapeParams): PathCmd[] {
+  const inner = 1 - Math.max(0.05, Math.min(0.9, p.thickness)) * 0.85;
+  return [
+    ...ellipse(w / 2, h / 2, w / 2, h / 2),
+    ...ellipseHole(w / 2, h / 2, (w / 2) * inner, (h / 2) * inner),
+  ];
+}
+
+/** An arrow pointing both ways: a shaft with a head at each end. */
+function doubleArrow(w: number, h: number, p: ShapeParams): PathCmd[] {
+  const head = Math.min(w / 2, Math.max(2, h * p.headSize + h * 0.2));
+  const half = (h * Math.max(0.02, Math.min(1, p.thickness))) / 2;
+  const cy = h / 2;
+  return [
+    M(0, cy), L(head, 0), L(head, cy - half), L(w - head, cy - half), L(w - head, 0),
+    L(w, cy), L(w - head, h), L(w - head, cy + half), L(head, cy + half), L(head, h), Z,
+  ];
+}
+
+/** A map pin: a teardrop pointing down with a round hole. */
+function pin(w: number, h: number): PathCmd[] {
+  return [
+    ...unitPath(w, h, [
+      ['M', 0.5, 1],
+      ['C', 0.5, 1, 0.08, 0.62, 0.08, 0.38],
+      ['C', 0.08, 0.17, 0.27, 0, 0.5, 0],
+      ['C', 0.73, 0, 0.92, 0.17, 0.92, 0.38],
+      ['C', 0.92, 0.62, 0.5, 1, 0.5, 1],
+    ]),
+    ...ellipseHole(0.5 * w, 0.38 * h, 0.17 * w, 0.17 * h),
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Bounds
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -323,6 +579,25 @@ export const SHAPE_LABELS: Record<ShapeKind, string> = {
   chevron: 'Chevron',
   'speech-bubble': 'Speech Bubble',
   callout: 'Callout',
+  plus: 'Plus',
+  cross: 'Cross',
+  lightning: 'Lightning Bolt',
+  cloud: 'Cloud',
+  crescent: 'Crescent Moon',
+  ring: 'Ring',
+  hexagon: 'Hexagon',
+  octagon: 'Octagon',
+  parallelogram: 'Parallelogram',
+  trapezoid: 'Trapezoid',
+  'right-triangle': 'Right Triangle',
+  'double-arrow': 'Double Arrow',
+  checkmark: 'Checkmark',
+  droplet: 'Droplet',
+  shield: 'Shield',
+  ribbon: 'Ribbon',
+  bookmark: 'Bookmark',
+  pin: 'Map Pin',
+  sparkle: 'Sparkle',
 };
 
 export const SHAPE_KINDS: readonly ShapeKind[] = Object.keys(SHAPE_LABELS) as ShapeKind[];

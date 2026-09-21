@@ -452,16 +452,20 @@ export const SETTINGS: SettingDef[] = [
 
   // ── Experimental ───────────────────────────────────────────────────────────
   {
-    id: 'developerMode', category: 'Experimental', control: 'toggle', status: 'planned',
-    blockedBy: 'There are no developer-only diagnostics to reveal yet.',
-    label: 'Developer mode', desc: 'Adds diagnostics to the status bar and keeps DevTools reachable.',
-    keywords: 'developer debug devtools diagnostics advanced',
+    id: 'developerMode', category: 'Experimental', control: 'toggle', status: 'live',
+    label: 'Developer mode', desc: 'Adds memory and page diagnostics to the status bar. DevTools is always on F12.',
+    keywords: 'developer debug devtools diagnostics advanced memory heap',
   },
   {
-    id: 'fpsOverlay', category: 'Experimental', control: 'toggle', status: 'planned',
-    blockedBy: 'The preview has no frame-time overlay.',
+    id: 'fpsOverlay', category: 'Experimental', control: 'toggle', status: 'live',
     label: 'FPS overlay', desc: 'Draw a frame-time readout over the preview.',
     keywords: 'fps overlay performance frame time debug diagnostics',
+  },
+  {
+    id: 'fpsOverlaySize', category: 'Experimental', control: 'slider', status: 'live',
+    requires: 'fpsOverlay', min: 10, max: 18, step: 1, unit: 'px',
+    label: 'FPS overlay size', desc: 'Text size of the readout. Kept small so it never covers the picture.',
+    keywords: 'fps overlay size text small large font',
   },
   {
     id: 'vulkanRenderer', category: 'Experimental', control: 'toggle', status: 'planned',

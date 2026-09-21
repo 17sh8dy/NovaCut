@@ -98,6 +98,8 @@ export interface AppPreferences {
   // ── Experimental ──
   developerMode: boolean;
   fpsOverlay: boolean;
+  /** Text size of the FPS overlay, px. Capped small on purpose. */
+  fpsOverlaySize: number;
 }
 
 export const DEFAULT_PREFERENCES: AppPreferences = {
@@ -156,6 +158,7 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
 
   developerMode: false,
   fpsOverlay: false,
+  fpsOverlaySize: 12,
 };
 
 /**
