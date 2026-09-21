@@ -13,17 +13,11 @@
  */
 
 import { useEffect, useRef } from 'react';
-import type { LucideIcon } from 'lucide-react';
 import { X } from 'lucide-react';
+import type { NovaProduct } from './novaProducts.js';
 import './nova-all-products.css';
 
-export interface NovaAllProduct {
-  id: string;
-  label: string;
-  tagline: string;
-  icon: LucideIcon;
-  url: string | null;
-}
+export type NovaAllProduct = NovaProduct;
 
 interface Props {
   open: boolean;
@@ -31,10 +25,14 @@ interface Props {
   current: string;
   currentLabel?: string;
   products: NovaAllProduct[];
+  /** Websites, shown in their own section under the apps. */
+  sites?: NovaAllProduct[];
   mark: React.ReactNode;
+  /** Open a product: an app is launched, a website opens in the browser. */
+  onOpen: (product: NovaAllProduct) => void;
 }
 
-export function NovaAllProducts({ open, onClose, current, currentLabel, products, mark }: Props) {
+export function NovaAllProducts({ open, onClose, current, currentLabel, products, sites = [], mark, onOpen }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -48,6 +46,43 @@ export function NovaAllProducts({ open, onClose, current, currentLabel, products
     closeRef.current?.focus();
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  const renderCard = (p: NovaAllProduct, i: number) => {
+    const Icon = p.icon;
+    const isCurrent = p.id === current;
+    const label = isCurrent && currentLabel ? currentLabel : p.label;
+    const body = (
+      <>
+        <span className="oc-nova-all__icon">
+          <Icon size={20} />
+        </span>
+        <span className="oc-nova-all__label">{label}</span>
+        <span className="oc-nova-all__tagline">{isCurrent ? "You're here" : p.tagline}</span>
+      </>
+    );
+    const style = { animationDelay: `${i * 40}ms` };
+
+    if (isCurrent) {
+      return (
+        <span key={p.id} className="oc-nova-all__card oc-nova-all__card--current" style={style}>
+          {body}
+        </span>
+      );
+    }
+    if (p.kind === 'soon') {
+      return (
+        <span key={p.id} className="oc-nova-all__card oc-nova-all__card--soon" style={style}>
+          {body}
+          <span className="oc-nova-all__badge">Soon</span>
+        </span>
+      );
+    }
+    return (
+      <button key={p.id} type="button" className="oc-nova-all__card" style={style} onClick={() => onOpen(p)}>
+        {body}
+      </button>
+    );
+  };
 
   if (!open) return null;
 
@@ -73,44 +108,14 @@ export function NovaAllProducts({ open, onClose, current, currentLabel, products
           All products
         </h2>
         <p className="oc-nova-all__subtitle">Everything Nova makes, in one place.</p>
-        <div className="oc-nova-all__grid">
-          {products.map((p, i) => {
-            const Icon = p.icon;
-            const isCurrent = p.id === current;
-            const label = isCurrent && currentLabel ? currentLabel : p.label;
-            const body = (
-              <>
-                <span className="oc-nova-all__icon">
-                  <Icon size={20} />
-                </span>
-                <span className="oc-nova-all__label">{label}</span>
-                <span className="oc-nova-all__tagline">{isCurrent ? "You're here" : p.tagline}</span>
-              </>
-            );
-            const style = { animationDelay: `${i * 40}ms` };
-
-            if (isCurrent) {
-              return (
-                <span key={p.id} className="oc-nova-all__card oc-nova-all__card--current" style={style}>
-                  {body}
-                </span>
-              );
-            }
-            if (!p.url) {
-              return (
-                <span key={p.id} className="oc-nova-all__card oc-nova-all__card--soon" style={style}>
-                  {body}
-                  <span className="oc-nova-all__badge">Soon</span>
-                </span>
-              );
-            }
-            return (
-              <a key={p.id} className="oc-nova-all__card" href={p.url} target="_blank" rel="noreferrer" style={style}>
-                {body}
-              </a>
-            );
-          })}
-        </div>
+        <p className="oc-nova-all__section">Apps</p>
+        <div className="oc-nova-all__grid">{products.map(renderCard)}</div>
+        {sites.length > 0 && (
+          <>
+            <p className="oc-nova-all__section">Websites</p>
+            <div className="oc-nova-all__grid">{sites.map(renderCard)}</div>
+          </>
+        )}
       </div>
     </div>
   );

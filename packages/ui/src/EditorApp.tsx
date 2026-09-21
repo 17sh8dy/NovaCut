@@ -6,6 +6,7 @@
  * and renders the same UI whether that bridge is Electron, web, or mobile.
  */
 
+import { useNovaStartupCheck } from './account/novaAccount.js';
 import { useEffect, useMemo } from 'react';
 import { ResizablePanels, Panel } from './components/primitives/index.js';
 import { StoreProvider, useStore } from './state/context.js';
@@ -48,6 +49,7 @@ export function EditorApp({ store }: { store: AppStore }) {
 /** Chooses between the Home launcher and the editor, and applies app-wide root attributes. */
 function AppRoot() {
   useRecovery(); // runs on both screens so Home can offer "Recover" after a crash
+  useNovaStartupCheck(); // one check, and only if a Nova Account token is already held
   useAppliedPreferences(); // theme, accent, density, zoom — everything the document root owns
   const view = useStore((s) => s.view);
   const dialog = useStore((s) => s.dialog);

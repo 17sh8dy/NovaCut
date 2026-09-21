@@ -129,8 +129,23 @@
   cursor: pointer;
 }
 
-a.oc-nova-switcher__item:hover {
+button.oc-nova-switcher__item:hover {
   background: var(--surface-3);
+}
+
+/* Now a <button> (it launches an app or opens the browser), so reset the button chrome. */
+button.oc-nova-switcher__item {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.oc-nova-switcher__kind {
+  margin-left: auto;
+  color: var(--text-tertiary);
 }
 
 .oc-nova-switcher__item--current {

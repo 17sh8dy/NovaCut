@@ -69,6 +69,9 @@ export interface RecentProject {
   modifiedAt: number;
 }
 
+/** What opening a Nova product did. 'not-installed' = its download page was opened instead. */
+export type OpenProductResult = 'launched' | 'focused' | 'running' | 'site' | 'not-installed' | 'unknown';
+
 export interface PlatformBridge {
   readonly platform: 'desktop' | 'web' | 'mobile';
 
@@ -166,6 +169,11 @@ export interface PlatformBridge {
   popupMenu?(id: WindowMenuId, x: number, y: number): void;
   /** Open a URL in the user's browser, rather than navigating the app away from itself. */
   openExternal?(url: string): void;
+  /**
+   * Open a Nova product by id: a website in the default browser, an app by launching the installed
+   * program (or its download page when it is not installed). Desktop only.
+   */
+  openProduct?(id: string): Promise<OpenProductResult>;
   /**
    * Minimise / maximise / close the host window.
    *

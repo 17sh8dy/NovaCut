@@ -26,6 +26,9 @@ const isMac = process.platform === 'darwin';
 /** Community invite, surfaced under Help. */
 const DISCORD_INVITE = 'https://discord.gg/XBhER9Z6EB';
 
+/** Nova Cut's section of Nova.Help, the support portal for the whole Nova ecosystem. A real page. */
+const NOVA_HELP_URL = 'https://nova-help.17sh8dy.workers.dev/help/nova-cut';
+
 export type MenuId = 'file' | 'edit' | 'view' | 'help';
 
 function send(command: string): void {
@@ -93,6 +96,7 @@ function submenus(): Record<MenuId, MenuItemConstructorOptions[]> {
     help: [
       owned('Keyboard Shortcuts', 'shortcuts'),
       { type: 'separator' },
+      { label: 'Get Help with Nova Cut', click: () => void shell.openExternal(NOVA_HELP_URL) },
       // openExternal, not openPath: this must hand the invite to the user's browser/Discord app.
       { label: 'Join the Discord', click: () => void shell.openExternal(DISCORD_INVITE) },
       { type: 'separator' },

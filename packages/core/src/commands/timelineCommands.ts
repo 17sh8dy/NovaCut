@@ -346,6 +346,22 @@ export function toggleTrackFlag(trackId: TrackId, flag: TrackFlag): Command {
   };
 }
 
+/**
+ * Rename the project. An ordinary command, so it is undoable, marks the project as changed, and
+ * consecutive edits while typing merge into one step. Blank names are refused (the caller keeps
+ * the old one) rather than saving a project called "".
+ */
+export function renameProject(name: string): Command {
+  return {
+    label: 'Rename Project',
+    coalesceKey: 'rename:project',
+    apply: (project) => {
+      const next = name.trim();
+      return next && next !== project.name ? { ...project, name: next, modifiedAt: Date.now() } : project;
+    },
+  };
+}
+
 export function renameTrack(trackId: TrackId, name: string): Command {
   return {
     label: 'Rename Track',

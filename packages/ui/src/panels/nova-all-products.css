@@ -122,14 +122,14 @@
   }
 }
 
-a.oc-nova-all__card {
+button.oc-nova-all__card {
   transition:
     transform var(--dur) var(--ease-out),
     border-color var(--dur) var(--ease-out),
     background var(--dur) var(--ease-out),
     box-shadow var(--dur) var(--ease-out);
 }
-a.oc-nova-all__card:hover {
+button.oc-nova-all__card:hover {
   background: var(--surface-3);
   border-color: var(--accent);
   transform: translateY(-3px);
@@ -198,4 +198,25 @@ a.oc-nova-all__card:hover {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: var(--space-3);
   }
+}
+
+/* Section labels inside View all: "Apps" / "Websites". */
+.oc-nova-all__section {
+  margin: 26px 0 12px;
+  text-align: left;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.oc-nova-all__section:first-of-type {
+  margin-top: 0;
+}
+
+/* The cards are buttons now, not links. */
+button.oc-nova-all__card {
+  font: inherit;
+  text-align: left;
 }

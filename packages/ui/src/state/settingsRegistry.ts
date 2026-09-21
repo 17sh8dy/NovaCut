@@ -38,15 +38,19 @@ export type SettingsCategory =
   | 'Privacy'
   | 'Notifications'
   | 'Experimental'
+  | 'Account'
   | 'About';
 
 export const CATEGORY_ORDER: SettingsCategory[] = [
   'General', 'Interface', 'Projects', 'Video', 'Photo', 'Performance',
-  'Export', 'Shortcuts', 'Storage', 'Privacy', 'Notifications', 'Experimental', 'About',
+  /* 'Account' sits next to 'About' at the bottom, not next to 'General' at the top. It is the one
+     pane in this window that is about something outside Nova Cut, and putting an account entry
+     first is how an optional thing starts reading as a required one. */
+  'Export', 'Shortcuts', 'Storage', 'Privacy', 'Notifications', 'Experimental', 'Account', 'About',
 ];
 
 /** Categories whose content is bespoke rather than a list of rows. */
-export const CUSTOM_PANES: SettingsCategory[] = ['Shortcuts', 'Storage', 'About'];
+export const CUSTOM_PANES: SettingsCategory[] = ['Shortcuts', 'Storage', 'Account', 'About'];
 
 export type SettingStatus = 'live' | 'planned';
 

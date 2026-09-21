@@ -58,6 +58,12 @@ export type MenuCommand =
 /** Which top-level menu an in-app menu-bar button should pop open. */
 export type MenuId = 'file' | 'edit' | 'view' | 'help';
 
+/**
+ * What happened when a Nova product was opened. 'not-installed' means the app was not found on
+ * this PC and its download page was opened in the browser instead.
+ */
+export type OpenProductResult = 'launched' | 'focused' | 'running' | 'site' | 'not-installed' | 'unknown';
+
 /** The object exposed on `window.opencut` by the preload script. */
 export interface OpenCutApi {
   platform: 'desktop';
@@ -108,6 +114,8 @@ export interface OpenCutApi {
   popupMenu(id: MenuId, x: number, y: number): void;
   /** Open a URL in the user's real browser. */
   openExternal(url: string): void;
+  /** Open a Nova product by id: a website in the browser, an app by launching it (see products.ts). */
+  openProduct(id: string): Promise<OpenProductResult>;
   /** Drive the window's own controls — the title bar is drawn by the app, not the OS. */
   windowAction(action: WindowAction): void;
   /** Subscribe to window state so the maximise button's icon matches reality. */
@@ -193,6 +201,7 @@ export const CH = {
   saveComplete: 'app:saveComplete',
   popupMenu: 'app:popupMenu',
   openExternal: 'app:openExternal',
+  openProduct: 'app:openProduct',
   windowAction: 'app:windowAction',
   windowState: 'app:windowState',
   // Settings support

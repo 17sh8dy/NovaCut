@@ -408,3 +408,169 @@
   --dur: 100ms;
   --dur-slow: 150ms;
 }
+
+/* ── Nova Account ──────────────────────────────────────────────────────────────
+   Uses the existing surface/border/text tokens throughout: an account pane that
+   introduced its own palette would look like it came from somewhere else, which is
+   the opposite of what "one account across Nova" should feel like. */
+.oc-account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 620px;
+}
+.oc-account__intro h1 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg, 17px);
+}
+.oc-account__intro p {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.55;
+}
+.oc-account__muted {
+  color: var(--text-tertiary);
+}
+.oc-account__fine {
+  font-size: 11px;
+}
+.oc-account__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.55;
+}
+.oc-account__card--quiet {
+  background: transparent;
+}
+.oc-account__card h2 {
+  margin: 0;
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+}
+.oc-account__card p {
+  margin: 0;
+}
+.oc-account__who {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+.oc-account__who > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.oc-account__avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+}
+.oc-account__list {
+  margin: 0;
+  padding-left: 1.15em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-secondary);
+}
+.oc-account__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+/* The code is the one thing on this screen a person has to read off the display and
+   type somewhere else, so it is the largest thing on it. */
+.oc-account__code {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.oc-account__code code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 22px;
+  letter-spacing: 0.14em;
+}
+.oc-account__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.oc-account__problem {
+  color: var(--danger, #e5484d);
+}
+
+/* Other Nova products, as rows that open them. */
+.oc-account__products {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.oc-account__product {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.oc-account__product:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--border-strong, var(--border));
+}
+.oc-account__product:disabled {
+  cursor: default;
+  color: var(--text-tertiary);
+}
+.oc-account__product-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+}
+.oc-account__product-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.oc-account__product-text strong {
+  font-size: var(--text-sm, 13px);
+}
+.oc-account__product-tag {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--surface-3);
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 600;
+}

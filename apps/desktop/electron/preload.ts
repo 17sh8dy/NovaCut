@@ -66,6 +66,7 @@ const api: OpenCutApi = {
   saveComplete: (saved) => ipcRenderer.send(CH.saveComplete, saved),
   popupMenu: (id: MenuId, x, y) => ipcRenderer.send(CH.popupMenu, id, x, y),
   openExternal: (url) => ipcRenderer.send(CH.openExternal, url),
+  openProduct: (id) => ipcRenderer.invoke(CH.openProduct, id),
   windowAction: (action: WindowAction) => ipcRenderer.send(CH.windowAction, action),
   onWindowState: (handler) => subscribe<{ maximized: boolean }>(CH.windowState, handler),
 

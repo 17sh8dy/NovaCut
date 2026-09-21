@@ -11,6 +11,7 @@
     "./styles.css": "./src/theme/global.css"
   },
   "dependencies": {
+    "@nova/account-client": "file:../../../NovaHelp/packages/nova-account-client",
     "@opencut/core": "1.0.0",
     "@opencut/engine": "1.0.0",
     "@opencut/photo": "1.0.0",

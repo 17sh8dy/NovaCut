@@ -19,6 +19,7 @@ import {
 } from './ipc-types.js';
 import { ffmpegThumbnail, ffprobeMedia, FfmpegEncoder, ffmpegBinary, setEncoderThreads } from './ffmpeg.js';
 import { popupMenu } from './menu.js';
+import { openProduct } from './products.js';
 import {
   chooseDirectory, clearCache, openDataFolder, setLaunchOnStartup, storageUsage, systemInfo,
   writeStartupPrefs,
@@ -298,6 +299,10 @@ export function registerHandlers(hooks: HandlerHooks): void {
   ipcMain.on(CH.openExternal, (_e, url: string) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
   });
+
+  // Nova products are opened by id only: the table of what an id means lives in products.ts, so the
+  // renderer can never ask for an arbitrary program or address.
+  ipcMain.handle(CH.openProduct, (_e, id: string) => openProduct(String(id)));
 
   // ── Settings ──
   ipcMain.on(CH.hostPrefs, (_e, next: HostPrefsDTO) => {

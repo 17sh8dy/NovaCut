@@ -125,6 +125,10 @@ export class ElectronBridge implements PlatformBridge {
     this.api.openExternal(url);
   }
 
+  openProduct(id: string) {
+    return this.api.openProduct(id);
+  }
+
   windowAction(action: WindowAction): void {
     this.api.windowAction(action);
   }

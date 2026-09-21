@@ -14,7 +14,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Settings as GeneralIcon, LayoutGrid, FolderOpen, Film, Image as ImageIcon, Gauge, Upload,
-  Keyboard, HardDrive, Shield, Bell, FlaskConical, Info,
+  Keyboard, HardDrive, Shield, Bell, FlaskConical, Info, UserRound,
   RotateCcw, AlertTriangle, X, Search, Lock,
 } from 'lucide-react';
 import { Button, Modal, Segmented } from '../components/primitives/index.js';
@@ -27,6 +27,7 @@ import {
 import { ACCENT_PRESETS, type AppPreferences } from '../state/preferences.js';
 import { StoragePane } from './settings/StoragePane.js';
 import { AboutPane } from './settings/AboutPane.js';
+import { AccountPane } from './settings/AccountPane.js';
 import './settings/settings.css';
 
 /** Kept as an alias so existing callers (`initialCategory="Shortcuts"`) keep type-checking. */
@@ -35,7 +36,8 @@ export type Category = SettingsCategory;
 const ICONS: Record<SettingsCategory, typeof GeneralIcon> = {
   General: GeneralIcon, Interface: LayoutGrid, Projects: FolderOpen, Video: Film,
   Photo: ImageIcon, Performance: Gauge, Export: Upload, Shortcuts: Keyboard,
-  Storage: HardDrive, Privacy: Shield, Notifications: Bell, Experimental: FlaskConical, About: Info,
+  Storage: HardDrive, Privacy: Shield, Notifications: Bell, Experimental: FlaskConical,
+  Account: UserRound, About: Info,
 };
 
 export function SettingsDialog({ initialCategory = 'General' }: { initialCategory?: Category }) {
@@ -189,6 +191,7 @@ function Pane({ category, query }: { category: SettingsCategory; query: string }
   if (CUSTOM_PANES.includes(category)) {
     if (category === 'Shortcuts') return <ShortcutsPane query={query} />;
     if (category === 'Storage') return <StoragePane />;
+    if (category === 'Account') return <AccountPane />;
     return <AboutPane />;
   }
   return <RegistryPane category={category} query={query} />;

@@ -1111,3 +1111,30 @@
 .oc-fps strong {
   font-weight: 700;
 }
+
+/* ── Rename the project from the title bar (same look as the photo editor's) ── */
+.oc-titlebar__name,
+.oc-titlebar__nameinput {
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: text;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oc-titlebar__name:hover {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+.oc-titlebar__nameinput {
+  border-color: var(--accent);
+  background: var(--surface-2);
+  outline: none;
+  min-width: 160px;
+}

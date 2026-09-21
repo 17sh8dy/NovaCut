@@ -14,31 +14,11 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { LucideIcon } from 'lucide-react';
-import { ArrowRight, ChevronDown, Gamepad2, Scissors, Sparkles } from 'lucide-react';
+import { ArrowRight, ChevronDown, Globe } from 'lucide-react';
+import { useAppStore } from '../state/context.js';
 import { NovaAllProducts } from './NovaAllProducts';
+import { NOVA_APPS, NOVA_SITES, openNovaProduct, type NovaProduct } from './novaProducts.js';
 import './nova-switcher.css';
-
-interface NovaProduct {
-  id: string;
-  label: string;
-  tagline: string;
-  icon: LucideIcon;
-  /**
-   * None of these has a confirmed public domain yet. TODO: confirm the real URL for each before
-   * this ships — a wrong guess here sends someone to an unregistered domain, not somewhere
-   * unsafe, but it should be fixed before launch. `null` (Nova Games) means there is genuinely
-   * nothing to link to yet, not just an unconfirmed one — that row renders disabled instead.
-   */
-  url: string | null;
-}
-
-const PRODUCTS: NovaProduct[] = [
-  { id: 'nova-cut', label: 'Nova Cut', tagline: 'Create and edit', icon: Scissors, url: 'https://novacut.app' },
-  { id: 'replay-gg', label: 'Replay.GG', tagline: 'Record and clip gameplay', icon: Gamepad2, url: 'https://replay.gg' },
-  { id: 'atlas', label: 'Atlas', tagline: 'Your desktop assistant', icon: Sparkles, url: 'https://atlas.app' },
-  { id: 'nova-games', label: 'Nova Games', tagline: 'Coming soon', icon: Gamepad2, url: null },
-];
 
 /** The Nova sparkle mark — identical to assets/favicon.svg in the Nova repo. */
 function NovaMark() {
@@ -54,8 +34,17 @@ function NovaMark() {
 }
 
 export function NovaSwitcher({ current }: { current: string }) {
+  const store = useAppStore();
   const [open, setOpen] = useState(false);
   const [allOpen, setAllOpen] = useState(false);
+
+  /** Apps are launched (or their download page opened); websites open in the default browser. */
+  const launch = (p: NovaProduct) => {
+    setOpen(false);
+    setAllOpen(false);
+    const { bridge, notify } = store.getState();
+    void openNovaProduct(bridge, notify, p);
+  };
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -96,7 +85,7 @@ export function NovaSwitcher({ current }: { current: string }) {
       </button>
       <div className="oc-nova-switcher__menu" role="menu" data-open={open}>
         <p className="oc-nova-switcher__eyebrow">Nova</p>
-        {PRODUCTS.map((p) => {
+        {NOVA_APPS.map((p) => {
           const Icon = p.icon;
           const isCurrent = p.id === current;
           const body = (
@@ -118,7 +107,7 @@ export function NovaSwitcher({ current }: { current: string }) {
               </span>
             );
           }
-          if (!p.url) {
+          if (p.kind === 'soon') {
             return (
               <span key={p.id} className="oc-nova-switcher__item oc-nova-switcher__item--soon" role="menuitem" aria-disabled="true">
                 {body}
@@ -127,9 +116,16 @@ export function NovaSwitcher({ current }: { current: string }) {
             );
           }
           return (
-            <a key={p.id} className="oc-nova-switcher__item" role="menuitem" href={p.url} target="_blank" rel="noreferrer">
+            <button
+              key={p.id}
+              type="button"
+              className="oc-nova-switcher__item"
+              role="menuitem"
+              onClick={() => launch(p)}
+            >
               {body}
-            </a>
+              {p.kind === 'site' && <Globe size={13} className="oc-nova-switcher__kind" />}
+            </button>
           );
         })}
         <button
@@ -148,8 +144,10 @@ export function NovaSwitcher({ current }: { current: string }) {
         open={allOpen}
         onClose={() => setAllOpen(false)}
         current={current}
-        products={PRODUCTS}
+        products={NOVA_APPS}
+        sites={NOVA_SITES}
         mark={<NovaMark />}
+        onOpen={launch}
       />
     </div>
   );

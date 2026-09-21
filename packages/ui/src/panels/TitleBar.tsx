@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { renameProject } from '@opencut/core';
 import {
   Download,
   Redo2,
@@ -19,6 +21,7 @@ import { WindowControls } from './WindowControls.js';
 export function TitleBar() {
   const store = useAppStore();
   const name = useStore((s) => s.project.name);
+  const [editingName, setEditingName] = useState(false);
   const dirty = useStore((s) => s.dirty);
   const canUndo = useStore((s) => s.history.canUndo);
   const canRedo = useStore((s) => s.history.canRedo);
@@ -80,7 +83,28 @@ export function TitleBar() {
 
       <div className="oc-titlebar__project">
         <Scissors size={13} />
-        {name}
+        {editingName ? (
+          <input
+            className="oc-titlebar__nameinput"
+            autoFocus
+            defaultValue={name}
+            aria-label="Project name"
+            onFocus={(e) => e.currentTarget.select()}
+            onBlur={(e) => {
+              // A blank name keeps the old one (the command refuses it); the input just closes.
+              store.getState().dispatch(renameProject(e.target.value));
+              setEditingName(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+              if (e.key === 'Escape') setEditingName(false);
+            }}
+          />
+        ) : (
+          <button className="oc-titlebar__name" onClick={() => setEditingName(true)} title="Rename project">
+            {name}
+          </button>
+        )}
         {dirty && <span className="oc-titlebar__dot" title="Unsaved changes" />}
       </div>
 
