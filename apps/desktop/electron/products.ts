@@ -42,12 +42,12 @@ type Target =
 
 const TARGETS: Record<string, Target> = {
   // Websites: only the ones that are deployed and have a real address today.
-  'nova-help': { kind: 'site', url: 'https://nova-help.17sh8dy.workers.dev/' },
+  'nova-help': { kind: 'site', url: 'https://nova-help.shadylabs.workers.dev/' },
   nova: { kind: 'site', url: NOVA_HOME },
-  'atlas-site': { kind: 'site', url: 'https://atlas-website.17sh8dy.workers.dev/' },
+  'atlas-site': { kind: 'site', url: 'https://atlas-website.shadylabs.workers.dev/' },
   // Apps.
   'replay-gg': { kind: 'app', names: ['Replay.gg', 'Replay.GG'], getUrl: NOVA_HOME },
-  atlas: { kind: 'app', names: ['Atlas'], getUrl: 'https://atlas-website.17sh8dy.workers.dev/' },
+  atlas: { kind: 'app', names: ['Atlas'], getUrl: 'https://atlas-website.shadylabs.workers.dev/' },
 };
 
 const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');

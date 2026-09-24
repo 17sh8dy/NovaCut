@@ -44,7 +44,7 @@ import { browserStorage } from '@nova/account-client/storage';
  */
 const ORIGIN =
   (globalThis as { __NOVA_ACCOUNTS_ORIGIN__?: string }).__NOVA_ACCOUNTS_ORIGIN__ ??
-  'https://nova-help.17sh8dy.workers.dev';
+  'https://nova-help.shadylabs.workers.dev';
 
 /**
  * `localStorage`, not a file in userData: the renderer's storage survives restarts, it needs no

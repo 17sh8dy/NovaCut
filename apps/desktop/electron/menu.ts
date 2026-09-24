@@ -27,7 +27,7 @@ const isMac = process.platform === 'darwin';
 const DISCORD_INVITE = 'https://discord.gg/XBhER9Z6EB';
 
 /** Nova Cut's section of Nova.Help, the support portal for the whole Nova ecosystem. A real page. */
-const NOVA_HELP_URL = 'https://nova-help.17sh8dy.workers.dev/help/nova-cut';
+const NOVA_HELP_URL = 'https://nova-help.shadylabs.workers.dev/help/nova-cut';
 
 export type MenuId = 'file' | 'edit' | 'view' | 'help';
 
