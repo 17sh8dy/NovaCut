@@ -8,9 +8,9 @@
  * what it does, not which product you're already looking at (the Home hero's own wordmark
  * already does that).
  *
- * Left out on purpose: Nova, Nova.Help and NovaLegal each already have their own way to switch
- * between the products they front, so they're neither getting this switcher nor listed as a
- * destination in it. Online Earth was never asked for and isn't here either.
+ * Nova, Nova.Help and Nova Legal each already have their own way to switch between the products
+ * they front, so none of them gets this switcher; they appear here only as websites under View
+ * all. Online Earth was never asked for and isn't here at all.
  */
 
 import { useEffect, useRef, useState } from 'react';

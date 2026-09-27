@@ -39,7 +39,7 @@ export const NOVA_SITES: NovaProduct[] = [
   { id: 'nova-help', label: 'Nova.Help', tagline: 'Support and guides', icon: LifeBuoy, kind: 'site' },
   { id: 'atlas-site', label: 'Atlas Website', tagline: 'Download and learn about Atlas', icon: Sparkles, kind: 'site' },
   { id: 'nova', label: 'Nova', tagline: 'The Nova home page', icon: Globe, kind: 'site' },
-  { id: 'nova-legal', label: 'Nova Legal', tagline: 'Terms and privacy', icon: FileText, kind: 'soon' },
+  { id: 'nova-legal', label: 'Nova Legal', tagline: 'Terms and privacy', icon: FileText, kind: 'site' },
   { id: 'nova-cut-site', label: 'Nova Cut Website', tagline: 'Nova Cut, on the web', icon: Scissors, kind: 'soon' },
 ];
 
