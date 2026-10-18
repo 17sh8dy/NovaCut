@@ -15,7 +15,7 @@
  */
 
 import type { LucideIcon } from 'lucide-react';
-import { FileText, Gamepad2, Globe, LifeBuoy, Scissors, Sparkles } from 'lucide-react';
+import { FileText, Gamepad2, Globe, LifeBuoy, Scissors, Sparkles, Star } from 'lucide-react';
 import type { OpenProductResult, PlatformBridge } from '@opencut/core';
 
 export type NovaProductKind = 'app' | 'site' | 'soon';
@@ -40,6 +40,7 @@ export const NOVA_SITES: NovaProduct[] = [
   { id: 'atlas-site', label: 'Atlas Website', tagline: 'Download and learn about Atlas', icon: Sparkles, kind: 'site' },
   { id: 'nova', label: 'Nova', tagline: 'The Nova home page', icon: Globe, kind: 'site' },
   { id: 'nova-legal', label: 'Nova Legal', tagline: 'Terms and privacy', icon: FileText, kind: 'site' },
+  { id: 'nova-review', label: 'Nova.Review', tagline: 'Reviews and suggestions', icon: Star, kind: 'site' },
   { id: 'nova-cut-site', label: 'Nova Cut Website', tagline: 'Nova Cut, on the web', icon: Scissors, kind: 'soon' },
 ];
 

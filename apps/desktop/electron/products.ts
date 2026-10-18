@@ -46,8 +46,9 @@ const TARGETS: Record<string, Target> = {
   nova: { kind: 'site', url: NOVA_HOME },
   'atlas-site': { kind: 'site', url: 'https://atlas-website.shadylabs.workers.dev/' },
   'nova-legal': { kind: 'site', url: 'https://nova-legal.shadylabs.workers.dev/' },
+  'nova-review': { kind: 'site', url: 'https://nova-review.shadylabs.workers.dev/' },
   // Apps.
-  'replay-gg': { kind: 'app', names: ['Replay.gg', 'Replay.GG'], getUrl: NOVA_HOME },
+  'replay-gg': { kind: 'app', names: ['Replay.gg', 'Replay.GG'], getUrl: 'https://replay-gg-site.shadylabs.workers.dev/' },
   atlas: { kind: 'app', names: ['Atlas'], getUrl: 'https://atlas-website.shadylabs.workers.dev/' },
 };
 
