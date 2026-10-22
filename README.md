@@ -74,9 +74,14 @@ and an AppImage + deb on Linux. Configuration lives in `apps/desktop/electron-bu
 
 ## The logo
 
-**`assets/NovaCut.svg` and `assets/NovaCut-small.svg` are the single source of truth** — small
-hand-authored vectors: no metadata, no filters, no embedded rasters, transparent everywhere the
-mark isn't. `npm run icon` (`scripts/make-icons.cjs`) rasterises them through Chromium and writes:
+The mark is the **Nova Mark**: an angular N built from three planes (a blue diagonal slab, a
+purple lower-left stem and a detached violet upper-right segment) on a dark navy rounded square.
+Its geometry, colour variants and PNG/ICO exports are generated in
+[`assets/brand/nova-mark/`](assets/brand/nova-mark/README.md).
+
+**`assets/NovaCut.svg` and `assets/NovaCut-small.svg` are the single source of truth for the app** —
+copies of the default tile from that folder: no metadata, no filters, no embedded rasters,
+transparent everywhere the mark isn't. `npm run icon` (`scripts/make-icons.cjs`) rasterises them through Chromium and writes:
 
 | Output | Contents |
 | --- | --- |
@@ -86,23 +91,24 @@ mark isn't. `npm run icon` (`scripts/make-icons.cjs`) rasterises them through Ch
 | `apps/desktop/build/icon.png` | 1024², the generic fallback |
 | `packages/ui/src/assets/logo.svg` | the full vector, bundled by the renderer |
 | `packages/ui/src/assets/logo-small.svg` | the small-size vector, ditto |
+| `packages/ui/src/assets/logo-<style>[-small].svg` | the Purple / Monochrome variants for Settings > Logo style, copied from `assets/brand` |
 
 `electron-builder.yml` points `win.icon` / `mac.icon` / `linux.icon` at those files explicitly, so
 a build never silently re-derives them. **Change the logo in the SVG and re-run — never hand-edit
 an output**, or the taskbar icon and the in-app mark drift apart with nothing to say which is right.
 
-**There are two drawings on purpose.** The mark — two overlapping translucent frames, a play
-triangle and a pair of corner brackets — reads at 128px and collapses into a plain blue square at
-16px, where the opacities converge on the background and the 12px bracket strokes fall below one
-pixel. So **32px and below take a simplified drawing**: one solid frame, a knocked-out triangle,
-no brackets. `make-icons.cjs` applies that threshold to the icon files and the CSS applies it
+**There are two drawings on purpose.** The channel that separates the upper-right segment from the
+diagonal, and the edge hairline on the tile, fall below one pixel at 16px. So **32px and below take
+a simplified drawing**: the same shapes with a wider channel, the glyph slightly larger and no
+hairline. `make-icons.cjs` applies that threshold to the icon files and the CSS applies it
 again to the 22px title-bar mark. An icon is not one drawing scaled, it is a family drawn per
 size — which is why `.ico` is a multi-image format in the first place.
 
-`--brand-blue` in `packages/ui/src/theme/tokens.css` is the SVG's fill verbatim, so the mark and
-the UI around it cannot disagree about the brand colour. **`--accent` is deliberately a different
-value**: the mark's `#0A84FF` measures 3.65:1 under white text and cannot carry a button label.
-That file explains the split.
+`--brand-blue` in `packages/ui/src/theme/tokens.css` is still the previous logo's flat blue
+(`#0A84FF`); the Nova Mark is a cyan-blue-purple gradient, so the two are no longer identical. The
+token now only drives the brand-coloured text and glow-free accents that predate the new mark.
+**`--accent` is deliberately a different value**: `#0A84FF` measures 3.65:1 under white text and
+cannot carry a button label. That file explains the split.
 
 Builds are unsigned, so Windows SmartScreen warns on first run until a code-signing certificate
 is configured (`CSC_LINK` / `CSC_KEY_PASSWORD`).
@@ -131,7 +137,8 @@ rest of the UI is held to:
    nothing else. There are no accent-washed panels and no glows.
 3. **The brand is not the accent.** `--brand-deep / --brand-blue / --brand-cyan` are the logo's own
    gradient stops and never change. `--accent` is a user preference that *defaults* to the brand
-   blue. Choosing a green accent recolours the controls and leaves the mark alone.
+   blue. Choosing a green accent recolours the controls and leaves the mark alone; the mark has its
+   own **Logo style** setting (Nova, Purple, Monochrome).
 
 **Themes** are System (default, follows the OS live), Light and Dark. Only `--accent` is ever
 written to the document by the app; `--accent-hover / -active / -text / -soft / -line` are derived
