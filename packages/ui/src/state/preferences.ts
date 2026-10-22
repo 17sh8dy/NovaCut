@@ -94,6 +94,7 @@ export interface AppPreferences {
 
   // ── Notifications ──
   notifyExport: boolean;
+  notifyUpdates: boolean;
   notifySounds: boolean;
 
   // ── Experimental ──
@@ -156,6 +157,7 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   rememberExportSettings: true,
 
   notifyExport: true,
+  notifyUpdates: true,
   notifySounds: false,
 
   developerMode: false,

@@ -322,7 +322,9 @@ export function registerHandlers(hooks: HandlerHooks): void {
   ipcMain.handle(CH.clearCache, () => clearCache());
   ipcMain.handle(CH.openDataFolder, () => openDataFolder());
   ipcMain.handle(CH.setLaunchOnStartup, (_e, enabled: boolean) => setLaunchOnStartup(!!enabled));
-  ipcMain.handle(CH.setCheckForUpdates, (_e, enabled: boolean) => setAutoUpdateCheck(!!enabled));
+  ipcMain.handle(CH.setCheckForUpdates, (_e, enabled: boolean, notify?: boolean) =>
+    setAutoUpdateCheck(!!enabled, notify !== false),
+  );
   ipcMain.handle(CH.clearRecentProjects, async () => {
     await writeFile(recentsPath(), '[]', 'utf8').catch(() => {});
   });

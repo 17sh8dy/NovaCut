@@ -106,8 +106,8 @@ export function useAppliedPreferences(): void {
 
   // ── Update checks ──
   useEffect(() => {
-    void store.getState().bridge.setCheckForUpdates?.(prefs.checkForUpdates);
-  }, [prefs.checkForUpdates, store]);
+    void store.getState().bridge.setCheckForUpdates?.(prefs.checkForUpdates, prefs.notifyUpdates);
+  }, [prefs.checkForUpdates, prefs.notifyUpdates, store]);
 
   // ── Low memory mode ──
   // It is a shorthand, not a separate mechanism: it forces off the two things that cost the most

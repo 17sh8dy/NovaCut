@@ -201,7 +201,7 @@ export interface PlatformBridge {
   /** Start Nova Cut when the user signs in. */
   setLaunchOnStartup?(enabled: boolean): Promise<void>;
   /** Check for new releases in the background (installed builds only); asks before downloading. */
-  setCheckForUpdates?(enabled: boolean): Promise<void>;
+  setCheckForUpdates?(enabled: boolean, notify?: boolean): Promise<void>;
   /** Zoom the whole window, for the interface-scale setting. */
   setZoomFactor?(factor: number): void;
   /** Mirror the preferences the host acts on (folders, recents cap, encoder threads, GPU). */

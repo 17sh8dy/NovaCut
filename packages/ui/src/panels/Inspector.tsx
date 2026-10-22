@@ -522,6 +522,11 @@ function TextTab({ clip }: { clip: Clip }) {
           value={t.align === 'justify' ? 'left' : t.align}
           onChange={(v) => setText('Align', { align: v as typeof t.align })}
         />
+        {!t.content.includes('\n') && (
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+            Aligns the lines of multi-line text. A single line is as wide as the box, so press Enter in Content to add one.
+          </span>
+        )}
       </div>
       <div className="oc-field">
         <div className="oc-field__row">
@@ -555,7 +560,7 @@ function TextTab({ clip }: { clip: Clip }) {
         is where they tune the one they chose — duration and the animation's own params — and
         where they turn it off. Both surfaces write the same three fields.
       */}
-      <div className="oc-section-title" style={{ paddingLeft: 0 }}>Animation</div>
+      <div className="oc-section-title" style={{ paddingLeft: 0, marginTop: 14 }}>Animation</div>
       <AnimationSlot clip={clip} slot="animateIn" kind="in" label="In" />
       <AnimationSlot clip={clip} slot="animateOut" kind="out" label="Out" />
       <AnimationSlot clip={clip} slot="animateLoop" kind="loop" label="Loop" />
@@ -567,7 +572,7 @@ function TextTab({ clip }: { clip: Clip }) {
         clearly at the default 96px, because a stroke of 0 or a fully transparent glow looks
         identical to the feature being broken.
       */}
-      <div className="oc-section-title" style={{ paddingLeft: 0 }}>Style</div>
+      <div className="oc-section-title" style={{ paddingLeft: 0, marginTop: 14 }}>Style</div>
 
       <ToggleField
         label="Outline"
@@ -737,6 +742,26 @@ function AnimationSlot({
 
       {current && def && (
         <div className="oc-animslot__body">
+          {/*
+            Speed is Duration seen the other way round: 2x runs the animation in half the time.
+            It is derived from the animation's own default length, so 1x always means "as designed"
+            and nothing new is stored on the clip.
+          */}
+          <Slider
+            label="Speed"
+            value={Math.round((def.duration / current.duration) * 100) / 100}
+            min={0.25}
+            max={4}
+            step={0.05}
+            unit="x"
+            onChange={(v) =>
+              setSlot(
+                { ...current, duration: Math.min(kind === 'loop' ? 10 : 5, Math.max(0.05, def.duration / v)) },
+                `${label} Speed`,
+                `anim:${slot}:${clip.id}`,
+              )
+            }
+          />
           <Slider
             label={kind === 'loop' ? 'Cycle' : 'Duration'}
             value={current.duration}

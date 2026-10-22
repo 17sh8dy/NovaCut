@@ -450,9 +450,10 @@ export const SETTINGS: SettingDef[] = [
     keywords: 'sound audio chime beep notification effects',
   },
   {
-    id: 'notifyUpdates', category: 'Notifications', control: 'toggle', status: 'planned',
-    blockedBy: 'Depends on automatic updates, which are not implemented.',
-    label: 'Update available', keywords: 'notification update available version release',
+    id: 'notifyUpdates', category: 'Notifications', control: 'toggle', status: 'live',
+    label: 'Update available',
+    desc: 'Ask when a new version is found. Off, an update is still checked for but you are not interrupted.',
+    keywords: 'notification update available version release',
   },
 
   // ── Experimental ───────────────────────────────────────────────────────────

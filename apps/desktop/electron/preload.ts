@@ -77,7 +77,7 @@ const api: OpenCutApi = {
   clearRecentProjects: () => ipcRenderer.invoke(CH.clearRecentProjects),
   openDataFolder: () => ipcRenderer.invoke(CH.openDataFolder),
   setLaunchOnStartup: (enabled) => ipcRenderer.invoke(CH.setLaunchOnStartup, enabled),
-  setCheckForUpdates: (enabled) => ipcRenderer.invoke(CH.setCheckForUpdates, enabled),
+  setCheckForUpdates: (enabled, notify) => ipcRenderer.invoke(CH.setCheckForUpdates, enabled, notify),
   setZoomFactor: (factor) => ipcRenderer.send(CH.setZoomFactor, factor),
   setHostPrefs: (prefs) => ipcRenderer.send(CH.hostPrefs, prefs),
 };

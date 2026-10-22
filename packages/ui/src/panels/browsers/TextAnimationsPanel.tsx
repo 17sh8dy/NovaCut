@@ -6,7 +6,7 @@
  * user makes at three different moments — and a title routinely gets one of each.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Type } from 'lucide-react';
 import {
   defaultParams,
@@ -98,6 +98,10 @@ export function TextAnimationsPanel() {
   const [query, setQuery] = useState('');
   const [hovered, setHovered] = useState<string | null>(null);
   const { favorites, recents, toggleFavorite, markUsed } = useShelfMemory('text-anim');
+  // The Recent shelf is frozen while the panel is open. Re-sorting it on every click moved the
+  // chip you had just pressed out from under the pointer, so the next click landed on a
+  // different animation and swapped it in.
+  const recentsAtOpen = useRef(recents).current;
 
   const selectedId = useStore((s) => s.selectedClipIds[0]);
   const seq = useStore((s) => s.sequence());
@@ -111,14 +115,13 @@ export function TextAnimationsPanel() {
     () => textAnimationsByKind(kind).filter((d) => matches(query, d.label, d.type)),
     [kind, query],
   );
-  const { favorite, recent, rest } = bucket(items, (d) => d.type, favorites, recents);
+  const { favorite, recent, rest } = bucket(items, (d) => d.type, favorites, recentsAtOpen);
 
   /**
-   * Apply, or clear when the same animation is clicked again.
+   * Apply. Clicking the animation that is already applied does nothing.
    *
-   * Click-to-toggle is the "reset to None" affordance: the chip that is currently applied shows
-   * as active, and clicking it removes the animation. There is a None button too, but making
-   * the applied chip undo itself means the user never has to hunt for the off switch.
+   * This used to remove it ("click again to undo"), so every repeat click flipped the animation
+   * off, then on, then off. Removing is the None button's job.
    */
   const apply = (type: string) => {
     const state = store.getState();
@@ -128,21 +131,22 @@ export function TextAnimationsPanel() {
     const def = getTextAnimation(type);
     if (!def) return;
     const slot = SLOT[kind];
-    const clear = applied === type;
-    const value: TextAnimation | undefined = clear
-      ? undefined
-      : { type, params: defaultParams(def.params), duration: def.duration };
+    if (applied === type) {
+      state.setInspectorTab('text');
+      return;
+    }
+    const value: TextAnimation = { type, params: defaultParams(def.params), duration: def.duration };
 
     const sequence = state.sequence();
     state.dispatch({
-      label: clear ? 'Remove Text Animation' : `Add ${def.label}`,
+      label: `Add ${def.label}`,
       apply: (proj) =>
         updateClip(proj, sequence.id, selected.id, (c) => ({
           ...c,
           text: { ...c.text!, [slot]: value },
         })),
     });
-    if (!clear) markUsed(type);
+    markUsed(type);
     state.setInspectorTab('text');
   };
 
@@ -164,7 +168,7 @@ export function TextAnimationsPanel() {
     <ItemChip
       key={def.type}
       label={def.label}
-      title={`${def.label} — click to apply${applied === def.type ? ' (click again to remove)' : ''}`}
+      title={`${def.label} — click to apply${applied === def.type ? ' (applied; use None to remove)' : ''}`}
       favorite={favorites.includes(def.type)}
       applied={applied === def.type}
       onToggleFavorite={() => toggleFavorite(def.type)}

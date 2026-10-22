@@ -130,7 +130,7 @@ export interface OpenCutApi {
   clearRecentProjects(): Promise<void>;
   openDataFolder(): Promise<void>;
   setLaunchOnStartup(enabled: boolean): Promise<void>;
-  setCheckForUpdates(enabled: boolean): Promise<void>;
+  setCheckForUpdates(enabled: boolean, notify?: boolean): Promise<void>;
   setZoomFactor(factor: number): void;
   /** Mirror the few preferences main needs at IPC time (recents cap, project folder). */
   setHostPrefs(prefs: HostPrefsDTO): void;

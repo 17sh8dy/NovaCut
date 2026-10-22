@@ -28,6 +28,8 @@ let timer: NodeJS.Timeout | null = null;
 let busy = false;
 /** A version the person already said "Later" to this session; do not ask again until restart. */
 let declined: string | null = null;
+/** The "Update available" notification preference; off means check quietly, never interrupt. */
+let notifyEnabled = true;
 
 /** Portable builds set this; they cannot update themselves in place. */
 const isPortable = () => !!process.env.PORTABLE_EXECUTABLE_DIR;
@@ -40,7 +42,7 @@ function wire(): void {
   autoUpdater.logger = console;
 
   autoUpdater.on('update-available', async (info) => {
-    if (declined === info.version || busy) return;
+    if (!notifyEnabled || declined === info.version || busy) return;
     busy = true;
     const { response } = await dialog.showMessageBox({
       type: 'info',
@@ -85,7 +87,8 @@ function check(): void {
 }
 
 /** Turn the periodic check on or off. Safe to call repeatedly with the same value. */
-export function setAutoUpdateCheck(enabled: boolean): void {
+export function setAutoUpdateCheck(enabled: boolean, notify = true): void {
+  notifyEnabled = notify;
   if (!app.isPackaged || isPortable()) return;
   if (!enabled) {
     if (timer) clearInterval(timer);
