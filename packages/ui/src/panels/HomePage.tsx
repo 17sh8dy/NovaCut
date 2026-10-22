@@ -15,7 +15,6 @@ import {
   Image,
   Settings,
   Sparkles,
-  Check,
   FolderOpen,
   Upload,
   Clock,
@@ -24,6 +23,7 @@ import {
   Rocket,
   RotateCcw,
   ArrowRight,
+  Plus,
 } from 'lucide-react';
 import { isStillFile, type ImportedFile, type RecentProject } from '@opencut/core';
 import { useAppStore, useStore } from '../state/context.js';
@@ -57,8 +57,6 @@ interface Workspace {
   /** A token colour var used to tint the card's icon tile — and nothing else on the card. */
   accent: string;
   status: WsStatus;
-  /** Capability bullets (used by the AI Tools card). */
-  features?: string[];
 }
 
 /** The workspaces on offer. Order = display order; only 'live' ones navigate. */
@@ -67,10 +65,9 @@ const WORKSPACES: Workspace[] = [
     id: 'video',
     icon: Film,
     title: 'Video Editor',
-    desc: 'Cut, trim and arrange video and audio on a timeline.',
+    desc: 'Cut together films, vlogs, clips and highlight reels.',
     accent: 'var(--accent)',
     status: 'live',
-    features: ['Multi-track timeline', 'Effects & transitions', 'Keyframe animation', 'Export to MP4'],
   },
   {
     id: 'photo',
@@ -79,17 +76,12 @@ const WORKSPACES: Workspace[] = [
     // tell someone whether this is the room they want. Say the job, then list the tools.
     icon: Image,
     title: 'Photo Editor',
-    desc: 'Edit photos and design thumbnails, banners and social posts.',
+    desc: 'Design thumbnails, banners, posters and social posts.',
     // The accent, like the Video card: a live workspace should follow the colour the person
     // chose. (It used a fixed label blue, so it stayed blue whatever the accent was.)
-    accent: 'var(--accent)',
+    // Nova's purple, so the two live workspaces read as a pair rather than twins.
+    accent: 'var(--label-purple)',
     status: 'live',
-    features: [
-      'Layers, masks & selections',
-      'Text, shapes & ready-made presets',
-      'Brushes, filters & adjustments',
-      'Export PNG, JPG & WebP',
-    ],
   },
   // GIF Editor, Audio Editor and Design Studio were removed from the launcher on 2026-07-22.
   // A chooser that is mostly placeholders reads as an unfinished app, not an ambitious one — the
@@ -99,11 +91,15 @@ const WORKSPACES: Workspace[] = [
     id: 'ai',
     icon: Sparkles,
     title: 'AI Tools',
-    desc: 'A growing suite of AI-assisted editing.',
-    accent: 'var(--label-purple)',
+    desc: 'AI-assisted editing, on the way.',
+    // A muted violet: related to Photo's purple, clearly quieter.
+    accent: 'color-mix(in srgb, var(--label-purple) 55%, var(--text-tertiary))',
     status: 'future',
   },
 ];
+
+/** Recent projects shown before "View All"; the section grows as the list does. */
+const RECENTS_SHOWN = 6;
 
 const STATUS_LABEL: Record<Exclude<WsStatus, 'live'>, string> = {
   soon: 'Coming soon',
@@ -114,6 +110,7 @@ export function HomePage() {
   const store = useAppStore();
   const recovery = useStore((s) => s.recovery);
   const [recents, setRecents] = useState<RecentProject[]>([]);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -258,11 +255,15 @@ export function HomePage() {
               </h1>
             </AnimatedContent>
             <AnimatedContent delay={130}>
-              <p className="oc-home__tagline">Choose a workspace</p>
+              <p className="oc-home__headline">Create something extraordinary.</p>
+              <p className="oc-home__tagline">Your workspace for video, photography, and creative projects.</p>
             </AnimatedContent>
 
             <AnimatedContent delay={190}>
               <div className="oc-home__actions">
+                <button className="oc-home__btn oc-home__btn--sm oc-home__btn--primary" onClick={() => void openVideoEditor()}>
+                  <Plus size={16} /> New Project
+                </button>
                 <button className="oc-home__btn oc-home__btn--sm" onClick={openProject}>
                   <FolderOpen size={16} /> Open Project
                 </button>
@@ -274,6 +275,7 @@ export function HomePage() {
           </header>
 
           {/* Workspace chooser */}
+          <h2 className="oc-home__label">Workspaces</h2>
           <div className="oc-workspaces">
             {WORKSPACES.map((ws, i) => (
               <AnimatedContent key={ws.id} delay={230 + i * 55}>
@@ -304,12 +306,22 @@ export function HomePage() {
 
           {/* Recent Projects */}
           <AnimatedContent delay={560}>
-            <Section icon={Clock} title="Recent Projects">
+            <Section
+              icon={Clock}
+              title="Recent Projects"
+              action={
+                recents.length > RECENTS_SHOWN ? (
+                  <button className="oc-home__link" onClick={() => setShowAll((v) => !v)}>
+                    {showAll ? 'Show less' : `View All (${recents.length})`}
+                  </button>
+                ) : undefined
+              }
+            >
               {recents.length === 0 ? (
                 <p className="oc-home__empty">No recent projects yet. Open a workspace to get started.</p>
               ) : (
                 <div className="oc-home__grid">
-                  {recents.map((r) => (
+                  {(showAll ? recents : recents.slice(0, RECENTS_SHOWN)).map((r) => (
                     <CardButton
                       key={r.path}
                       className="oc-home__card"
@@ -317,10 +329,10 @@ export function HomePage() {
                       title={r.path}
                     >
                       <div className="oc-home__card-thumb">
-                        <LayoutTemplate size={22} />
+                        <LayoutTemplate size={28} />
                       </div>
                       <div className="oc-home__card-name">{r.name}</div>
-                      <div className="oc-home__card-meta">{new Date(r.modifiedAt).toLocaleDateString()}</div>
+                      <div className="oc-home__card-meta">Edited {new Date(r.modifiedAt).toLocaleDateString()}</div>
                     </CardButton>
                   ))}
                 </div>
@@ -361,20 +373,14 @@ function WorkspaceCard({ ws, onSelect }: { ws: Workspace; onSelect: () => void }
   const inner = (
     <>
       {ws.status !== 'live' && <span className="oc-ws-card__badge">{STATUS_LABEL[ws.status]}</span>}
-      <div className="oc-ws-card__icon">
-        <Icon size={26} />
+      <WorkspacePreview id={ws.id} />
+      <div className="oc-ws-card__head">
+        <div className="oc-ws-card__icon">
+          <Icon size={20} />
+        </div>
+        <div className="oc-ws-card__title">{ws.title}</div>
       </div>
-      <div className="oc-ws-card__title">{ws.title}</div>
       <div className="oc-ws-card__desc">{ws.desc}</div>
-      {ws.features && (
-        <ul className="oc-ws-card__features">
-          {ws.features.map((f) => (
-            <li key={f}>
-              <Check size={13} /> {f}
-            </li>
-          ))}
-        </ul>
-      )}
       {ws.status === 'live' && (
         <div className="oc-ws-card__cta">
           Open <ArrowRight size={15} />
@@ -397,7 +403,7 @@ function WorkspaceCard({ ws, onSelect }: { ws: Workspace; onSelect: () => void }
 
   return (
     <div
-      className={`oc-ws-card oc-ws-card--${ws.status}${ws.features ? ' oc-ws-card--wide' : ''}`}
+      className={`oc-ws-card oc-ws-card--${ws.status}`}
       style={style}
       aria-disabled="true"
     >
@@ -406,12 +412,62 @@ function WorkspaceCard({ ws, onSelect }: { ws: Workspace; onSelect: () => void }
   );
 }
 
-function Section({ icon: Icon, title, children }: { icon: typeof Clock; title: string; children: React.ReactNode }) {
+/** Miniature, purely decorative illustrations built from divs so they follow theme and accent. */
+function WorkspacePreview({ id }: { id: string }) {
+  if (id === 'video') {
+    return (
+      <div className="oc-ws-prev oc-ws-prev--video" aria-hidden="true">
+        <div className="oc-ws-prev__monitor" />
+        <div className="oc-ws-prev__tracks">
+          <i style={{ left: '4%', width: '34%' }} />
+          <i style={{ left: '40%', width: '22%' }} />
+          <i style={{ left: '64%', width: '30%' }} />
+          <i className="oc-ws-prev__aud" style={{ left: '4%', width: '90%' }} />
+          <b className="oc-ws-prev__playhead" />
+        </div>
+      </div>
+    );
+  }
+  if (id === 'photo') {
+    return (
+      <div className="oc-ws-prev oc-ws-prev--photo" aria-hidden="true">
+        <div className="oc-ws-prev__canvas">
+          <span className="oc-ws-prev__sun" />
+          <span className="oc-ws-prev__hill" />
+          <span className="oc-ws-prev__text" />
+        </div>
+        <div className="oc-ws-prev__layers">
+          <i />
+          <i />
+          <i />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="oc-ws-prev oc-ws-prev--ai" aria-hidden="true">
+      <Sparkles size={34} />
+    </div>
+  );
+}
+
+function Section({
+  icon: Icon,
+  title,
+  action,
+  children,
+}: {
+  icon: typeof Clock;
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="oc-home__section">
       <div className="oc-home__section-head">
         <Icon size={16} />
         <h2>{title}</h2>
+        {action && <span className="oc-home__section-action">{action}</span>}
       </div>
       {children}
     </section>

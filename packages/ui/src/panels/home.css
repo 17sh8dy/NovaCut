@@ -203,17 +203,17 @@
    one piece of information. The card is now a surface; the icon carries the identity. */
 .oc-workspaces {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
   margin-top: var(--space-2);
 }
 .oc-ws-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  min-height: 152px;
-  padding: 20px;
+  gap: 10px;
+  min-height: 300px;
+  padding: 16px 16px 20px;
   text-align: left;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
@@ -227,9 +227,8 @@
 .oc-ws-card__icon {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  margin-bottom: 4px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--ws-accent) 14%, transparent);
   color: var(--ws-accent);
@@ -505,4 +504,205 @@
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* ── Launcher refresh ─────────────────────────────────────────────────────── */
+.oc-home__headline {
+  margin: 14px 0 0;
+  font-size: clamp(20px, 2.6vw, 28px);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+.oc-home__label {
+  margin: 8px 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.oc-ws-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.oc-ws-card__title {
+  font-size: 17px;
+}
+.oc-ws-card__desc {
+  font-size: 13.5px;
+}
+.oc-home__section-action {
+  margin-left: auto;
+}
+.oc-home__link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+.oc-home__link:hover {
+  text-decoration: underline;
+}
+.oc-home__grid {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+.oc-home__card-thumb {
+  height: 120px;
+}
+.oc-home__card-name {
+  font-size: 14px;
+}
+.oc-home__card-meta {
+  font-size: 12px;
+}
+
+/* Workspace previews: a flat charcoal stage with the workspace colour used sparingly. */
+.oc-ws-prev {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  align-self: stretch;
+  flex: none;
+  height: 170px;
+  border-radius: var(--radius-md);
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.oc-ws-prev--video {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+.oc-ws-prev__monitor {
+  flex: 1;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--surface-3), var(--surface-2));
+  position: relative;
+}
+.oc-ws-prev__monitor::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0;
+  height: 0;
+  border-left: 14px solid var(--ws-accent);
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  opacity: 0.85;
+}
+.oc-ws-prev__tracks {
+  position: relative;
+  height: 44px;
+}
+.oc-ws-prev__tracks i {
+  position: absolute;
+  top: 4px;
+  height: 14px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ws-accent) 70%, transparent);
+}
+.oc-ws-prev__tracks i.oc-ws-prev__aud {
+  top: 24px;
+  height: 10px;
+  background: var(--surface-3);
+}
+.oc-ws-prev__playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 38%;
+  width: 2px;
+  background: var(--text-primary);
+  opacity: 0.7;
+}
+.oc-ws-prev--photo {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+}
+.oc-ws-prev__canvas {
+  position: relative;
+  flex: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ws-accent) 35%, var(--surface-2)), var(--surface-2));
+}
+.oc-ws-prev__sun {
+  position: absolute;
+  top: 18%;
+  right: 18%;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ws-accent) 30%, white);
+  opacity: 0.85;
+}
+.oc-ws-prev__hill {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: -30%;
+  height: 60%;
+  border-radius: 50%;
+  background: var(--surface-1);
+}
+.oc-ws-prev__text {
+  position: absolute;
+  left: 12%;
+  top: 16%;
+  width: 34%;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--text-primary);
+  opacity: 0.8;
+}
+.oc-ws-prev__layers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 52px;
+}
+.oc-ws-prev__layers i {
+  flex: 1;
+  border-radius: 4px;
+  background: var(--surface-3);
+}
+.oc-ws-prev__layers i:first-child {
+  background: color-mix(in srgb, var(--ws-accent) 55%, transparent);
+}
+.oc-ws-prev--ai {
+  display: grid;
+  place-items: center;
+  color: var(--ws-accent);
+  background: color-mix(in srgb, var(--ws-accent) 10%, var(--canvas));
+  border-style: dashed;
+}
+
+/* Three equal columns; the animation wrappers and the cards both fill their cell. */
+.oc-workspaces {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.oc-workspaces > * {
+  min-width: 0;
+  display: flex;
+}
+.oc-workspaces .oc-ws-card {
+  width: 100%;
+  min-height: 0;
+}
+@media (max-width: 900px) {
+  .oc-workspaces {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
 }

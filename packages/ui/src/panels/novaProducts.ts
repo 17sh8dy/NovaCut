@@ -41,7 +41,7 @@ export const NOVA_SITES: NovaProduct[] = [
   { id: 'nova', label: 'Nova', tagline: 'The Nova home page', icon: Globe, kind: 'site' },
   { id: 'nova-legal', label: 'Nova Legal', tagline: 'Terms and privacy', icon: FileText, kind: 'site' },
   { id: 'nova-review', label: 'Nova.Review', tagline: 'Reviews and suggestions', icon: Star, kind: 'site' },
-  { id: 'nova-cut-site', label: 'Nova Cut Website', tagline: 'Nova Cut, on the web', icon: Scissors, kind: 'soon' },
+  { id: 'nova-cut-site', label: 'Nova Cut Website', tagline: 'Nova Cut download site', icon: Scissors, kind: 'soon' },
 ];
 
 /** The Nova home page, and where a Nova Account is managed. Real, deployed addresses. */
