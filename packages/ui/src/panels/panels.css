@@ -1138,3 +1138,24 @@
   outline: none;
   min-width: 160px;
 }
+
+/* Media library: the whole panel is a drop target, not just the import button. */
+.oc-media-panel {
+  position: relative;
+}
+.oc-media-dropveil {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-1));
+  color: var(--accent-text);
+  font-weight: 600;
+  pointer-events: none;
+}

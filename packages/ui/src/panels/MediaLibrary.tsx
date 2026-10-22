@@ -203,11 +203,12 @@ The file stays on your device — this only removes it from Nova Cut.`,
     store.getState().notify(`Removed ${label} from the project`, 'success', 'The file on your device was not touched.');
   };
 
-  const onDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
+  /** Only OS files count; dragging a card out of the library toward the timeline must not light this up. */
+  const hasFiles = (e: React.DragEvent) => [...e.dataTransfer.types].includes('Files');
+
+  const ingestFiles = async (list: File[]) => {
     const bridge = store.getState().bridge;
-    const files = [...e.dataTransfer.files];
+    const files = list;
     await ingest(
       files.map((f) => ({
         // Prefer a durable path (desktop) so probing/thumbnails/export work; fall back to
@@ -220,8 +221,55 @@ The file stays on your device — this only removes it from Nova Cut.`,
     );
   };
 
+  const onDrop = async (e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    setDragOver(false);
+    await ingestFiles([...e.dataTransfer.files]);
+  };
+
+  /*
+   * Files copied in Explorer (Ctrl+C) paste straight in with Ctrl+V while the library is on
+   * screen. Only a paste that actually carries files is taken: text pastes, and the timeline's own
+   * clip paste (which never touches the system clipboard), are left alone — as is any paste into
+   * a text field.
+   */
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const files = [...(e.clipboardData?.files ?? [])];
+      if (files.length === 0) return;
+      e.preventDefault();
+      void ingestFiles(files);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div
+      className="oc-media-panel"
+      data-drag={dragOver}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}
+      onDragOver={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        // Leaving for a child is not leaving the panel.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false);
+      }}
+      onDrop={onDrop}
+    >
+      {dragOver && (
+        <div className="oc-media-dropveil" aria-hidden="true">
+          <Upload size={28} />
+          <span>Drop to add to your media</span>
+        </div>
+      )}
       <div className="oc-search">
         <Search size={14} />
         <input
@@ -236,12 +284,6 @@ The file stays on your device — this only removes it from Nova Cut.`,
           className="oc-import-btn"
           data-drag={dragOver}
           onClick={runImport}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
         >
           {importProgress ? (
             <>
@@ -258,7 +300,7 @@ The file stays on your device — this only removes it from Nova Cut.`,
               <Upload size={24} />
               <span style={{ fontWeight: 600, fontSize: 'var(--text-md)' }}>Import Media</span>
               <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>
-                or drop video, audio, images & GIFs
+                or drop or paste video, audio, images & GIFs
               </span>
             </>
           )}

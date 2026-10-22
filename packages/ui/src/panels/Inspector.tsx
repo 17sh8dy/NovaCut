@@ -560,7 +560,7 @@ function TextTab({ clip }: { clip: Clip }) {
         is where they tune the one they chose — duration and the animation's own params — and
         where they turn it off. Both surfaces write the same three fields.
       */}
-      <div className="oc-section-title" style={{ paddingLeft: 0, marginTop: 14 }}>Animation</div>
+      <div className="oc-section-title" style={{ paddingLeft: 'var(--space-3)', marginTop: 14 }}>Animation</div>
       <AnimationSlot clip={clip} slot="animateIn" kind="in" label="In" />
       <AnimationSlot clip={clip} slot="animateOut" kind="out" label="Out" />
       <AnimationSlot clip={clip} slot="animateLoop" kind="loop" label="Loop" />
@@ -572,7 +572,7 @@ function TextTab({ clip }: { clip: Clip }) {
         clearly at the default 96px, because a stroke of 0 or a fully transparent glow looks
         identical to the feature being broken.
       */}
-      <div className="oc-section-title" style={{ paddingLeft: 0, marginTop: 14 }}>Style</div>
+      <div className="oc-section-title" style={{ paddingLeft: 'var(--space-3)', marginTop: 14 }}>Style</div>
 
       <ToggleField
         label="Outline"
