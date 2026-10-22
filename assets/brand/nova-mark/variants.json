@@ -1,0 +1,12 @@
+{
+  "variants": [
+    "default",
+    "purple",
+    "light",
+    "mono-dark",
+    "mono-light"
+  ],
+  "tile": 1024,
+  "radius": 228,
+  "glyphAspect": 0.9866666666666667
+}
