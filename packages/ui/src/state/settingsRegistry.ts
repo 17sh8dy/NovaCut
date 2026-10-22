@@ -117,8 +117,19 @@ export const SETTINGS: SettingDef[] = [
   {
     id: 'accentColor', category: 'General', group: 'Appearance', control: 'accent', status: 'live',
     label: 'Accent colour',
-    desc: 'Primary buttons, active tools, selection, sliders and focus rings. The Nova Cut logo always keeps its own blue.',
+    desc: 'Primary buttons, active tools, selection, sliders and focus rings. The logo has its own setting below.',
     keywords: 'accent colour color highlight brand blue purple green orange red pink gray theme',
+  },
+  {
+    id: 'logoStyle', category: 'General', group: 'Appearance', control: 'select', status: 'live',
+    label: 'Logo style',
+    desc: 'The colours of the Nova Cut mark inside the app. The taskbar and installer icon stay the default.',
+    keywords: 'logo icon mark brand colour color purple mono monochrome nova blue theme',
+    options: [
+      { value: 'nova', label: 'Nova (cyan / blue / purple)' },
+      { value: 'purple', label: 'Purple' },
+      { value: 'mono', label: 'Monochrome' },
+    ],
   },
   {
     id: 'language', category: 'General', group: 'Appearance', control: 'select', status: 'planned',

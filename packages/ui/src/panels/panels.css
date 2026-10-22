@@ -1159,3 +1159,29 @@
   font-weight: 600;
   pointer-events: none;
 }
+
+/* ── Logo style ────────────────────────────────────────────────────────────────
+   Settings > Appearance > Logo style. `nova` is the default artwork already set on each mark;
+   the other two swap the file. The title-bar mark (22px) takes the -small drawing, the same split
+   as everywhere else. Monochrome follows the theme: white mark on dark, charcoal on light. */
+:root[data-logo='purple'] .oc-home__logo,
+:root[data-logo='purple'] .oc-about__mark {
+  background-image: url('../assets/logo-purple.svg');
+}
+:root[data-logo='purple'] .oc-brand__mark {
+  background-image: url('../assets/logo-purple-small.svg');
+}
+:root[data-logo='mono'] .oc-home__logo,
+:root[data-logo='mono'] .oc-about__mark {
+  background-image: url('../assets/logo-mono-dark.svg');
+}
+:root[data-logo='mono'] .oc-brand__mark {
+  background-image: url('../assets/logo-mono-dark-small.svg');
+}
+:root[data-logo='mono'][data-theme='light'] .oc-home__logo,
+:root[data-logo='mono'][data-theme='light'] .oc-about__mark {
+  background-image: url('../assets/logo-mono-light.svg');
+}
+:root[data-logo='mono'][data-theme='light'] .oc-brand__mark {
+  background-image: url('../assets/logo-mono-light-small.svg');
+}

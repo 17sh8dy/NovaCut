@@ -54,6 +54,12 @@ export function useAppliedPreferences(): void {
     root.style.setProperty('--accent', prefs.accentColor);
   }, [prefs.accentColor]);
 
+  // ── Logo style ──
+  // The stylesheet picks the artwork off this attribute (see "Logo style" in panels.css).
+  useEffect(() => {
+    document.documentElement.setAttribute('data-logo', prefs.logoStyle);
+  }, [prefs.logoStyle]);
+
   // ── Density, icon size, motion ──
   useEffect(() => {
     const root = document.documentElement;

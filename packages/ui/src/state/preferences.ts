@@ -34,6 +34,8 @@ export interface AppPreferences {
    * text. tokens.css explains the split.
    */
   accentColor: string;
+  /** Which colourway the Nova Cut logo wears inside the app. */
+  logoStyle: 'nova' | 'purple' | 'mono';
   launchOnStartup: boolean;
   checkForUpdates: boolean;
   showHomeOnLaunch: boolean;
@@ -109,6 +111,7 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   // first thing a new user has to go and fix.
   theme: 'system',
   accentColor: '',
+  logoStyle: 'nova',
   launchOnStartup: false,
   checkForUpdates: true,
   showHomeOnLaunch: true,
