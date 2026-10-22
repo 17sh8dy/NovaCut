@@ -130,6 +130,7 @@ export interface OpenCutApi {
   clearRecentProjects(): Promise<void>;
   openDataFolder(): Promise<void>;
   setLaunchOnStartup(enabled: boolean): Promise<void>;
+  setCheckForUpdates(enabled: boolean): Promise<void>;
   setZoomFactor(factor: number): void;
   /** Mirror the few preferences main needs at IPC time (recents cap, project folder). */
   setHostPrefs(prefs: HostPrefsDTO): void;
@@ -212,6 +213,7 @@ export const CH = {
   clearRecentProjects: 'settings:clearRecent',
   openDataFolder: 'settings:openDataFolder',
   setLaunchOnStartup: 'settings:launchOnStartup',
+  setCheckForUpdates: 'settings:checkForUpdates',
   setZoomFactor: 'settings:zoomFactor',
   hostPrefs: 'settings:hostPrefs',
 } as const;

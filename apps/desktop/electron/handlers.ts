@@ -20,6 +20,7 @@ import {
 import { ffmpegThumbnail, ffprobeMedia, FfmpegEncoder, ffmpegBinary, setEncoderThreads } from './ffmpeg.js';
 import { popupMenu } from './menu.js';
 import { openProduct } from './products.js';
+import { setAutoUpdateCheck } from './updater.js';
 import {
   chooseDirectory, clearCache, openDataFolder, setLaunchOnStartup, storageUsage, systemInfo,
   writeStartupPrefs,
@@ -321,6 +322,7 @@ export function registerHandlers(hooks: HandlerHooks): void {
   ipcMain.handle(CH.clearCache, () => clearCache());
   ipcMain.handle(CH.openDataFolder, () => openDataFolder());
   ipcMain.handle(CH.setLaunchOnStartup, (_e, enabled: boolean) => setLaunchOnStartup(!!enabled));
+  ipcMain.handle(CH.setCheckForUpdates, (_e, enabled: boolean) => setAutoUpdateCheck(!!enabled));
   ipcMain.handle(CH.clearRecentProjects, async () => {
     await writeFile(recentsPath(), '[]', 'utf8').catch(() => {});
   });

@@ -35,6 +35,7 @@ export interface AppPreferences {
    */
   accentColor: string;
   launchOnStartup: boolean;
+  checkForUpdates: boolean;
   showHomeOnLaunch: boolean;
   reopenLastProject: boolean;
   confirmOnClose: boolean;
@@ -108,6 +109,7 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   theme: 'system',
   accentColor: '',
   launchOnStartup: false,
+  checkForUpdates: true,
   showHomeOnLaunch: true,
   reopenLastProject: false,
   confirmOnClose: true,
@@ -125,7 +127,7 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   autoScrollDuringPlayback: true,
 
   defaultProjectDir: '',
-  autosaveInterval: 30,
+  autosaveInterval: 60,
   backupVersions: 5,
   maxRecentProjects: 12,
   defaultResolution: '1080p',

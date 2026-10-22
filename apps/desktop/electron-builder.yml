@@ -69,6 +69,12 @@ fileAssociations:
     description: Nova Cut Project
     role: Editor
 
+# Releases on GitHub double as the update feed: upload the installer, its .blockmap and latest.yml.
+publish:
+  provider: github
+  owner: 17sh8dy
+  repo: NovaCut
+
 win:
   icon: build/icon.ico
   target:

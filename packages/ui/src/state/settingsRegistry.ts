@@ -154,9 +154,10 @@ export const SETTINGS: SettingDef[] = [
     label: 'Minimise to tray', keywords: 'tray system notification area background minimise',
   },
   {
-    id: 'checkForUpdates', category: 'General', group: 'Updates', control: 'toggle', status: 'planned',
-    blockedBy: 'Builds are not published to an update feed yet.',
-    label: 'Check for updates automatically', keywords: 'update upgrade version release auto',
+    id: 'checkForUpdates', category: 'General', group: 'Updates', control: 'toggle', status: 'live',
+    label: 'Check for updates automatically',
+    desc: 'Looks for a new release in the background and asks before downloading. Installed builds only.',
+    keywords: 'update upgrade version release auto',
   },
 
   // ── Interface ──────────────────────────────────────────────────────────────

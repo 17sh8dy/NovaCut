@@ -104,6 +104,11 @@ export function useAppliedPreferences(): void {
     void store.getState().bridge.setLaunchOnStartup?.(prefs.launchOnStartup);
   }, [prefs.launchOnStartup, store]);
 
+  // ── Update checks ──
+  useEffect(() => {
+    void store.getState().bridge.setCheckForUpdates?.(prefs.checkForUpdates);
+  }, [prefs.checkForUpdates, store]);
+
   // ── Low memory mode ──
   // It is a shorthand, not a separate mechanism: it forces off the two things that cost the most
   // memory. Expressing it as a real override rather than a flag other code has to remember to
