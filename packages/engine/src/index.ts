@@ -19,6 +19,7 @@ export * from './gl/fboPool.js';
 export * from './gl/effectChain.js';
 export * from './compositor/compositor.js';
 export * from './compositor/transitions.js';
+export * from './compositor/glTransitions.js';
 export * from './media/frameSource.js';
 export * from './audio/audioGraph.js';
 export * from './export/offlineExporter.js';

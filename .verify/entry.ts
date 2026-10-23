@@ -22,6 +22,7 @@
 import { Compositor, FrameSourcePool, PhotoRenderer, type PhotoRenderContext } from '@opencut/engine';
 import {
   instantiateEffect,
+  registerTransition,
   newClipId,
   newTrackId,
   registerBuiltins,
@@ -253,6 +254,7 @@ function hue([r, , b]: [number, number, number]): string {
 }
 
 /** 8-bit channels through a GPU round-trip; ±3 absorbs rounding without hiding a real error. */
+const eq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const near = (got: [number, number, number], want: [number, number, number]) =>
   got.every((c, i) => Math.abs(c - want[i]!) <= 3);
 
@@ -605,6 +607,61 @@ async function main() {
       check('video_wipe_splits_frame', hue(leftPx) === 'blue' && hue(rightPx) === 'red', {
         left: leftPx, right: rightPx,
       });
+
+      // ── GL Transitions, through the compositor itself ─────────────────────
+      //
+      // The adapter has its own harness (verify:gltransitions). What only THIS one can show is that
+      // Compositor.renderTransition actually hands a `gl:` transition to it: the right textures,
+      // the right progress, endpoints forced to the exact clips, and a graceful dissolve when the
+      // shader is unusable.
+      track.transitions[0]!.type = 'gl:wipeLeft';
+      track.transitions[0]!.params = {};
+      const glLeft = frameAt(CUT);
+      check('gl_transition_renders_through_compositor',
+        hue(glLeft(1, 4)) === 'red' && hue(glLeft(SIZE - 2, 4)) === 'blue', { left: glLeft(1, 4), right: glLeft(SIZE - 2, 4) });
+      track.transitions[0]!.type = 'gl:wipeUp';
+      const glUp = frameAt(CUT);
+      check('gl_transition_picture_is_upright_in_compositor',
+        hue(glUp(SIZE / 2, 1)) === 'red' && hue(glUp(SIZE / 2, SIZE - 2)) === 'blue', { top: glUp(SIZE / 2, 1), bottom: glUp(SIZE / 2, SIZE - 2) });
+      // Window edges: the first instant of the window is exactly the outgoing clip, the clip it borders.
+      const glEdge = drawAt(CUT - HALF_SECOND);
+      check('gl_transition_starts_on_the_outgoing_clip', hue(glEdge) === 'red', { got: glEdge });
+      // An unusable shader must degrade to a crossfade, every frame, without throwing.
+      registerTransition({ type: 'gl:zzz-no-source', label: 'No source', render: 'gl:zzz-no-source', params: [], hidden: true, gl: { name: 'zzz-no-source', bindings: [] } });
+      track.transitions[0]!.type = 'gl:zzz-no-source';
+      let threw = false;
+      let fallback: [number, number, number] = [0, 0, 0];
+      try {
+        for (let i = 0; i < 5; i++) fallback = drawAt(CUT);
+      } catch {
+        threw = true;
+      }
+      check('gl_broken_shader_falls_back_to_crossfade', !threw && near(fallback, [128, 0, 128]), { got: fallback, threw });
+      // A project naming a transition this build does not have still renders (as a cut), not as an error.
+      track.transitions[0]!.type = 'gl:FromTheFuture';
+      let unknownThrew = false;
+      try { drawAt(CUT); } catch { unknownThrew = true; }
+      check('gl_unknown_type_does_not_throw', !unknownThrew);
+
+      // ── Reduced-resolution preview: while PLAYING only, never for paused frames or export ──
+      track.transitions[0]!.type = 'gl:wipeLeft';
+      const renderWith = (extra: Record<string, unknown>) => {
+        compositor.render({ sequence: seq, time: CUT as Ticks, getMedia: (id: string) => [red, blue].find((m) => m.id === id), ...extra } as never);
+        return readback(vcanvas);
+      };
+      const grid = (acc: (x: number, y: number) => [number, number, number]) => {
+        const out: number[] = [];
+        for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) out.push(...acc(x, y));
+        return out;
+      };
+      const fullFrame = grid(renderWith({}));
+      const reduced = renderWith({ playing: true, previewScale: 0.5 });
+      check('reduced_preview_keeps_the_picture_while_playing', hue(reduced(1, 4)) === 'red' && hue(reduced(SIZE - 2, 4)) === 'blue', { l: reduced(1, 4), r: reduced(SIZE - 2, 4) });
+      check('scale_1_while_playing_is_identical_to_full', eq(grid(renderWith({ playing: true, previewScale: 1 })), fullFrame));
+      check('paused_frames_ignore_the_preview_scale', eq(grid(renderWith({ playing: false, previewScale: 0.25 })), fullFrame));
+      track.transitions[0]!.type = 'gl:zzz-no-source';
+      const reducedFallback = renderWith({ playing: true, previewScale: 0.5 });
+      check('broken_shader_still_falls_back_when_reduced', near(reducedFallback(SIZE / 2, SIZE / 2), [128, 0, 128]), { got: reducedFallback(SIZE / 2, SIZE / 2) });
 
       // ── 7. The filter grade and the reveal mask, on real pixels ───────────
       //

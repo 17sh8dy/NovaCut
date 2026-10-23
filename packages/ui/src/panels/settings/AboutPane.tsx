@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { Button } from '../../components/primitives/index.js';
 import { useAppStore } from '../../state/context.js';
-import type { SystemInfo } from '@opencut/core';
+import { GL_TRANSITIONS_NOTICE, type SystemInfo } from '@opencut/core';
 
 const HIGHLIGHTS = [
   'Multi-track timeline with real transitions and GPU effects',
@@ -76,6 +76,15 @@ export function AboutPane() {
       <p className="oc-about__legal">
         MIT licensed. Built with Electron, React and FFmpeg — see each project for its own licence.
       </p>
+
+      <details className="oc-about__notices">
+        <summary>Third-party notices</summary>
+        <p>
+          The transition library includes shaders from the open GL Transitions collection
+          (gl-transitions.com), used under the MIT licence. Each shader's author and licence are listed below.
+        </p>
+        <pre>{GL_TRANSITIONS_NOTICE}</pre>
+      </details>
     </div>
   );
 }

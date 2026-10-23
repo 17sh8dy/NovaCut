@@ -54,3 +54,11 @@ Thumbs.db
 apps/desktop/resources/ffmpeg/*
 !apps/desktop/resources/ffmpeg/README.md
 !apps/desktop/resources/ffmpeg/LICENSE.txt
+.verify/dist-gltransitions/
+.verify/dist-glsheet/
+.verify/dist-glui/
+scripts/transition-sprites/dist/
+.verify/dist-glexport/
+.verify/dist-speed/
+.verify/dist-speedengine/
+.verify/dist-speedui/

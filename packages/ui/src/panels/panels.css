@@ -1185,3 +1185,47 @@
 :root[data-logo='mono'][data-theme='light'] .oc-brand__mark {
   background-image: url('../assets/logo-mono-light-small.svg');
 }
+
+/* Transition thumbnails: one frame of a pre-rendered strip (see TransitionsPanel.tsx). */
+.oc-tthumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-3);
+  background-image: url('../assets/transition-sprites.webp');
+  background-repeat: no-repeat;
+}
+.oc-tthumb--none {
+  background-image: none;
+}
+.oc-browser__credit {
+  margin: var(--space-3) var(--space-2) var(--space-2);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+
+/* About > Third-party notices */
+.oc-about__notices {
+  margin-top: var(--space-4);
+  text-align: left;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+.oc-about__notices summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.oc-about__notices pre {
+  max-height: 220px;
+  overflow: auto;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  white-space: pre-wrap;
+  font-size: 11px;
+  line-height: 1.45;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}

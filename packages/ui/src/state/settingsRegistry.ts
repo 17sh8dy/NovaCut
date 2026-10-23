@@ -283,9 +283,8 @@ export const SETTINGS: SettingDef[] = [
 
   // ── Video ──────────────────────────────────────────────────────────────────
   {
-    id: 'previewQuality', category: 'Video', group: 'Playback', control: 'segmented', status: 'planned',
-    blockedBy: 'The compositor always renders at sequence resolution; there is no render scale.',
-    label: 'Preview quality', desc: 'Lower resolutions play back more smoothly while editing.',
+    id: 'previewQuality', category: 'Video', group: 'Playback', control: 'segmented', status: 'live',
+    label: 'Preview quality', desc: 'Draws transitions at a lower resolution while the video is playing, so heavy ones stay smooth. Paused frames, scrubbing and exports are always full quality.',
     keywords: 'preview quality playback resolution proxy smooth performance',
     options: [
       { value: 'full', label: 'Full' }, { value: 'half', label: '1/2' }, { value: 'quarter', label: '1/4' },

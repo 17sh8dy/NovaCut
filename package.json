@@ -14,6 +14,8 @@
     "build": "npm run build --workspace @opencut/desktop",
     "pack": "npm run pack --workspace @opencut/desktop",
     "dist": "npm run ffmpeg:check && npm run dist --workspace @opencut/desktop",
+    "gl-transition-sprites": "vite build --config scripts/transition-sprites/vite.config.ts && electron scripts/transition-sprites/host.cjs",
+    "gl-transitions": "node scripts/build-gl-transitions.mjs",
     "icon": "electron scripts/make-icons.cjs",
     "ffmpeg:fetch": "node scripts/fetch-ffmpeg.mjs",
     "ffmpeg:check": "node scripts/check-ffmpeg.mjs",
@@ -23,20 +25,29 @@
     "verify:canvas": "esbuild .verify/canvas-orientation.mjs --bundle --platform=node --format=esm --alias:@opencut/photo=./packages/photo/src/index.ts --alias:@opencut/core=./packages/core/src/index.ts --outfile=.verify/dist/canvas-orientation.js && node .verify/dist/canvas-orientation.js",
     "verify:export": "vite build --config .verify/export-profile.config.ts && electron .verify/export-host.cjs export-profile.html",
     "verify:pointer": "vite build --config .verify/pointer.config.ts && electron .verify/main.cjs pointer.html 1400 900",
-    "verify:split": "esbuild .verify/split-playhead.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --alias:@opencut/ui=./packages/ui/src/state/store.ts --loader:.css=empty --loader:.svg=empty --outfile=.verify/dist/split-playhead.js && node .verify/dist/split-playhead.js",
-    "verify:ripple": "esbuild .verify/auto-ripple.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --alias:@opencut/ui=./packages/ui/src/state/store.ts --loader:.css=empty --loader:.svg=empty --outfile=.verify/dist/auto-ripple.js && node .verify/dist/auto-ripple.js",
+    "verify:gltransitions": "vite build --config .verify/gl-transitions.config.ts && electron .verify/main.cjs gl-transitions.html",
+    "verify:glexport": "vite build --config .verify/gl-export.config.ts && electron .verify/main.cjs gl-export.html 400 300",
     "verify:speedprobe": "vite build --config .verify/speed.config.ts && electron .verify/speed-host.cjs",
     "verify:speed": "vite build --config .verify/speed-ui.config.ts && node .verify/speed-regression.cjs",
     "verify:speedengine": "vite build --config .verify/speed-engine.config.ts && electron .verify/speed-engine-host.cjs",
     "verify:speedui": "vite build --config .verify/speed-ui.config.ts && electron .verify/speed-ui-host.cjs",
+    "verify:glsheet": "vite build --config .verify/gl-contact-sheet.config.ts && electron .verify/gl-contact-sheet-host.cjs",
+    "verify:split": "esbuild .verify/split-playhead.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --alias:@opencut/ui=./packages/ui/src/state/store.ts --loader:.css=empty --loader:.svg=empty --outfile=.verify/dist/split-playhead.js && node .verify/dist/split-playhead.js",
+    "verify:gltparams": "esbuild .verify/gl-transitions-params.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --alias:@opencut/ui=./packages/ui/src/state/store.ts --loader:.css=empty --loader:.svg=empty --outfile=.verify/dist/gl-transitions-params.js && node .verify/dist/gl-transitions-params.js",
+    "verify:ripple": "esbuild .verify/auto-ripple.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --alias:@opencut/ui=./packages/ui/src/state/store.ts --loader:.css=empty --loader:.svg=empty --outfile=.verify/dist/auto-ripple.js && node .verify/dist/auto-ripple.js",
+    "verify:gltcatalog": "esbuild .verify/gl-transitions-catalog.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --loader:.css=empty --loader:.svg=empty --outfile=.verify/dist/gl-transitions-catalog.js && node .verify/dist/gl-transitions-catalog.js",
     "verify:guards": "esbuild .verify/guards.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --alias:@opencut/engine=./packages/engine/src/index.ts --alias:@opencut/ui=./packages/ui/src/state/store.ts --loader:.css=empty --loader:.svg=empty --outfile=.verify/dist/guards.js && node .verify/dist/guards.js",
     "verify:timeline": "esbuild .verify/timeline-invariants.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --outfile=.verify/dist/timeline-invariants.js && node .verify/dist/timeline-invariants.js",
     "verify:browsers": "vite build --config .verify/browsers.config.ts && electron .verify/browsers-host.cjs",
+    "verify:gltui": "vite build --config .verify/gl-ui.config.ts && electron .verify/browsers-host.cjs gl-ui.html",
     "verify:textanim": "esbuild .verify/text-animations.mjs --bundle --platform=node --format=esm --alias:@opencut/core=./packages/core/src/index.ts --outfile=.verify/dist/text-animations.js && node .verify/dist/text-animations.js",
     "lint": "eslint . --ext .ts,.tsx",
     "clean": "node -e \"const fs=require('fs');['packages/core','packages/engine','packages/ui','apps/desktop'].forEach(p=>{try{fs.rmSync(p+'/dist',{recursive:true,force:true})}catch{}})\""
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "gl-transitions": "1.76.1"
   }
 }

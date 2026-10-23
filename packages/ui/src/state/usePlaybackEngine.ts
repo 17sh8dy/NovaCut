@@ -24,6 +24,9 @@ export interface PlaybackEngine {
   setSpeed: (s: number) => void;
 }
 
+/** Preview quality setting -> the fraction of full size the transition pass is drawn at while playing. */
+const PREVIEW_SCALE: Record<string, number> = { full: 1, half: 0.5, quarter: 0.25 };
+
 export function usePlaybackEngine(): PlaybackEngine {
   const store = useAppStore();
   const compositor = useRef<Compositor | null>(null);
@@ -55,6 +58,7 @@ export function usePlaybackEngine(): PlaybackEngine {
       getMedia: (id) => findMedia(state.project, id as never),
       playing: clock.current?.isPlaying ?? false,
       speed,
+      previewScale: PREVIEW_SCALE[state.preferences.previewQuality] ?? 1,
     });
     if (compositor.current) recordFrame(performance.now() - t0);
     audio.current?.update(seq, time, (id) => findMedia(state.project, id as never), speed);

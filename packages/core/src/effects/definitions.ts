@@ -13,6 +13,7 @@ import {
   type TransitionDefinition,
 } from './registry.js';
 import { registerFilters } from './filters.js';
+import { registerGlTransitions } from './glTransitions.js';
 import { registerTextAnimations } from './textAnimations.js';
 
 const p = (key: string, label: string, min: number, max: number, def: number, step = 1, unit?: string) =>
@@ -291,6 +292,7 @@ export function registerBuiltins(): void {
   registered = true;
   for (const e of EFFECTS) registerEffect(e);
   for (const t of TRANSITIONS) registerTransition(t);
+  registerGlTransitions();
   registerFilters();
   registerTextAnimations();
 }

@@ -1,6 +1,10 @@
 import {
   allTransitions,
   defaultParams,
+  resetTransitionParams,
+  setTransitionParams,
+  allTransitionsIncludingHidden,
+  GL_TRANSITION_MAPS,
   getEffectDef,
   getTextAnimation,
   getTransitionDef,
@@ -30,6 +34,7 @@ import { Diamond, Trash2, Power, ArrowLeftRight } from 'lucide-react';
 import { NumberField, Slider, EmptyState, Segmented } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
 import type { InspectorTab } from '../state/store.js';
+import { describeTransitionControls, hexToRgb, rgbToHex, type TransitionControl } from './transitionControls.js';
 
 const TABS: { id: InspectorTab; label: string }[] = [
   { id: 'transform', label: 'Transform' },
@@ -38,6 +43,166 @@ const TABS: { id: InspectorTab; label: string }[] = [
   { id: 'speed', label: 'Speed' },
   { id: 'text', label: 'Text' },
 ];
+
+/**
+ * The options of the Type dropdown: Nova Cut's own first, then the GL catalog grouped by category.
+ * The CURRENT type is always listed, even when it is hidden from the pickers (a saved project can
+ * use one), because a select whose value has no option shows blank and looks like the transition
+ * lost its type.
+ */
+function TransitionOptions({ current }: { current: string }) {
+  const visible = allTransitions();
+  const own = visible.filter((t) => t.source !== 'gl-transitions');
+  const gl = visible.filter((t) => t.source === 'gl-transitions');
+  const hiddenCurrent = visible.some((t) => t.type === current)
+    ? undefined
+    : allTransitionsIncludingHidden().find((t) => t.type === current);
+  const categories = [...new Set(gl.map((t) => t.category ?? 'More'))].sort();
+  return (
+    <>
+      {hiddenCurrent && <option value={current}>{hiddenCurrent.label} (GL)</option>}
+      {gl.length > 0 ? (
+        <>
+          <optgroup label="Nova Classic">
+            {own.map((t) => (
+              <option key={t.type} value={t.type}>{t.label}</option>
+            ))}
+          </optgroup>
+          {categories.map((c) => (
+            <optgroup key={c} label={`GL · ${c}`}>
+              {gl.filter((t) => (t.category ?? 'More') === c).map((t) => (
+                <option key={t.type} value={t.type}>{t.label}</option>
+              ))}
+            </optgroup>
+          ))}
+        </>
+      ) : (
+        own.map((t) => (
+          <option key={t.type} value={t.type}>{t.label}</option>
+        ))
+      )}
+    </>
+  );
+}
+
+/**
+ * The generated controls for a GL transition's parameters (see transitionControls.ts).
+ *
+ * Every edit is a `setTransitionParams` patch whose coalesce key names the PARAMETER GROUP, so a
+ * colour pick that sets r, g and b together is one undo step, and dragging a slider is one step
+ * however many events it fires.
+ */
+function TransitionParamControls({
+  controls,
+  values,
+  onPatch,
+  onReset,
+}: {
+  controls: TransitionControl[];
+  values: Record<string, number>;
+  onPatch: (patch: Record<string, number>, group: string) => void;
+  onReset: () => void;
+}) {
+  if (controls.length === 0) {
+    return <p className="oc-hint" style={{ padding: '0 var(--space-3)' }}>This transition has no settings.</p>;
+  }
+  const val = (p: { key: string; default: number }) => values[p.key] ?? p.default;
+  return (
+    <>
+      {controls.map((c) => {
+        const wrap = { borderBottom: 'none', paddingTop: 4, paddingBottom: 4 } as const;
+        if (c.kind === 'toggle') {
+          return (
+            <div key={c.uniform} title={c.hint}>
+              <ToggleField label={c.label} value={val(c.param) >= 0.5} onChange={(v) => onPatch({ [c.param.key]: v ? 1 : 0 }, c.uniform)} />
+            </div>
+          );
+        }
+        if (c.kind === 'map') {
+          return (
+            <div className="oc-field" key={c.uniform} style={wrap} title={c.hint}>
+              <span className="oc-field__label">{c.label}</span>
+              <select
+                className="oc-select"
+                value={Math.round(val(c.param))}
+                onChange={(e) => onPatch({ [c.param.key]: Number(e.target.value) }, c.uniform)}
+              >
+                {GL_TRANSITION_MAPS.map((name, i) => (
+                  <option key={name} value={i}>{name}</option>
+                ))}
+              </select>
+            </div>
+          );
+        }
+        if (c.kind === 'slider' || c.kind === 'integer') {
+          return (
+            <div className="oc-field" key={c.uniform} style={wrap} title={c.hint}>
+              <Slider
+                label={c.label}
+                value={val(c.param)}
+                min={c.param.min}
+                max={c.param.max}
+                step={c.kind === 'integer' ? 1 : c.param.step}
+                unit=""
+                onChange={(v) => onPatch({ [c.param.key]: v }, c.uniform)}
+              />
+            </div>
+          );
+        }
+        if (c.kind === 'vector') {
+          return (
+            <div className="oc-field" key={c.uniform} style={wrap} title={c.hint}>
+              <span className="oc-field__label">{c.label}</span>
+              {c.params.map((p, i) => (
+                <Slider
+                  key={p.key}
+                  label={c.components[i]!}
+                  value={val(p)}
+                  min={p.min}
+                  max={p.max}
+                  step={c.integer ? 1 : p.step}
+                  unit=""
+                  onChange={(v) => onPatch({ [p.key]: v }, c.uniform)}
+                />
+              ))}
+            </div>
+          );
+        }
+        // colour
+        const [r, g, b] = c.params;
+        const hex = rgbToHex(val(r!), val(g!), val(b!));
+        return (
+          <div className="oc-field" key={c.uniform} style={wrap} title={c.hint}>
+            <span className="oc-field__label">{c.label}</span>
+            <input
+              type="color"
+              value={hex}
+              onChange={(e) => {
+                const [nr, ng, nb] = hexToRgb(e.target.value);
+                onPatch({ [r!.key]: nr, [g!.key]: ng, [b!.key]: nb }, c.uniform);
+              }}
+              style={{ width: '100%', height: 28, border: 'none', borderRadius: 'var(--radius-sm)', background: 'var(--surface-3)', cursor: 'pointer' }}
+            />
+            {c.alpha && c.params[3] && (
+              <Slider
+                label="Opacity"
+                value={val(c.params[3])}
+                min={0}
+                max={1}
+                step={0.01}
+                unit=""
+                onChange={(v) => onPatch({ [c.params[3]!.key]: v }, `${c.uniform}.a`)}
+              />
+            )}
+          </div>
+        );
+      })}
+      <div className="oc-field" style={{ borderBottom: 'none' }}>
+        <button className="oc-btn" onClick={onReset}>Reset settings</button>
+      </div>
+    </>
+  );
+}
 
 /**
  * Everything about the transition sitting on a cut.
@@ -85,10 +250,14 @@ function TransitionInspector({ selection }: { selection: { trackId: TrackId; id:
               store.getState().dispatch(setTransitionType(track.id, transition.id, e.target.value))
             }
           >
-            {allTransitions().map((t) => (
-              <option key={t.type} value={t.type}>{t.label}</option>
-            ))}
+            <TransitionOptions current={transition.type} />
           </select>
+          {def?.author && (
+            <p className="oc-hint" style={{ margin: '6px 0 0' }} title={def.description}>
+              By {def.author} · {def.license}
+              {def.source === 'gl-transitions' ? ' · GL Transitions' : ''}
+            </p>
+          )}
         </div>
 
         <div className="oc-field" style={{ borderBottom: 'none' }}>
@@ -105,21 +274,32 @@ function TransitionInspector({ selection }: { selection: { trackId: TrackId; id:
           />
         </div>
 
-        {(def?.params ?? []).map((param) => (
-          <div className="oc-field" key={param.key} style={{ borderBottom: 'none', paddingTop: 4, paddingBottom: 4 }}>
-            <Slider
-              label={param.label}
-              value={transition.params[param.key] ?? param.default}
-              min={param.min}
-              max={param.max}
-              step={param.step}
-              unit={param.unit ?? ''}
-              onChange={(v) =>
-                store.getState().dispatch(setTransitionParam(track.id, transition.id, param.key, v))
-              }
-            />
-          </div>
-        ))}
+        {def?.gl ? (
+          <TransitionParamControls
+            controls={describeTransitionControls(def)}
+            values={transition.params}
+            onPatch={(patch, group) =>
+              store.getState().dispatch(setTransitionParams(track.id, transition.id, patch, `trn-params:${transition.id}:${group}`))
+            }
+            onReset={() => store.getState().dispatch(resetTransitionParams(track.id, transition.id))}
+          />
+        ) : (
+          (def?.params ?? []).map((param) => (
+            <div className="oc-field" key={param.key} style={{ borderBottom: 'none', paddingTop: 4, paddingBottom: 4 }}>
+              <Slider
+                label={param.label}
+                value={transition.params[param.key] ?? param.default}
+                min={param.min}
+                max={param.max}
+                step={param.step}
+                unit={param.unit ?? ''}
+                onChange={(v) =>
+                  store.getState().dispatch(setTransitionParam(track.id, transition.id, param.key, v))
+                }
+              />
+            </div>
+          ))
+        )}
 
         <div className="oc-field">
           <button

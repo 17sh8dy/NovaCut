@@ -22,6 +22,8 @@ export * from './commands/timelineCommands.js';
 // Effects / transitions / filters / animations
 export * from './effects/registry.js';
 export * from './effects/definitions.js';
+export * from './effects/glTransitions.js';
+export * from './effects/glTransitions.generated.js';
 export * from './effects/easing.js';
 export * from './effects/filters.js';
 export * from './effects/textAnimations.js';

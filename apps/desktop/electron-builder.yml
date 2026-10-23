@@ -57,6 +57,10 @@ extraResources:
     filter:
       - '**/*'
       - '!README.md'
+  # Third-party notices (the GL Transitions MIT/BSD texts), installed beside the app so the licences
+  # travel with the shaders they cover. Also shown in Settings > About.
+  - from: ../../licenses
+    to: licenses
 
 # No native modules anywhere in the tree; skipping the rebuild pass saves a minute per build.
 npmRebuild: false

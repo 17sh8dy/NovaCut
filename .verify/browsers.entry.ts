@@ -207,10 +207,14 @@ async function main() {
       all3?.animateOut?.type === 'fade-out' &&
       all3?.animateLoop?.type === 'pulse';
 
-    // ── 4. Clicking the applied chip again clears that slot ──
+    // ── 4. Clicking the applied chip again KEEPS it; the None button is what clears a slot ──
+    // (It used to remove the animation on a repeat click, so repeat clicks flipped it off and on.)
     clickChip('Pulse');
     await sleep(280);
-    results.clickAgainClearsSlot = textClip()?.text?.animateLoop === undefined;
+    results.clickAgainKeepsAnimation = textClip()?.text?.animateLoop?.type === 'pulse';
+    (document.querySelector('.oc-browser__none-btn') as HTMLButtonElement | null)?.click();
+    await sleep(280);
+    results.noneButtonClearsSlot = textClip()?.text?.animateLoop === undefined;
 
     // ── 5. Search narrows the grid ──
     tab('In')?.click();
@@ -392,7 +396,8 @@ async function main() {
       results.animateInApplied === true &&
       results.animateInHasDuration === true &&
       results.threeSlotsCoexist === true &&
-      results.clickAgainClearsSlot === true &&
+      results.clickAgainKeepsAnimation === true &&
+      results.noneButtonClearsSlot === true &&
       results.searchNarrows === true &&
       results.searchResultsAllMatch === true &&
       results.favoriteStored === true &&

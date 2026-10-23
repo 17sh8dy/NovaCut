@@ -61,6 +61,6 @@ app.whenReady().then(() => {
   win.webContents.on('did-fail-load', (_e, code, desc) => finish(1, `[host] LOAD FAILED ${code} ${desc}`));
   win.webContents.on('render-process-gone', (_e, d) => finish(1, '[host] RENDERER GONE ' + JSON.stringify(d)));
 
-  win.loadFile(path.join(__dirname, 'browsers.html')).catch((e) => finish(1, '[host] loadFile threw: ' + e));
+  win.loadFile(path.join(__dirname, process.argv[2] || 'browsers.html')).catch((e) => finish(1, '[host] loadFile threw: ' + e));
   setTimeout(() => finish(1, '[host] TIMEOUT — no result within 60s'), 60000);
 });

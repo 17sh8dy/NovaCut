@@ -12,7 +12,7 @@ import { clampTicks, type Ticks } from '../model/time.js';
 import { getTransitionDef } from '../effects/registry.js';
 import type { Clip, MediaAsset, Track, Transition } from '../model/types.js';
 import type { Command } from './history.js';
-import { insertClip, removeClip, updateClip, updateSequence, updateTrack } from './mutations.js';
+import { insertClip, removeClip, updateClip, updateSequence, updateTrack, updateTrackIfChanged } from './mutations.js';
 
 const activeSeqId = (p: { activeSequenceId: SequenceId }) => p.activeSequenceId;
 
@@ -541,7 +541,7 @@ export function addTransition(
   return {
     label: 'Add Transition',
     apply: (project) =>
-      updateTrack(project, activeSeqId(project), trackId, (track) => {
+      updateTrackIfChanged(project, activeSeqId(project), trackId, (track) => {
         const from = track.clips.find((c) => c.id === fromClipId);
         const to = track.clips.find((c) => c.id === toClipId);
         if (!from || !to) return track;
@@ -569,7 +569,7 @@ export function removeTransition(trackId: TrackId, transitionId: string): Comman
   return {
     label: 'Remove Transition',
     apply: (project) =>
-      updateTrack(project, activeSeqId(project), trackId, (track) => {
+      updateTrackIfChanged(project, activeSeqId(project), trackId, (track) => {
         const transitions = track.transitions.filter((t) => t.id !== transitionId);
         return transitions.length === track.transitions.length ? track : { ...track, transitions };
       }),
@@ -587,7 +587,7 @@ export function setTransitionDuration(
     label: 'Transition Duration',
     coalesceKey: `trn-dur:${transitionId}`,
     apply: (project) =>
-      updateTrack(project, activeSeqId(project), trackId, (track) => {
+      updateTrackIfChanged(project, activeSeqId(project), trackId, (track) => {
         let changed = false;
         const transitions = track.transitions.map((t) => {
           if (t.id !== transitionId || t.duration === clamped) return t;
@@ -609,7 +609,7 @@ export function setTransitionParam(
     label: 'Transition Setting',
     coalesceKey: `trn-param:${transitionId}:${key}`,
     apply: (project) =>
-      updateTrack(project, activeSeqId(project), trackId, (track) => {
+      updateTrackIfChanged(project, activeSeqId(project), trackId, (track) => {
         let changed = false;
         const transitions = track.transitions.map((t) => {
           if (t.id !== transitionId || t.params[key] === value) return t;
@@ -621,12 +621,90 @@ export function setTransitionParam(
   };
 }
 
+/** Which GLSL uniform types hold whole numbers, so a patched value is rounded rather than truncated by the GPU. */
+const INTEGER_UNIFORMS = new Set(['int', 'bool', 'ivec2', 'ivec3', 'ivec4', 'sampler2D']);
+
+/**
+ * Set several parameters of one transition at once, as ONE undo step.
+ *
+ * A vector or colour parameter is several numbers (a `vec4` colour is r, g, b, a), and changing it
+ * as four separate commands would make one colour pick four presses of Undo. `coalesceKey` lets a
+ * drag across a colour picker or a slider group collapse into the same single step.
+ *
+ * Values are made safe before they are stored: only keys the transition's definition declares are
+ * accepted (anything else is ignored), non-finite numbers are dropped, values are clamped to the
+ * declared range (a shader dividing by a grid size must never be handed 0), and integer / bool
+ * uniforms are rounded. A transition whose type this build does not know is left alone, since
+ * there is nothing to validate against. Returns the SAME project when nothing changes, so a
+ * no-op never becomes an undo step.
+ */
+export function setTransitionParams(
+  trackId: TrackId,
+  transitionId: string,
+  patch: Record<string, number>,
+  coalesceKey?: string,
+): Command {
+  return {
+    label: 'Transition Setting',
+    coalesceKey: coalesceKey ?? `trn-params:${transitionId}`,
+    apply: (project) =>
+      updateTrackIfChanged(project, activeSeqId(project), trackId, (track) => {
+        const current = track.transitions.find((t) => t.id === transitionId);
+        const def = current ? getTransitionDef(current.type) : undefined;
+        if (!current || !def) return track;
+        const declared = new Map(def.params.map((p) => [p.key, p]));
+        const integer = new Set(
+          (def.gl?.bindings ?? []).filter((b) => INTEGER_UNIFORMS.has(b.type)).flatMap((b) => b.keys),
+        );
+        const next: Record<string, number> = { ...current.params };
+        let changed = false;
+        for (const [key, raw] of Object.entries(patch)) {
+          const p = declared.get(key);
+          if (!p || typeof raw !== 'number' || !Number.isFinite(raw)) continue;
+          let v = Math.min(p.max, Math.max(p.min, raw));
+          if (integer.has(key)) v = Math.round(v);
+          if (next[key] === v) continue;
+          next[key] = v;
+          changed = true;
+        }
+        if (!changed) return track;
+        return {
+          ...track,
+          transitions: track.transitions.map((t) => (t.id === transitionId ? { ...t, params: next } : t)),
+        };
+      }),
+  };
+}
+
+/** Put every parameter of a transition back to its definition's defaults (one undo step). */
+export function resetTransitionParams(trackId: TrackId, transitionId: string): Command {
+  return {
+    label: 'Reset Transition Settings',
+    apply: (project) =>
+      updateTrackIfChanged(project, activeSeqId(project), trackId, (track) => {
+        const current = track.transitions.find((t) => t.id === transitionId);
+        const def = current ? getTransitionDef(current.type) : undefined;
+        if (!current || !def) return track;
+        const params: Record<string, number> = {};
+        for (const p of def.params) params[p.key] = p.default;
+        const same =
+          Object.keys(params).length === Object.keys(current.params).length &&
+          Object.entries(params).every(([k, v]) => current.params[k] === v);
+        if (same) return track;
+        return {
+          ...track,
+          transitions: track.transitions.map((t) => (t.id === transitionId ? { ...t, params } : t)),
+        };
+      }),
+  };
+}
+
 /** Swap a transition's type in place, re-seeding params from the new definition's defaults. */
 export function setTransitionType(trackId: TrackId, transitionId: string, type: string): Command {
   return {
     label: 'Transition Type',
     apply: (project) =>
-      updateTrack(project, activeSeqId(project), trackId, (track) => {
+      updateTrackIfChanged(project, activeSeqId(project), trackId, (track) => {
         const def = getTransitionDef(type);
         if (!def) return track;
         let changed = false;
@@ -655,7 +733,7 @@ export function pruneTransitions(trackId: TrackId): Command {
   return {
     label: 'Prune Transitions',
     apply: (project) =>
-      updateTrack(project, activeSeqId(project), trackId, (track) => {
+      updateTrackIfChanged(project, activeSeqId(project), trackId, (track) => {
         const ids = new Set(track.clips.map((c) => c.id));
         const transitions = track.transitions.filter(
           (t) => ids.has(t.fromClipId) && ids.has(t.toClipId),

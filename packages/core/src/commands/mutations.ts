@@ -38,6 +38,28 @@ export function updateTrack(
     tracks: seq.tracks.map((t) => (t.id === trackId ? fn(t) : t)),
   }));
 }
+
+/**
+ * Like `updateTrack`, but hands back the SAME project when `fn` returns the track untouched.
+ *
+ * `updateTrack` always rebuilds the sequence, so a command that decided there was nothing to do
+ * still produced a new project object, and History (whose only junk-step guard is
+ * `next === prev`) recorded an undo step that undid nothing. Commands that can legitimately be
+ * no-ops — setting a value that is already set, refusing an unknown type — use this one.
+ */
+export function updateTrackIfChanged(
+  project: Project,
+  sequenceId: SequenceId,
+  trackId: TrackId,
+  fn: (track: Track) => Track,
+): Project {
+  const seq = project.sequences.find((s) => s.id === sequenceId);
+  const track = seq?.tracks.find((t) => t.id === trackId);
+  if (!track) return project;
+  const next = fn(track);
+  return next === track ? project : updateTrack(project, sequenceId, trackId, () => next);
+}
+
 /** Update a clip wherever it lives in the sequence (track-agnostic lookup). */
 export function updateClip(
   project: Project,

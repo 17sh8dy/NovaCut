@@ -50,6 +50,7 @@ import { GLContext, type Fbo } from '../gl/glContext.js';
 import { FboPool } from '../gl/fboPool.js';
 import { runEffectChain } from '../gl/effectChain.js';
 import { getTransitionFragment, TRANSITION_VERTEX_SHADER } from './transitions.js';
+import { GlTransitions } from './glTransitions.js';
 import { rasterizeText } from './textRaster.js';
 import { dthrottle } from '../debug.js';
 
@@ -66,6 +67,13 @@ export interface RenderContext {
   /** Global preview speed from the transport (e.g. 2 for ×2). The playhead already advances
    * at this rate, so the decoded element must run at clipSpeed × this to keep pace. Default 1. */
   speed?: number;
+  /**
+   * Render GL transitions at this fraction of the frame size (0.25..1) while `playing`, then upscale.
+   * The expensive part of a transition is its shader pass, so this is where a lower resolution buys
+   * smooth playback. Ignored unless `playing`: a paused frame, a scrub and every export frame are
+   * always drawn at full size, so what you export is never the reduced picture.
+   */
+  previewScale?: number;
 }
 
 export class Compositor {
@@ -82,6 +90,8 @@ export class Compositor {
   private source: WebGLTexture;
   private width = 0;
   private height = 0;
+  /** Draws the GL Transitions catalog; see glTransitions.ts for what it guarantees. */
+  private glTransitions: GlTransitions;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -89,8 +99,17 @@ export class Compositor {
   ) {
     this.ctx = new GLContext(canvas);
     this.fbos = new FboPool(this.ctx);
+    this.glTransitions = new GlTransitions(this.ctx);
     this.source = this.ctx.createTexture();
     this.resize(canvas.width || 1920, canvas.height || 1080);
+  }
+
+  /**
+   * Told once when a GL transition's shader fails to compile and is disabled for the session (its
+   * cuts then render as a cross dissolve). Never called per frame.
+   */
+  set onTransitionBroken(cb: ((name: string, reason: string) => void) | undefined) {
+    this.glTransitions.onBroken = cb;
   }
 
   /** Resize the render targets to the sequence resolution. */
@@ -298,7 +317,52 @@ export class Compositor {
       this.ctx.clear(0, 0, 0, 0);
       this.renderClip(ctx, to, toBuf);
 
-      const render = def?.render ?? 'cut';
+      if (def?.gl && ctx.playing && (ctx.previewScale ?? 1) < 1) {
+        const scale = Math.max(0.25, Math.min(1, ctx.previewScale ?? 1));
+        const w = Math.max(16, Math.round(this.width * scale));
+        const h = Math.max(16, Math.round(this.height * scale));
+        const small = this.fbos.acquire(w, h);
+        try {
+          this.ctx.bindTarget(small, w, h);
+          this.ctx.clear(0, 0, 0, 0);
+          const drawnSmall = this.glTransitions.draw(def, {
+            from: fromBuf.tex,
+            to: toBuf.tex,
+            progress,
+            ratio: this.width / this.height,
+            values: transition.params,
+          });
+          if (drawnSmall) {
+            // Upscale onto the canvas with the same plain copy the hard cut uses (progress 0 = `from`).
+            this.ctx.bindTarget(null, this.width, this.height);
+            this.ctx.enableSourceOver();
+            const copy = this.ctx.getProgram('__transition:cut', TRANSITION_VERTEX_SHADER, getTransitionFragment('cut'));
+            this.ctx.useProgram(copy);
+            this.ctx.setUniformMat3(copy, 'u_model', IDENTITY_MAT3);
+            this.ctx.setUniform1f(copy, 'u_progress', 0);
+            this.ctx.bindTexture(copy, 'u_from', small.tex, 0);
+            this.ctx.bindTexture(copy, 'u_to', small.tex, 1);
+            this.ctx.drawQuad();
+            return; // the finally below releases every buffer
+          }
+        } finally {
+          this.fbos.release(small);
+        }
+      }
+      if (def?.gl) {
+        this.ctx.bindTarget(null, this.width, this.height);
+        this.ctx.enableSourceOver();
+        const drawn = this.glTransitions.draw(def, {
+          from: fromBuf.tex,
+          to: toBuf.tex,
+          progress,
+          ratio: this.width / this.height,
+          values: transition.params,
+        });
+        if (drawn) return; // the finally below releases both buffers
+      }
+      // A GL transition whose shader is unusable degrades to the plain crossfade.
+      const render = def?.gl ? 'dissolve' : (def?.render ?? 'cut');
       const prog = this.ctx.getProgram(
         `__transition:${render}`,
         TRANSITION_VERTEX_SHADER,

@@ -3,7 +3,6 @@ import { Sparkles } from 'lucide-react';
 import {
   addClipOnFreeTrack,
   allTools,
-  allTransitions,
   createTextClip,
   instantiateEffect,
   updateClip,
@@ -13,7 +12,6 @@ import {
   type VideoTextPreset,
 } from '@opencut/core';
 import { EmptyState, Segmented } from '../components/primitives/index.js';
-import { applyTransitionAtTime } from './Timeline.js';
 import { useAppStore, useStore } from '../state/context.js';
 import { TextAnimationsPanel } from './browsers/TextAnimationsPanel.js';
 import { TextEffectsPanel } from './browsers/TextEffectsPanel.js';
@@ -51,16 +49,6 @@ function FxPreview({ demo }: { demo: string }) {
       <span className="oc-fx-demo__fg" />
     </div>
   );
-}
-
-/** Map a transition type to the closest demo animation. */
-function transitionDemo(type: string): string {
-  const t = type.toLowerCase();
-  if (t.includes('zoom')) return 'zoom';
-  if (t.includes('slide') || t.includes('push') || t.includes('wipe')) return 'slide';
-  if (t.includes('glitch')) return 'glitch';
-  if (t.includes('spin') || t.includes('rotate')) return 'distort';
-  return 'fade';
 }
 
 /**
@@ -156,56 +144,7 @@ function ChipRow<T>({ title, items, render }: { title: string; items: T[]; rende
   );
 }
 
-/** Transitions browser. Clicking applies to the boundary of the selected clip. */
-export function TransitionsPanel() {
-  const store = useAppStore();
-  const transitions = allTransitions();
-
-  /**
-   * Click-to-apply: attach to the cut nearest the PLAYHEAD on the selected clip's track, or on
-   * the first video track that has a cut at all.
-   *
-   * The old behaviour was a toast telling the user to drag instead — which is a feature
-   * describing itself rather than doing anything. Drag still works and is more precise; this is
-   * the one-click path for the common case where the playhead is already at the cut.
-   */
-  const apply = (type: string) => {
-    const state = store.getState();
-    const seq = state.sequence();
-    const selectedId = state.selectedClipIds[0];
-    const track =
-      seq.tracks.find((t) => t.clips.some((c) => c.id === selectedId)) ??
-      seq.tracks.find((t) => t.kind === 'video' && t.clips.length > 1);
-    if (!track) {
-      state.notify('Transitions need two clips', 'info', 'Put two clips on one track first.');
-      return;
-    }
-    applyTransitionAtTime(store, track, state.playhead, type);
-  };
-
-  return (
-    <div style={{ overflow: 'auto', height: '100%' }}>
-      <div className="oc-section-title">Transitions</div>
-      <div className="oc-chip-grid">
-        {transitions.map((t) => (
-          <button
-            key={t.type}
-            className="oc-chip"
-            draggable
-            onDragStart={(e) => e.dataTransfer.setData('application/x-opencut-transition', t.type)}
-            onClick={() => apply(t.type)}
-            title={`${t.label} — click to apply at the playhead, or drag onto a cut`}
-          >
-            <div className="oc-chip__preview">
-              <FxPreview demo={transitionDemo(t.type)} />
-            </div>
-            <span className="oc-chip__label">{t.label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+export { TransitionsPanel } from './browsers/TransitionsPanel.js';
 
 /**
  * The swatch previews a preset by rendering its ACTUAL style in CSS, at a size that fits the

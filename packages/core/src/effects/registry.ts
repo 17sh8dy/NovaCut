@@ -30,6 +30,35 @@ export interface EffectParamDef {
    * untouched. Only the inspector reads this, and only to swap a slider for a swatch.
    */
   kind?: 'number' | 'color';
+  /**
+   * The shader uniform this param is one component of, for params flattened from a vector or a
+   * colour (a GL transition's `vec4 shadow_colour` becomes four params with this set to
+   * `shadow_colour`). The inspector can use it to draw one control instead of four.
+   */
+  group?: string;
+  /** True when the range was inferred rather than annotated by the shader's author. */
+  inferred?: boolean;
+}
+
+/** GLSL uniform types a GL transition parameter can have. */
+export type GlUniformType = 'float' | 'int' | 'bool' | 'vec2' | 'vec3' | 'vec4' | 'ivec2' | 'ivec3' | 'ivec4' | 'sampler2D';
+
+/** How a GL transition's uniform is assembled from the flat numeric `params` of an instance. */
+export interface GlParamBinding {
+  uniform: string;
+  type: GlUniformType;
+  /** What the control is called: the uniform's name, tidied ("Blocksize", "Shadow Colour"). */
+  label: string;
+  /** The shader author's one-line explanation of the parameter, when they wrote one. */
+  description?: string;
+  /** A vec3 / vec4 that holds a colour (components are r g b [a], each 0..1). */
+  color?: boolean;
+  /** Names for the components of a vector when the shader's author gave them ("Columns", "Rows"). */
+  componentLabels?: string[];
+  /** The flat param keys, one per component, in uniform order. */
+  keys: string[];
+  /** The shader's own defaults, one per component. */
+  defaults: number[];
 }
 
 /**
@@ -120,6 +149,22 @@ export interface TransitionDefinition {
   label: string;
   render: string;
   params: EffectParamDef[];
+  /**
+   * Resolvable (so a saved project that uses it still renders) but kept out of every browser and
+   * picker. The GL Transitions catalog ships this way until its library UI exists.
+   */
+  hidden?: boolean;
+  /** Where the transition came from. Omitted means one of Nova Cut's own. */
+  source?: 'nova' | 'gl-transitions';
+  category?: string;
+  featured?: boolean;
+  tags?: string[];
+  /** Credit, shown wherever the transition is named. */
+  author?: string;
+  license?: string;
+  description?: string;
+  /** Present for GL Transitions: the shader to render and how to bind its uniforms. */
+  gl?: { name: string; bindings: GlParamBinding[] };
 }
 
 const effects = new Map<string, EffectDefinition>();
@@ -136,7 +181,9 @@ export const getEffectDef = (type: string): EffectDefinition | undefined => effe
 export const getTransitionDef = (type: string): TransitionDefinition | undefined =>
   transitions.get(type);
 export const allEffects = (): EffectDefinition[] => [...effects.values()];
-export const allTransitions = (): TransitionDefinition[] => [...transitions.values()];
+/** The transitions a person can pick. Hidden ones still resolve through `getTransitionDef`. */
+export const allTransitions = (): TransitionDefinition[] => [...transitions.values()].filter((t) => !t.hidden);
+export const allTransitionsIncludingHidden = (): TransitionDefinition[] => [...transitions.values()];
 export const effectsByCategory = (cat: EffectCategory): EffectDefinition[] =>
   allTools().filter((e) => e.category === cat);
 

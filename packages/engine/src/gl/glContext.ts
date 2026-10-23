@@ -95,6 +95,31 @@ export class GLContext {
     if (loc) this.gl.uniform2f(loc, x, y);
   }
 
+  setUniform3f(prog: Program, name: string, x: number, y: number, z: number): void {
+    const loc = prog.uniforms.get(name);
+    if (loc) this.gl.uniform3f(loc, x, y, z);
+  }
+
+  setUniform4f(prog: Program, name: string, x: number, y: number, z: number, w: number): void {
+    const loc = prog.uniforms.get(name);
+    if (loc) this.gl.uniform4f(loc, x, y, z, w);
+  }
+
+  setUniform2i(prog: Program, name: string, x: number, y: number): void {
+    const loc = prog.uniforms.get(name);
+    if (loc) this.gl.uniform2i(loc, x, y);
+  }
+
+  setUniform3i(prog: Program, name: string, x: number, y: number, z: number): void {
+    const loc = prog.uniforms.get(name);
+    if (loc) this.gl.uniform3i(loc, x, y, z);
+  }
+
+  setUniform4i(prog: Program, name: string, x: number, y: number, z: number, w: number): void {
+    const loc = prog.uniforms.get(name);
+    if (loc) this.gl.uniform4i(loc, x, y, z, w);
+  }
+
   setUniformMat3(prog: Program, name: string, m: Float32Array): void {
     const loc = prog.uniforms.get(name);
     if (loc) this.gl.uniformMatrix3fv(loc, false, m);
