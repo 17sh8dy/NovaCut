@@ -300,7 +300,7 @@ export const SETTINGS: SettingDef[] = [
   },
   {
     id: 'rippleByDefault', category: 'Video', group: 'Editing', control: 'toggle', status: 'live',
-    label: 'Ripple edits by default', desc: 'Close the gap when a clip is deleted.',
+    label: 'Auto Ripple on by default', desc: 'Deleting or shortening a clip closes the gap it leaves on its own track. Also set by the Auto Ripple button on the timeline.',
     keywords: 'ripple delete gap close edit trim',
   },
   {

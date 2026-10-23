@@ -38,7 +38,6 @@ export function updateTrack(
     tracks: seq.tracks.map((t) => (t.id === trackId ? fn(t) : t)),
   }));
 }
-
 /** Update a clip wherever it lives in the sequence (track-agnostic lookup). */
 export function updateClip(
   project: Project,
@@ -68,9 +67,22 @@ export function insertClip(
   });
 }
 
+/**
+ * Remove a clip, and with it any transition that joined it to a neighbour.
+ *
+ * A transition is a relationship between two clips, so it cannot outlive either one. They used to
+ * be left behind: harmless on screen (the renderer and the timeline both ignore a transition whose
+ * clip is missing) but still saved in the project, which is how a document accumulates dead data.
+ * Doing it here covers every way a clip leaves a track: delete, removing media from the library,
+ * and a drag onto another track.
+ */
 export function removeClip(project: Project, sequenceId: SequenceId, clipId: ClipId): Project {
   return updateSequence(project, sequenceId, (seq) => ({
     ...seq,
-    tracks: seq.tracks.map((t) => ({ ...t, clips: t.clips.filter((c) => c.id !== clipId) })),
+    tracks: seq.tracks.map((t) => ({
+      ...t,
+      clips: t.clips.filter((c) => c.id !== clipId),
+      transitions: t.transitions.filter((tr) => tr.fromClipId !== clipId && tr.toClipId !== clipId),
+    })),
   }));
 }

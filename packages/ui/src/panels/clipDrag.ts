@@ -56,6 +56,8 @@ interface DragSession {
   /** Where the clip was when the gesture started — every delta is measured from these. */
   origStart: Ticks;
   origDur: Ticks;
+  /** Source-in when the gesture started; a ripple head trim measures what it has applied from it. */
+  origSourceIn: Ticks;
   /** False until the pointer clears the threshold: a press is a candidate for a drag, not one. */
   active: boolean;
   /** Live position/duration readout, drawn by whichever component currently renders this clip. */
@@ -134,6 +136,12 @@ export function beginClipDrag(opts: {
     startY: opts.clientY,
     origStart: opts.origStart,
     origDur: opts.origDur,
+    origSourceIn:
+      opts.store
+        .getState()
+        .sequence()
+        .tracks.flatMap((t) => t.clips)
+        .find((c) => c.id === opts.clipId)?.sourceIn ?? 0,
     active: false,
     readout: null,
     lastY: opts.clientY,
@@ -277,12 +285,22 @@ function apply(d: DragSession, e: { clientX: number; clientY: number; altKey: bo
   } else if (d.mode === 'in') {
     const desired = snapResult(d, d.origStart + deltaTicks, alt, toTicks);
     state.setSnapGuide(desired.guide);
-    state.dispatch(trimClip(d.clipId, 'in', desired.value - clip.start));
+    if (state.rippleEnabled) {
+      /*
+       * A ripple head trim leaves the clip's start where it was, so `desired - clip.start` is the
+       * TOTAL distance dragged, not the step since the last event. What has already been applied
+       * is how far sourceIn has moved since the gesture began; the command wants only the rest.
+       */
+      const applied = clip.sourceIn - d.origSourceIn;
+      state.dispatch(trimClip(d.clipId, 'in', desired.value - d.origStart - applied, { ripple: true }));
+    } else {
+      state.dispatch(trimClip(d.clipId, 'in', desired.value - clip.start));
+    }
   } else {
     const desired = snapResult(d, d.origStart + d.origDur + deltaTicks, alt, toTicks);
     state.setSnapGuide(desired.guide);
     const newDur = Math.max(MIN_TRIM_DURATION, desired.value - clip.start);
-    state.dispatch(trimClip(d.clipId, 'out', newDur - clip.duration));
+    state.dispatch(trimClip(d.clipId, 'out', newDur - clip.duration, { ripple: state.rippleEnabled }));
   }
 
   // Show the resulting duration (trim) or start position (move) while dragging.

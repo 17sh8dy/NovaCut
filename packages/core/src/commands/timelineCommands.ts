@@ -51,8 +51,23 @@ export function moveClip(
  * never trims past the available source: the head can't go before source 0, and the tail
  * can't extend beyond the media's duration. Still images (source duration 0) can extend
  * freely since they have no fixed source length.
+ *
+ * RIPPLE (`opts.ripple`, driven by the timeline's Auto Ripple toggle). The clip keeps its
+ * start on the timeline and the clips after it on the SAME track follow its end: shorten the
+ * clip and they move left by exactly that amount (the gap closes), lengthen it and they move
+ * right (nothing is overlapped). Source in/out of the trimmed clip are adjusted as in a plain
+ * trim, so the remaining footage is never stretched, sped up or re-timed. Only this clip's
+ * own track is touched, and a locked track refuses the edit outright. `delta` is incremental
+ * (relative to the clip as it is NOW), exactly as for a plain trim, so the mouse drag can keep
+ * dispatching it and Undo still collapses a whole drag into one step.
  */
-export function trimClip(clipId: ClipId, edge: 'in' | 'out', deltaTicks: Ticks): Command {
+export function trimClip(
+  clipId: ClipId,
+  edge: 'in' | 'out',
+  deltaTicks: Ticks,
+  opts: { ripple?: boolean } = {},
+): Command {
+  if (opts.ripple) return rippleTrimClip(clipId, edge, deltaTicks);
   return {
     label: 'Trim Clip',
     coalesceKey: `trim:${clipId}:${edge}`,
@@ -80,6 +95,48 @@ export function trimClip(clipId: ClipId, edge: 'in' | 'out', deltaTicks: Ticks):
         const newDuration = Math.min(maxDuration, Math.max(minLen, c.duration + deltaTicks));
         return { ...c, duration: newDuration, sourceOut: c.sourceIn + newDuration };
       });
+    },
+  };
+}
+
+function rippleTrimClip(clipId: ClipId, edge: 'in' | 'out', deltaTicks: Ticks): Command {
+  return {
+    label: 'Ripple Trim Clip',
+    coalesceKey: `trim:${clipId}:${edge}`,
+    apply: (project) => {
+      const seq = getActiveSequence(project);
+      const track = seq.tracks.find((t) => t.clips.some((c) => c.id === clipId));
+      if (!track || track.locked) return project;
+      const clip = track.clips.find((c) => c.id === clipId)!;
+      const minLen = 1;
+      const oldEnd = clip.start + clip.duration;
+      const media = clip.mediaId ? project.media.find((m) => m.id === clip.mediaId) : undefined;
+      const sourceLimit = media && media.duration > 0 ? media.duration : Infinity;
+
+      let trimmed: Clip;
+      /** How far the clip's END moved: what the clips after it have to follow. */
+      let shift: number;
+      if (edge === 'in') {
+        // The head moves, the clip does not: its start stays put and the footage behind the
+        // head is cut away (or restored). sourceIn can never go below 0.
+        const applied = clampTicks(deltaTicks, -clip.sourceIn, clip.duration - minLen);
+        if (applied === 0) return project;
+        trimmed = { ...clip, duration: clip.duration - applied, sourceIn: clip.sourceIn + applied };
+        shift = -applied;
+      } else {
+        const maxDuration = sourceLimit === Infinity ? Infinity : sourceLimit - clip.sourceIn;
+        const newDuration = Math.min(maxDuration, Math.max(minLen, clip.duration + deltaTicks));
+        if (newDuration === clip.duration) return project;
+        trimmed = { ...clip, duration: newDuration, sourceOut: clip.sourceIn + newDuration };
+        shift = newDuration - clip.duration;
+      }
+      return updateTrack(project, seq.id, track.id, (t) => ({
+        ...t,
+        clips: t.clips.map((c) => {
+          if (c.id === clipId) return trimmed;
+          return c.start >= oldEnd ? { ...c, start: (c.start + shift) as Ticks } : c;
+        }),
+      }));
     },
   };
 }
@@ -196,6 +253,11 @@ export function deleteClip(clipId: ClipId): Command {
 /**
  * Ripple-delete: remove the clip and pull everything after it on the same track left by
  * the clip's duration, closing the gap.
+ *
+ * Only the clip's own track moves. Other tracks keep their clips exactly where they are, so
+ * nothing there can be overlapped or knocked out of sync, and a locked track is left completely
+ * alone: its clips are neither deleted nor shifted. Gaps that already existed stay the size they
+ * were (everything after the removed clip moves by that clip's duration and no more).
  */
 export function rippleDeleteClips(clipIds: readonly ClipId[]): Command {
   const ids = new Set(clipIds);
@@ -212,10 +274,13 @@ export function rippleDeleteClips(clipIds: readonly ClipId[]): Command {
        * deletes would have.
        */
       for (const track of seq.tracks) {
+        if (track.locked) continue;
         const removed = track.clips.filter((c) => ids.has(c.id));
         if (removed.length === 0) continue;
         next = updateTrack(next, seq.id, track.id, (t) => ({
           ...t,
+          // A transition cannot outlive either of its clips.
+          transitions: t.transitions.filter((tr) => !ids.has(tr.fromClipId) && !ids.has(tr.toClipId)),
           clips: t.clips
             .filter((c) => !ids.has(c.id))
             .map((c) => {
@@ -582,9 +647,9 @@ export function setTransitionType(trackId: TrackId, transitionId: string, type: 
 /**
  * Drop transitions whose clips are gone.
  *
- * Called by delete/split so the document does not accumulate orphans. The renderer already
- * ignores them, so this is hygiene rather than correctness — but an orphan that survives a
- * save and then matches a recycled id would stop being harmless.
+ * Deleting a clip now drops its transitions itself (see `removeClip` in mutations.ts), so this is
+ * only a sweep for a document that arrives with orphans already in it. The renderer ignores
+ * them either way, so this is hygiene rather than correctness.
  */
 export function pruneTransitions(trackId: TrackId): Command {
   return {

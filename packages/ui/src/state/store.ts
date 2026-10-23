@@ -33,6 +33,8 @@ import {
   newClipId,
   RESOLUTIONS,
   splitClipsAt,
+  deleteClips as deleteClipsCommand,
+  rippleDeleteClips as rippleDeleteClipsCommand,
   getActiveSequence,
   History,
   registerBuiltins,
@@ -138,6 +140,11 @@ interface AppState {
   canRedo: () => boolean;
   /** Split at the playhead: selected clips it bisects, or every clip under it if none selected. */
   splitAtPlayhead: () => void;
+  /**
+   * Delete clips the way the timeline is currently set to: with Auto Ripple on, the gap closes
+   * (see `rippleDeleteClips`); off, the clips are simply removed. Clears the selection.
+   */
+  removeClips: (ids: readonly ClipId[]) => void;
 
   selectClip: (id: ClipId | null, additive?: boolean) => void;
   /** Select every clip in the sequence that an edit could actually act on. */
@@ -278,6 +285,14 @@ export function createAppStore(bridge: PlatformBridge) {
     canUndo: () => get().history.canUndo,
     canRedo: () => get().history.canRedo,
 
+    removeClips: (ids) => {
+      if (ids.length === 0) return;
+      const s = get();
+      s.dispatch(s.rippleEnabled ? rippleDeleteClipsCommand(ids) : deleteClipsCommand(ids));
+      // The ids would otherwise outlive the clips (see the note at the Delete shortcut).
+      s.selectClip(null);
+    },
+
     splitAtPlayhead: () => {
       const s = get();
       const seq = s.sequence();
@@ -415,7 +430,15 @@ export function createAppStore(bridge: PlatformBridge) {
     // 0.1 px/s fits about three hours into a ~1000px timeline; 400 is the closest useful zoom.
     setPixelsPerSecond: (pps) => set({ pixelsPerSecond: Math.max(MIN_PPS, Math.min(MAX_PPS, pps)) }),
     toggleSnap: () => set({ snapEnabled: !get().snapEnabled }),
-    toggleRipple: () => set({ rippleEnabled: !get().rippleEnabled }),
+    /*
+     * Auto Ripple is remembered between launches: the toggle writes the same preference the
+     * Settings window edits (`rippleByDefault`), so the two can never disagree.
+     */
+    toggleRipple: () => {
+      const rippleEnabled = !get().rippleEnabled;
+      set({ rippleEnabled });
+      get().setPreference('rippleByDefault', rippleEnabled);
+    },
     setSnapGuide: (snapGuide) => set({ snapGuide }),
     setSearch: (search) => set({ search }),
     notify: (title, kind = 'info', body) =>

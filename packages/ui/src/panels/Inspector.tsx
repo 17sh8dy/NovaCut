@@ -48,11 +48,20 @@ const TABS: { id: InspectorTab; label: string }[] = [
  */
 function TransitionInspector({ selection }: { selection: { trackId: TrackId; id: string } }) {
   const store = useAppStore();
-  const found = useStore((s) => {
-    const track = s.sequence().tracks.find((t) => t.id === selection.trackId);
-    const transition = track?.transitions.find((t) => t.id === selection.id);
-    return track && transition ? { track, transition } : null;
-  });
+  /*
+   * Two selectors that each return an object ALREADY IN the store, never a new one.
+   *
+   * This used to be one selector building `{ track, transition }` on every call. Zustand 5 hands
+   * the selector's result straight to useSyncExternalStore, which re-runs it constantly and treats
+   * a fresh object each time as "the state changed" — so selecting any transition threw React
+   * error 185 (maximum update depth) and took the Inspector down. A selector must return something
+   * with a stable identity.
+   */
+  const trackFound = useStore((s) => s.sequence().tracks.find((t) => t.id === selection.trackId));
+  const transitionFound = useStore((s) =>
+    s.sequence().tracks.find((t) => t.id === selection.trackId)?.transitions.find((t) => t.id === selection.id),
+  );
+  const found = trackFound && transitionFound ? { track: trackFound, transition: transitionFound } : null;
 
   // The transition can vanish under the panel — an undo, or a clip deleted from beneath it.
   if (!found) {

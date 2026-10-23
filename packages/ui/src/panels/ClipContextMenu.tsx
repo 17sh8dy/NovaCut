@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { Copy, Scissors, Trash2, EyeOff, ChevronsLeftRight } from 'lucide-react';
 import {
-  deleteClip,
   duplicateClip,
   rippleDeleteClip,
   splitClip,
@@ -64,7 +63,7 @@ export function ClipContextMenu({ x, y, clip, onClose }: Props) {
       )}
       <div className="oc-ctx__sep" />
       {item('Ripple Delete', <ChevronsLeftRight size={15} />, () => store.getState().dispatch(rippleDeleteClip(clip.id)), formatCombo(shortcuts.rippleDelete))}
-      {item('Delete', <Trash2 size={15} />, () => store.getState().dispatch(deleteClip(clip.id)), formatCombo(shortcuts.delete), true)}
+      {item('Delete', <Trash2 size={15} />, () => store.getState().removeClips([clip.id]), formatCombo(shortcuts.delete), true)}
     </div>
   );
 }

@@ -393,7 +393,16 @@ export class FrameSource {
   }
 }
 
-/** Cache of FrameSources keyed by media id, so each asset decodes once. */
+/**
+ * Cache of FrameSources keyed by media id AND lane, so each asset decodes once per lane.
+ *
+ * A lane exists because one decoder can only be at one point in a file at a time. A transition
+ * puts two clips on screen at once, and the clips either side of a cut are very often the same
+ * file (every split makes two). Sharing one element meant each frame re-sought it between the two
+ * clips' positions, and the "last good frame" safety net then served the OTHER clip's picture
+ * while the seek landed. That is the flash seen on every transition. The compositor now gives
+ * neighbouring clips different lanes (see `Compositor.laneFor`), so the two never share a decoder.
+ */
 export class FrameSourcePool {
   private sources = new Map<string, FrameSource>();
   /** Notified whenever any source produces a new frame — used to refresh a paused preview. */
@@ -401,11 +410,12 @@ export class FrameSourcePool {
 
   constructor(private resolveUrl: (src: string) => string) {}
 
-  get(media: MediaAsset): FrameSource {
-    let s = this.sources.get(media.id);
+  get(media: MediaAsset, lane = ''): FrameSource {
+    const key = lane ? `${media.id}#${lane}` : media.id;
+    let s = this.sources.get(key);
     if (!s) {
       s = new FrameSource(media, this.resolveUrl, () => this.onFrameReady());
-      this.sources.set(media.id, s);
+      this.sources.set(key, s);
     }
     return s;
   }
@@ -418,9 +428,13 @@ export class FrameSourcePool {
     return Promise.all([...this.sources.values()].map((s) => s.whenReady(timeoutMs))).then(() => undefined);
   }
 
+  /** Drop every lane of a media asset. */
   dispose(mediaId: string): void {
-    this.sources.get(mediaId)?.dispose();
-    this.sources.delete(mediaId);
+    for (const key of [...this.sources.keys()]) {
+      if (key !== mediaId && !key.startsWith(`${mediaId}#`)) continue;
+      this.sources.get(key)?.dispose();
+      this.sources.delete(key);
+    }
   }
 
   /**
@@ -434,13 +448,13 @@ export class FrameSourcePool {
    */
   pruneTo(liveMediaIds: Iterable<string>): number {
     const live = new Set(liveMediaIds);
-    let dropped = 0;
-    for (const id of [...this.sources.keys()]) {
-      if (live.has(id)) continue;
-      this.dispose(id);
-      dropped++;
+    const dead = new Set<string>();
+    for (const key of this.sources.keys()) {
+      const id = key.split('#')[0]!;
+      if (!live.has(id)) dead.add(id);
     }
-    return dropped;
+    for (const id of dead) this.dispose(id);
+    return dead.size;
   }
 
   disposeAll(): void {

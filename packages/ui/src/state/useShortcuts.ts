@@ -8,7 +8,7 @@
  */
 
 import { useEffect } from 'react';
-import { deleteClips, duplicateClips, rippleDeleteClips } from '@opencut/core';
+import { duplicateClips, rippleDeleteClips } from '@opencut/core';
 import { useAppStore } from './context.js';
 import { usePlayback } from './playbackContext.js';
 import { comboFromEvent, comboToId } from './shortcuts.js';
@@ -66,8 +66,8 @@ export function useShortcuts() {
            */
           case 'delete':
             if (!selected.length) return;
-            s.dispatch(deleteClips(selected));
-            return s.selectClip(null);
+            // Follows the Auto Ripple toggle; Shift+Delete below always ripples.
+            return s.removeClips(selected);
           case 'rippleDelete':
             if (!selected.length) return;
             s.dispatch(rippleDeleteClips(selected));

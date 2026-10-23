@@ -12,6 +12,7 @@ import {
   ZoomIn,
   ZoomOut,
   Headphones,
+  ChevronsLeftRight,
 } from 'lucide-react';
 import {
   addClipOnFreeTrack,
@@ -254,10 +255,21 @@ function TimelineToolbar() {
           <Magnet size={16} />
         </IconButton>
       </Tooltip>
-      <Tooltip label="Ripple edits">
-        <IconButton active={ripple} onClick={() => store.getState().toggleRipple()}>
-          <span style={{ fontSize: 11, fontWeight: 700 }}>R</span>
-        </IconButton>
+      <Tooltip
+        label={ripple ? 'Auto Ripple: on' : 'Auto Ripple: off'}
+        shortcut={ripple ? 'Deleting or shortening a clip closes the gap' : 'Gaps are left where they are'}
+      >
+        <button
+          type="button"
+          className="oc-ripple-toggle"
+          data-active={ripple ? 'true' : undefined}
+          aria-pressed={ripple}
+          onClick={() => store.getState().toggleRipple()}
+        >
+          <ChevronsLeftRight size={14} />
+          <span>Auto Ripple</span>
+          <i className="oc-ripple-toggle__state">{ripple ? 'On' : 'Off'}</i>
+        </button>
       </Tooltip>
 
       <div className="oc-zoom">

@@ -29,7 +29,9 @@ import {
   hasTextAnimation,
   NEUTRAL_TEXT_ANIMATION,
   resolveTextAnimation,
+  resolvedTransitions,
   sample,
+  seconds,
   toSeconds,
   transitionAtTime,
   videoTracksTopDown,
@@ -50,6 +52,9 @@ import { runEffectChain } from '../gl/effectChain.js';
 import { getTransitionFragment, TRANSITION_VERTEX_SHADER } from './transitions.js';
 import { rasterizeText } from './textRaster.js';
 import { dthrottle } from '../debug.js';
+
+/** How far ahead of a transition's window its incoming clip is positioned during playback. */
+const PREROLL_TICKS = seconds(1.5);
 
 export interface RenderContext {
   sequence: Sequence;
@@ -163,6 +168,55 @@ export class Compositor {
   }
 
   /**
+   * Which decoder a clip uses. Clips on a track alternate between two lanes by their order, so
+   * ANY two neighbours — which is exactly what a transition joins — get different decoders even
+   * when they are cut from the same file, and a clip keeps its decoder as it goes from "incoming"
+   * to "playing" instead of handing over mid-transition. The track index keeps clips on different
+   * tracks from sharing one either.
+   */
+  private laneFor(sequence: Sequence, clip: Clip): string {
+    for (let ti = 0; ti < sequence.tracks.length; ti++) {
+      const clips = sequence.tracks[ti]!.clips;
+      if (!clips.some((c) => c.id === clip.id)) continue;
+      const order = [...clips].sort((a, b) => a.start - b.start);
+      return `${ti}:${order.findIndex((c) => c.id === clip.id) & 1}`;
+    }
+    return '';
+  }
+
+  /**
+   * During live playback, move each upcoming transition's INCOMING clip to where its window opens
+   * before the window gets there. Without it the incoming decoder is idle somewhere else, the
+   * first frames of the transition wait on a seek, and the stale picture it shows meanwhile is
+   * the flash. Seeks only (the element stays paused); sync() starts it when the window opens.
+   * Skipped for export and scrubbing, which seek every frame exactly anyway.
+   */
+  private prerollTransitions(ctx: RenderContext): void {
+    for (const track of videoTracksTopDown(ctx.sequence)) {
+      if (track.hidden || track.transitions.length === 0) continue;
+      const activeLanes = new Set<string>();
+      for (const c of track.clips) {
+        if (c.start <= ctx.time && ctx.time < c.start + c.duration) activeLanes.add(this.laneFor(ctx.sequence, c));
+      }
+      const crossing = transitionAtTime(track, ctx.time);
+      if (crossing) {
+        activeLanes.add(this.laneFor(ctx.sequence, crossing.from));
+        activeLanes.add(this.laneFor(ctx.sequence, crossing.to));
+      }
+      for (const { to, start } of resolvedTransitions(track)) {
+        const lead = start - ctx.time;
+        if (lead <= 0 || lead > PREROLL_TICKS || !to.enabled) continue;
+        const media = to.mediaId ? ctx.getMedia(to.mediaId) : undefined;
+        if (!media || media.kind === 'audio' || media.kind === 'image') continue;
+        const lane = this.laneFor(ctx.sequence, to);
+        if (activeLanes.has(lane)) continue; // that decoder is busy showing something on screen
+        const rate = to.speed.reverse ? -to.speed.rate : to.speed.rate;
+        this.sources.get(media, lane).seekTo((to.sourceIn + (start - to.start) * rate) as Ticks);
+      }
+    }
+  }
+
+  /**
    * Map timeline time → source time for one clip and reconcile its decoder to it.
    *
    * Shared by prepare() and renderClip() so the seek that gets issued and the seek that gets
@@ -170,7 +224,7 @@ export class Compositor {
    * it; prepare() ignores the return.
    */
   private syncClipSource(ctx: RenderContext, clip: Clip, media: MediaAsset): FrameSource {
-    const source = this.sources.get(media);
+    const source = this.sources.get(media, this.laneFor(ctx.sequence, clip));
     const localTicks = ctx.time - clip.start;
     const speedRate = clip.speed.reverse ? -clip.speed.rate : clip.speed.rate;
     const sourceTicks = clip.sourceIn + localTicks * speedRate;
@@ -196,6 +250,7 @@ export class Compositor {
     this.ctx.clear(br, bg, bb, 1);
     this.ctx.enableSourceOver();
 
+    if (ctx.playing) this.prerollTransitions(ctx);
     const active = this.walkFrame(
       ctx,
       (crossing) => this.renderTransition(ctx, crossing),
