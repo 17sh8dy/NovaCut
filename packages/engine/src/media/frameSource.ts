@@ -19,6 +19,17 @@ import { dlog, dthrottle } from '../debug.js';
  */
 const SEEK_WATCHDOG_MS = 4000;
 
+/**
+ * The fastest effective rate at which a video element is left to PLAY (8x is the highest speed any
+ * control offers). Measured on 1080p60 H.264 at 61 Mbps in this Electron, a bare element holds 12x
+ * with no seeks. On a decoder that cannot keep up it simply falls behind and the drift correction in
+ * `sync` brings it back, which degrades to a stepped picture rather than a stalled one. Beyond this
+ * rate the source is stepped by seeking instead.
+ */
+const PLAY_MAX_RATE = 8;
+/** At least this long between corrective seeks while playing. */
+const CORRECTION_COOLDOWN_MS = 250;
+
 export type FrameBitmap = HTMLVideoElement | HTMLImageElement | HTMLCanvasElement | ImageBitmap;
 
 /**
@@ -49,6 +60,10 @@ export class FrameSource {
   private lastSeekTarget = -1;
   /** Releases a seek that never completes; see the note in seekTo. */
   private seekWatchdog: ReturnType<typeof setTimeout> | undefined;
+  /** When the seek now in flight was issued, and a running estimate of how long seeks take to land. */
+  private seekStartedAt = 0;
+  private seekLatencyMs = 150;
+  private lastCorrectionAt = 0;
   /**
    * A snapshot of the last frame the element actually had decoded, taken right before a seek is
    * issued. See the note on `getFrame()` for why this exists: without it, every seek — which is
@@ -113,6 +128,12 @@ export class FrameSource {
       };
       v.onseeked = () => {
         this.seeking = false;
+        if (this.seekStartedAt) {
+          // Smoothed, so one slow seek does not make the next ones aim wildly ahead.
+          const took = performance.now() - this.seekStartedAt;
+          this.seekLatencyMs = Math.min(1500, Math.max(30, this.seekLatencyMs * 0.7 + took * 0.3));
+          this.seekStartedAt = 0;
+        }
         dlog('decode', 'video seeked', { id: media.id, currentTime: v.currentTime, readyState: v.readyState });
         this.onReady(); // re-render after a scrub settles
         if (this.pendingSeek != null) {
@@ -182,7 +203,7 @@ export class FrameSource {
     // Forward playback at a positive rate: let the element play at the clip's speed. A video
     // element can't play in reverse, and rate 0 is meaningless — those fall through to the
     // per-frame seek path below (so reverse/held frames still render, just via seeking).
-    if (playing && rate > 0) {
+    if (playing && rate > 0 && rate <= PLAY_MAX_RATE) {
       // Match the element's speed to the clip's, or drift accumulates and the correction
       // seek below fires every frame → the stutter/flicker seen on sped-up clips.
       v.playbackRate = Math.max(0.0625, Math.min(16, rate));
@@ -191,12 +212,31 @@ export class FrameSource {
         void v.play().catch(() => {});
       }
       const target = toSeconds(sourceTime);
-      // Correct only meaningful drift so playback stays smooth.
-      if (Number.isFinite(target) && !this.seeking && Math.abs(v.currentTime - target) > 0.5) {
+      /*
+       * Correct only meaningful drift, and make the correction STICK.
+       *
+       * A seek takes a while to land (tens to hundreds of ms on long-GOP footage). By then the
+       * playhead has moved on by latency x rate, so a fixed 0.5 s threshold has a cliff: at 2x a
+       * 0.2 s seek leaves the element 0.4 s behind (fine), at 3x it leaves it 0.6 s behind, which is
+       * over the threshold, which triggers another seek, forever. Measured: 70 seeks in 4 s and
+       * about 2 distinct pictures a second above 2x. So the threshold grows with the rate, the seek
+       * aims ahead by the latency it is expected to take, and corrections are rate-limited.
+       */
+      const threshold = Math.max(0.5, 0.25 * rate);
+      const now = performance.now();
+      if (
+        Number.isFinite(target) &&
+        !this.seeking &&
+        Math.abs(v.currentTime - target) > threshold &&
+        now - this.lastCorrectionAt > CORRECTION_COOLDOWN_MS
+      ) {
+        this.lastCorrectionAt = now;
         this.snapshotIfReady();
         this.seeking = true;
+        this.seekStartedAt = now;
+        const limit = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : Infinity;
         try {
-          v.currentTime = target;
+          v.currentTime = Math.min(limit, target + rate * (this.seekLatencyMs / 1000));
         } catch {
           this.seeking = false;
         }
@@ -251,6 +291,7 @@ export class FrameSource {
     this.lastSeekTarget = target;
     this.snapshotIfReady();
     this.seeking = true;
+    this.seekStartedAt = performance.now();
 
     /*
      * Defence in depth for a seek that genuinely never completes — a corrupt file, a decoder that

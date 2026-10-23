@@ -25,7 +25,23 @@ interface ClipNode {
   el: HTMLAudioElement;
   source: MediaElementAudioSourceNode;
   gain: GainNode;
+  /** When this element was last re-seeked to correct drift (performance.now()). */
+  lastCorrectionAt: number;
 }
+
+/**
+ * The fastest effective rate (clip speed x preview speed) at which audio is still played.
+ *
+ * Above about 2x an audio element can no longer hold its clock at the rate it was asked for, and
+ * what it plays is not listenable anyway. Trying regardless made the drift check below re-seek the
+ * element hundreds of times a second (measured: ~460 seeks in 4 s at 3x), and those seeks hammer the
+ * same file the video is decoding from, which starved the picture down to about 1 frame a second.
+ * Past this rate the clip is simply silent, like every editor's fast-forward.
+ */
+export const MAX_AUDIO_RATE = 2;
+
+/** A corrective seek is skipped if one happened this recently: seeking is not free and drift heals. */
+const CORRECTION_COOLDOWN_MS = 350;
 
 export class AudioEngine {
   private ctx: AudioContext;
@@ -82,7 +98,7 @@ export class AudioEngine {
     const source = this.ctx.createMediaElementSource(el);
     const gain = this.ctx.createGain();
     source.connect(gain).connect(this.master);
-    node = { el, source, gain };
+    node = { el, source, gain, lastCorrectionAt: 0 };
     this.nodes.set(clip.id, node);
     dlog('audio', 'clip audio node created', { clip: clip.id, mediaId: media.id, url, hasAudio: media.hasAudio });
     return node;
@@ -137,12 +153,25 @@ export class AudioEngine {
         );
         const inClip = crossing ? true : time >= clip.start && time < clip.start + clip.duration;
 
-        if (inClip && audible && !clip.audio.muted) {
+        // Reversed clips and very fast ones are silent (see MAX_AUDIO_RATE); an element cannot play
+        // backwards, and chasing a reversed position with seeks is the same storm.
+        const effRate = Math.abs(clip.speed.rate) * speed;
+        const playable = !clip.speed.reverse && effRate <= MAX_AUDIO_RATE;
+
+        if (inClip && audible && !clip.audio.muted && playable) {
           const localTicks = time - clip.start;
-          const sourceTime = toSeconds(clip.sourceIn + localTicks * (clip.speed.reverse ? -1 : clip.speed.rate));
-          if (Math.abs(node.el.currentTime - sourceTime) > 0.2) node.el.currentTime = sourceTime;
+          const sourceTime = toSeconds(clip.sourceIn + localTicks * clip.speed.rate);
+          // How far the element may stray before it is re-seeked. It grows with the rate because the
+          // element's reported position lags its output by a fixed time, which is a longer stretch
+          // of media at higher speeds.
+          const drift = Math.abs(node.el.currentTime - sourceTime);
+          const now = performance.now();
+          if (drift > 0.2 + 0.1 * effRate && !node.el.seeking && now - node.lastCorrectionAt > CORRECTION_COOLDOWN_MS) {
+            node.lastCorrectionAt = now;
+            node.el.currentTime = sourceTime;
+          }
           // × preview speed so audio keeps pace with the playhead (same reason as video).
-          node.el.playbackRate = Math.max(0.0625, Math.min(16, Math.abs(clip.speed.rate) * speed));
+          node.el.playbackRate = Math.max(0.0625, Math.min(16, effRate));
           node.gain.gain.value = this.gainFor(clip, localTicks) * this.crossfadeFor(crossing, clip.id, time);
           const wasPaused = node.el.paused;
           if (this.playing && node.el.paused) void node.el.play().catch((e) => dlog('audio', 'el.play() rejected', { clip: clip.id, err: String(e) }));
