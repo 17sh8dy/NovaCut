@@ -25,8 +25,8 @@ import {
   type ShortcutId,
 } from './shortcuts.js';
 import {
-  addClip,
   addMedia as addMediaCommand,
+  placeClipSmart,
   removeMedia as removeMediaCommand,
   createClipFromMedia,
   createProject,
@@ -573,13 +573,15 @@ export function createAppStore(bridge: PlatformBridge) {
     addMediaToTimeline: (media, trackId, at) => {
       const seq = get().sequence();
       const kindWanted = media.kind === 'audio' ? 'audio' : 'video';
-      const track =
-        (trackId ? seq.tracks.find((t) => t.id === trackId) : undefined) ??
-        seq.tracks.find((t) => t.kind === kindWanted);
-      if (!track) return;
-      const start = at ?? nextFreeStart(track.clips);
+      // The track asked for, if it can hold this kind of media; otherwise the first track that can.
+      // (A drop on the wrong kind of lane no longer fails: it is sent to the right section.)
+      const asked = trackId ? seq.tracks.find((t) => t.id === trackId) : undefined;
+      const preferred = asked && asked.kind === kindWanted ? asked : seq.tracks.find((t) => t.kind === kindWanted && !t.locked);
+      const start = at ?? (preferred ? nextFreeStart(preferred.clips) : 0);
       const clip = createClipFromMedia(media, start);
-      get().dispatch(addClip(track.id, clip));
+      // Never on top of something: the preferred track if that span is free, otherwise the nearest free
+      // track of the right kind, otherwise a new one. One undo step.
+      get().dispatch(placeClipSmart(clip, preferred?.id));
       get().selectClip(clip.id);
     },
   }));

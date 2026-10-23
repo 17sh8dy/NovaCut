@@ -154,6 +154,12 @@ export const SETTINGS: SettingDef[] = [
     keywords: 'remember last project restore session reopen',
   },
   {
+    id: 'confirmRemoveMedia', category: 'General', group: 'Startup', control: 'toggle', status: 'live',
+    label: 'Confirm before removing media from a project',
+    desc: 'The reminder that removing media only takes it out of Nova Cut and never deletes the file. Also switched off by "Do not show again" on the prompt itself.',
+    keywords: 'confirm remove media library delete prompt warning dialog do not show again',
+  },
+  {
     id: 'confirmOnClose', category: 'General', group: 'Startup', control: 'toggle', status: 'live',
     label: 'Confirm before closing unsaved projects',
     desc: 'Turning this off discards unsaved work without asking.',

@@ -505,3 +505,25 @@
 .oc-ripple-toggle[data-active='true'] .oc-ripple-toggle__state {
   color: var(--accent-text);
 }
+
+/* The "drop here for a new track" strip shown under the lanes while a clip is being dragged. */
+.oc-newtrack {
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  margin: 6px 8px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.oc-newtrack:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}

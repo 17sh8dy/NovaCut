@@ -14,6 +14,7 @@ import { IconButton, Tooltip } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
 import { usePlayback } from '../state/playbackContext.js';
 import { FpsOverlay } from '../components/FpsOverlay.js';
+import { TextDragLayer } from './TextDragLayer.js';
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2];
 
@@ -55,6 +56,8 @@ export function Preview() {
             pixels by construction.
           */}
           <canvas ref={canvasRef} width={seq.width} height={seq.height} />
+          {/* Grab a title here and drag it anywhere; see TextDragLayer. */}
+          <TextDragLayer />
           {fpsOverlay && <FpsOverlay />}
         </div>
       </div>

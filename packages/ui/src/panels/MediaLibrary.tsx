@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Film, ImageIcon, Music, Search, Upload, Loader2, X } from 'lucide-react';
 import {
   formatClock,
@@ -8,7 +9,7 @@ import {
   type MediaKind,
 } from '@opencut/core';
 import { dlog } from '@opencut/engine';
-import { EmptyState } from '../components/primitives/index.js';
+import { EmptyState, Modal } from '../components/primitives/index.js';
 import { useAppStore, useStore } from '../state/context.js';
 
 const KIND_ICON: Record<MediaKind, typeof Film> = {
@@ -26,6 +27,9 @@ export function MediaLibrary() {
   const selected = useStore((s) => s.selectedMediaIds);
   const importProgress = useStore((s) => s.importProgress);
   const [dragOver, setDragOver] = useState(false);
+  /** A removal waiting on the person's answer, and whether they ticked "Do not show again". */
+  const [pendingRemove, setPendingRemove] = useState<{ ids: string[]; label: string; detail: string } | null>(null);
+  const [dontAsk, setDontAsk] = useState(false);
   const [sort, setSort] = useState<'name' | 'recent' | 'kind'>('recent');
 
   const filtered = useMemo(() => {
@@ -193,14 +197,23 @@ export function MediaLibrary() {
       .project.sequences.flatMap((seq) => seq.tracks.flatMap((t) => t.clips))
       .filter((c) => c.mediaId !== undefined && ids.includes(c.mediaId)).length;
     const detail = usedBy > 0 ? ` and ${usedBy} clip${usedBy > 1 ? 's' : ''} using it from the timeline` : '';
-    const ok = window.confirm(
-      `Remove ${label} from this project${detail}?
+    // "Do not show again" (or the Settings toggle) skips the prompt; the removal still lands in
+    // Undo, and the toast below still says the file was not touched.
+    if (!store.getState().preferences.confirmRemoveMedia) return performRemove(ids, label);
+    setDontAsk(false);
+    setPendingRemove({ ids, label, detail });
+  };
 
-The file stays on your device — this only removes it from Nova Cut.`,
-    );
-    if (!ok) return;
+  const performRemove = (ids: string[], label: string) => {
     store.getState().removeMedia(ids);
     store.getState().notify(`Removed ${label} from the project`, 'success', 'The file on your device was not touched.');
+  };
+
+  const confirmRemove = () => {
+    if (!pendingRemove) return;
+    if (dontAsk) store.getState().setPreference('confirmRemoveMedia', false);
+    performRemove(pendingRemove.ids, pendingRemove.label);
+    setPendingRemove(null);
   };
 
   /** Only OS files count; dragging a card out of the library toward the timeline must not light this up. */
@@ -264,6 +277,32 @@ The file stays on your device — this only removes it from Nova Cut.`,
       }}
       onDrop={onDrop}
     >
+      {pendingRemove &&
+        createPortal(
+          <Modal
+            title="Remove from project?"
+            maxWidth={440}
+            onClose={() => setPendingRemove(null)}
+            footer={
+              <div className="oc-confirm__footer">
+                <label className="oc-confirm__remember">
+                  <input type="checkbox" checked={dontAsk} onChange={(e) => setDontAsk(e.target.checked)} />
+                  Do not show again
+                </label>
+                <button className="oc-btn" onClick={() => setPendingRemove(null)}>Cancel</button>
+                <button className="oc-btn oc-btn--primary" onClick={confirmRemove} autoFocus>Remove</button>
+              </div>
+            }
+          >
+            <p style={{ margin: 0 }}>
+              Remove <strong>{pendingRemove.label}</strong> from this project{pendingRemove.detail}?
+            </p>
+            <p style={{ margin: 'var(--space-3) 0 0', color: 'var(--text-secondary)' }}>
+              The file stays on your device. This only removes it from Nova Cut.
+            </p>
+          </Modal>,
+          document.body,
+        )}
       {dragOver && (
         <div className="oc-media-dropveil" aria-hidden="true">
           <Upload size={28} />

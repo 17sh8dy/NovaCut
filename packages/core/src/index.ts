@@ -18,8 +18,10 @@ export * from './model/queries.js';
 export * from './commands/history.js';
 export * from './commands/mutations.js';
 export * from './commands/timelineCommands.js';
+export * from './commands/placement.js';
 
 // Effects / transitions / filters / animations
+export * from './model/clipGeometry.js';
 export * from './effects/registry.js';
 export * from './effects/definitions.js';
 export * from './effects/glTransitions.js';

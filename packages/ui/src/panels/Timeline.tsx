@@ -44,6 +44,7 @@ import {
   clipDragReadout,
   isClipDragging,
   subscribeClipDrag,
+  activeMoveKind,
   type ClipDragMode,
 } from './clipDrag.js';
 
@@ -173,11 +174,27 @@ export function Timeline() {
             {seq.tracks.map((track) => (
               <Lane key={track.id} track={track} toPx={toPx} toTicks={toTicks} />
             ))}
+            <NewTrackZones />
             <SnapGuide toPx={toPx} />
             <Playhead toPx={toPx} onSeek={seekFromEvent} />
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * "Drop here for a new track": appears under the lanes while a clip is being dragged, for the kind
+ * of track that clip belongs on. Releasing over it puts the clip on a brand-new track, which is how
+ * you get a clip off the track it shares with others without having to add one first.
+ */
+function NewTrackZones() {
+  const kind = useSyncExternalStore(subscribeClipDrag, activeMoveKind);
+  if (!kind) return null;
+  return (
+    <div className="oc-newtrack" data-new-track={kind}>
+      <span>＋ Drop here for a new {kind} track</span>
     </div>
   );
 }
@@ -459,9 +476,9 @@ const Lane = memo(function Lane({
     if (!mediaId) return;
     const media = store.getState().project.media.find((m) => m.id === mediaId);
     if (!media) return;
-    if ((media.kind === 'audio') !== (track.kind === 'audio')) {
-      return store.getState().notify('Drop audio on audio tracks', 'info');
-    }
+    // Dropped on the wrong kind of lane? Send it to the right section instead of refusing.
+    const wrongLane = (media.kind === 'audio') !== (track.kind === 'audio');
+    if (wrongLane) store.getState().notify(media.kind === 'audio' ? 'Audio goes on an audio track' : 'Video goes on a video track', 'info', 'Placed there for you.');
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const scroller = (e.currentTarget as HTMLElement).closest('.oc-timeline__scroll');
     const x = e.clientX - rect.left + (scroller?.scrollLeft ?? 0);
@@ -605,7 +622,12 @@ const TimelineClip = memo(function TimelineClip({
     // arm a drag left the gesture half-open when the menu swallowed the matching release.
     if (e.button !== 0) return;
     e.stopPropagation();
-    store.getState().selectClip(clip.id, e.shiftKey);
+    // Grabbing a member of a multi-selection keeps the selection so the whole group can be dragged;
+    // a plain click on it (no drag) collapses to that clip when the press is released (clipDrag.ts).
+    const sel = store.getState().selectedClipIds;
+    if (!(mode === 'move' && !e.shiftKey && sel.length > 1 && sel.includes(clip.id))) {
+      store.getState().selectClip(clip.id, e.shiftKey);
+    }
     /*
      * Deliberately no `setPointerCapture`: capture binds the gesture to this element, and this
      * element is exactly what disappears when the clip crosses to another track. The session

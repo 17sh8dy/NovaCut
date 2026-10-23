@@ -10,7 +10,9 @@ import { newClipId, newId, newTrackId, type ClipId, type MediaId, type SequenceI
 import { getActiveSequence } from '../model/queries.js';
 import { clampTicks, type Ticks } from '../model/time.js';
 import { getTransitionDef } from '../effects/registry.js';
-import type { Clip, MediaAsset, Track, Transition } from '../model/types.js';
+import { newKeyframeId } from '../model/ids.js';
+import { upsertKeyframe } from '../model/animation.js';
+import type { AnimatedValue, Clip, MediaAsset, Track, Transition } from '../model/types.js';
 import type { Command } from './history.js';
 import { insertClip, removeClip, updateClip, updateSequence, updateTrack, updateTrackIfChanged } from './mutations.js';
 
@@ -137,6 +139,36 @@ function rippleTrimClip(clipId: ClipId, edge: 'in' | 'out', deltaTicks: Ticks): 
           return c.start >= oldEnd ? { ...c, start: (c.start + shift) as Ticks } : c;
         }),
       }));
+    },
+  };
+}
+
+/**
+ * Put a clip's picture at (x, y), in sequence pixels from the frame centre — what dragging a title
+ * around the preview does. Follows the same rule as the Inspector's Position fields: if the position
+ * is animated the new value is written as a keyframe at `at` (the playhead), otherwise it replaces
+ * the static value. Coalesced per clip, so a whole drag is one undo step.
+ */
+export function setClipPosition(clipId: ClipId, x: number, y: number, at: Ticks): Command {
+  return {
+    label: 'Move Text',
+    coalesceKey: `position:${clipId}`,
+    apply: (project) => {
+      const seq = getActiveSequence(project);
+      const track = seq.tracks.find((t) => t.clips.some((c) => c.id === clipId));
+      const clip = track?.clips.find((c) => c.id === clipId);
+      if (!track || !clip || track.locked || !Number.isFinite(x) || !Number.isFinite(y)) return project;
+      const local = Math.max(0, at - clip.start) as Ticks;
+      const write = (cur: AnimatedValue, value: number): AnimatedValue => {
+        if (cur.keyframes.length === 0) return cur.static === value ? cur : { ...cur, static: value };
+        const existing = cur.keyframes.find((k) => k.time === local);
+        if (existing && existing.value === value) return cur;
+        return upsertKeyframe(cur, { id: existing?.id ?? newKeyframeId(), time: local, value, interpolation: existing?.interpolation ?? 'linear' });
+      };
+      const nx = write(clip.transform.x, x);
+      const ny = write(clip.transform.y, y);
+      if (nx === clip.transform.x && ny === clip.transform.y) return project;
+      return updateClip(project, seq.id, clipId, (c) => ({ ...c, transform: { ...c.transform, x: nx, y: ny } }));
     },
   };
 }

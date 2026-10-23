@@ -26,8 +26,11 @@
 import {
   formatTimecode,
   moveClip,
+  moveClips,
   seconds,
+  settleClips,
   snapTargets,
+  trackKindFor,
   trimClip,
   type ClipId,
   type Ticks,
@@ -62,6 +65,13 @@ interface DragSession {
   active: boolean;
   /** Live position/duration readout, drawn by whichever component currently renders this clip. */
   readout: string | null;
+  /** Every clip travelling with this gesture: the whole multi-selection when one of its members is grabbed. */
+  groupIds: ClipId[];
+  /** Which kind of track the grabbed clip belongs on, for the "new track" drop zone. */
+  kind: 'video' | 'audio';
+  /** Where the pointer last was, so releasing over a drop zone can be recognised. */
+  lastClientX: number;
+  lastClientY: number;
   /** Last vertical position hit-tested, and what it resolved to. See `apply`. */
   lastY: number;
   lastTrackId: string | null;
@@ -127,6 +137,12 @@ export function beginClipDrag(opts: {
   origDur: Ticks;
 }): void {
   endDrag(); // a new press always supersedes whatever came before it
+  const sel = opts.store.getState().selectedClipIds;
+  const grabbed = opts.store
+    .getState()
+    .sequence()
+    .tracks.flatMap((t) => t.clips)
+    .find((c) => c.id === opts.clipId);
   session = {
     store: opts.store,
     clipId: opts.clipId,
@@ -144,6 +160,11 @@ export function beginClipDrag(opts: {
         .find((c) => c.id === opts.clipId)?.sourceIn ?? 0,
     active: false,
     readout: null,
+    // Grabbing a member of a multi-selection moves them all; grabbing anything else moves just it.
+    groupIds: opts.mode === 'move' && sel.length > 1 && sel.includes(opts.clipId) ? [...sel] : [opts.clipId],
+    kind: grabbed ? trackKindFor(grabbed) : 'video',
+    lastClientX: opts.clientX,
+    lastClientY: opts.clientY,
     lastY: opts.clientY,
     lastTrackId: null,
   };
@@ -183,6 +204,29 @@ export function endDrag(): void {
   detach();
   d.store.getState().setSnapGuide(null); // hide the guide line when the drag ends
   emit();
+
+  if (d.mode !== 'move') return;
+  const state = d.store.getState();
+  if (!d.active) {
+    // A plain click on a member of a multi-selection: it collapses to the clip that was clicked
+    // (it was kept while the press might still have become a group drag).
+    if (d.groupIds.length > 1) state.selectClip(d.clipId);
+    return;
+  }
+  /*
+   * Settle the move. While dragging, a clip may sit on top of another so the gesture stays fluid;
+   * on release nothing is left covering anything: a clip that overlaps goes to the nearest free
+   * track of its kind or a new one, and releasing over the "new track" zone forces a new track.
+   * Dispatched with the drag's own coalesce key, so the drag and its settling are ONE undo step.
+   */
+  const zone = document.elementFromPoint(d.lastClientX, d.lastClientY)?.closest('[data-new-track]');
+  const newTrack = zone?.getAttribute('data-new-track') as 'video' | 'audio' | null;
+  state.dispatch(settleClips(d.groupIds, newTrack ? { newTrack } : {}));
+}
+
+/** The kind of track the clip being dragged belongs on, or null when no move is in progress. */
+export function activeMoveKind(): 'video' | 'audio' | null {
+  return session && session.active && session.mode === 'move' ? session.kind : null;
 }
 
 function onPointerMove(e: PointerEvent): void {
@@ -246,6 +290,8 @@ function apply(d: DragSession, e: { clientX: number; clientY: number; altKey: bo
   const clip = seq.tracks.flatMap((t) => t.clips).find((c) => c.id === d.clipId);
   if (!clip) return false; // deleted mid-drag; there is nothing left to move
 
+  d.lastClientX = e.clientX;
+  d.lastClientY = e.clientY;
   const toTicks = (px: number): Ticks => seconds(px / state.pixelsPerSecond);
   const alt = e.altKey; // hold Alt to temporarily disable snapping
   const deltaTicks = toTicks(e.clientX - d.startX);
@@ -280,7 +326,12 @@ function apply(d: DragSession, e: { clientX: number; clientY: number; altKey: bo
       guide = trail.guide;
     }
     state.setSnapGuide(guide);
-    state.dispatch(moveClip(d.clipId, newStart, (targetTrackId ?? undefined) as never, true));
+    if (d.groupIds.length > 1) {
+      // A multi-selection travels as one piece, horizontally, each clip staying on its own track.
+      state.dispatch(moveClips(d.groupIds, (newStart - clip.start) as Ticks));
+    } else {
+      state.dispatch(moveClip(d.clipId, newStart, (targetTrackId ?? undefined) as never, true));
+    }
     d.readout = formatTimecode(newStart, state.sequence().fps);
   } else if (d.mode === 'in') {
     const desired = snapResult(d, d.origStart + deltaTicks, alt, toTicks);

@@ -41,6 +41,8 @@ export interface AppPreferences {
   showHomeOnLaunch: boolean;
   reopenLastProject: boolean;
   confirmOnClose: boolean;
+  /** Ask before removing media from a project (the file on disk is never touched either way). */
+  confirmRemoveMedia: boolean;
 
   // ── Interface ──
   /** Percent. Applied as the window's zoom factor. */
@@ -117,6 +119,7 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   showHomeOnLaunch: true,
   reopenLastProject: false,
   confirmOnClose: true,
+  confirmRemoveMedia: true,
 
   uiScale: 100,
   compactMode: false,

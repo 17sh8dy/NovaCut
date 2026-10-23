@@ -20,6 +20,7 @@ export * from './gl/effectChain.js';
 export * from './compositor/compositor.js';
 export * from './compositor/transitions.js';
 export * from './compositor/glTransitions.js';
+export { rasterizeText, type TextRaster } from './compositor/textRaster.js';
 export * from './media/frameSource.js';
 export * from './audio/audioGraph.js';
 export * from './export/offlineExporter.js';
