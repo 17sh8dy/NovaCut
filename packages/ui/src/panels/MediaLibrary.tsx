@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Film, ImageIcon, Music, Search, Upload, Loader2, X } from 'lucide-react';
 import {
   formatClock,
-  isStillFile,
   newMediaId,
   seconds,
   type MediaAsset,
@@ -44,7 +43,7 @@ export function MediaLibrary() {
       // Ask the picker for footage and audio only. Stills belong to the Photo Editor, which
       // has layers, masks and text — everything that makes a still worth editing — while this
       // timeline could only stretch one across five seconds.
-      const files = await store.getState().bridge.importDialog(['video', 'audio']);
+      const files = await store.getState().bridge.importDialog(['video', 'audio', 'image']);
       if (files.length === 0) return; // user canceled
       await ingest(files.map((f) => ({ src: f.src, name: f.name, mime: f.mime, size: f.size })));
     } catch (err) {
@@ -79,20 +78,20 @@ export function MediaLibrary() {
   /**
    * Turn imported file descriptors into probed MediaAssets, streaming progress.
    *
-   * Stills are refused HERE as well as at the picker, because drag-and-drop never goes near a
-   * picker and a user can type any filename past any filter. The message names the Photo
-   * Editor rather than just saying no — a refusal that does not say where to go is a dead end.
+   * Still images are now ordinary media: they sit on the timeline as clips (5 seconds to start,
+   * stretchable to any length). Only GIFs are still turned away, because the timeline would draw
+   * a GIF as one frozen frame; the message names the Photo Editor so the refusal is not a dead end.
    */
   const ingest = async (files: { src: string; name: string; mime: string; size: number }[]) => {
     if (files.length === 0) return;
-    const stills = files.filter((f) => isStillFile(f.mime, f.name));
-    if (stills.length > 0) {
-      files = files.filter((f) => !isStillFile(f.mime, f.name));
-      const names = stills.slice(0, 3).map((f) => f.name).join(', ');
+    const gifs = files.filter((f) => isGifFile(f.mime, f.name));
+    if (gifs.length > 0) {
+      files = files.filter((f) => !isGifFile(f.mime, f.name));
+      const names = gifs.slice(0, 3).map((f) => f.name).join(', ');
       store.getState().notify(
-        stills.length === 1 ? 'Images open in the Photo Editor' : `${stills.length} images skipped`,
+        gifs.length === 1 ? 'GIFs open in the Photo Editor' : `${gifs.length} GIFs skipped`,
         'info',
-        `${names}${stills.length > 3 ? '…' : ''} — use Home → Photo Editor for stills and GIFs.`,
+        `${names}${gifs.length > 3 ? '…' : ''} — use Home → Photo Editor for GIFs.`,
       );
       if (files.length === 0) return;
     }
@@ -121,7 +120,8 @@ export function MediaLibrary() {
           kind,
           name: f.name,
           src: f.src,
-          duration: seconds(probe.duration || (kind === 'image' ? 5 : 0)),
+          // A still has no source length: 0 lets the clip be stretched to any duration.
+          duration: kind === 'image' ? 0 : seconds(probe.duration || 0),
           width: probe.width,
           height: probe.height,
           ...(probe.fps !== undefined ? { fps: probe.fps } : {}),
@@ -150,7 +150,7 @@ export function MediaLibrary() {
           kind,
           name: f.name,
           src: f.src,
-          duration: kind === 'image' ? seconds(5) : 0,
+          duration: 0,
           width: 1920,
           height: 1080,
           hasAudio: kind === 'audio' || kind === 'video',
@@ -382,6 +382,10 @@ The file stays on your device — this only removes it from Nova Cut.`,
       </div>
     </div>
   );
+}
+
+function isGifFile(mime: string, name: string): boolean {
+  return mime === 'image/gif' || name.toLowerCase().endsWith('.gif');
 }
 
 function mimeToKind(mime: string, name: string): MediaKind {

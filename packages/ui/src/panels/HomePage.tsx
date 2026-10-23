@@ -172,19 +172,22 @@ export function HomePage() {
     const stills = files.filter((f) => isStillFile(f.mime, f.name));
     const footage = files.filter((f) => !isStillFile(f.mime, f.name));
 
-    // A mixed selection cannot open in two places at once. Footage wins — it is the one the
-    // timeline alone can handle — and the stills are named rather than silently dropped.
+    // A mixed selection cannot open in two places at once. Anything with footage in it opens in
+    // the video editor, and the stills come along as image clips; only GIFs, which the timeline
+    // would freeze on one frame, are named and left for the Photo Editor.
     if (footage.length > 0) {
-      if (stills.length > 0) {
-        const names = stills.slice(0, 3).map((f) => f.name).join(', ');
+      const isGif = (f: ImportedFile) => f.mime === 'image/gif' || f.name.toLowerCase().endsWith('.gif');
+      const gifs = stills.filter(isGif);
+      if (gifs.length > 0) {
+        const names = gifs.slice(0, 3).map((f) => f.name).join(', ');
         store.getState().notify(
-          stills.length === 1 ? '1 image was left out' : `${stills.length} images were left out`,
+          gifs.length === 1 ? '1 GIF was left out' : `${gifs.length} GIFs were left out`,
           'info',
-          `${names}${stills.length > 3 ? '…' : ''} — open images in the Photo Editor.`,
+          `${names}${gifs.length > 3 ? '…' : ''} — open GIFs in the Photo Editor.`,
         );
       }
       store.getState().newProject();
-      store.getState().setPendingFiles({ target: 'editor', files: footage });
+      store.getState().setPendingFiles({ target: 'editor', files: [...footage, ...stills.filter((f) => !isGif(f))] });
       enterEditor();
       return;
     }
