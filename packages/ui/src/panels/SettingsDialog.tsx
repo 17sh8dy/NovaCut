@@ -174,7 +174,7 @@ export function SettingsDialog({ initialCategory = 'General' }: { initialCategor
               </span>
             )}
             <div style={{ flex: 1 }} />
-            <button className="oc-icon-btn" onClick={close} aria-label="Close settings">
+            <button className="oc-icon-btn" onClick={close} aria-label="Close settings" title="Close">
               <X size={18} />
             </button>
           </div>

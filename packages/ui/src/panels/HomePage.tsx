@@ -42,9 +42,12 @@ const TIPS = [
 ];
 
 const WHATS_NEW = [
-  'Choose-a-workspace home with Video, Photo, GIF & Audio editors.',
-  'Professional Settings window with a full keyboard-shortcut editor.',
-  'Crash recovery — restore your session after an unexpected close.',
+  '125 new GL transitions, with adjustable settings and a searchable browser.',
+  'Drag titles right in the preview to move them anywhere, with centre snapping.',
+  'Clips no longer override each other — they move to a free track or a new one.',
+  'Select several clips and drag them together as a group.',
+  'Faster, smoother playback at high speeds, plus a Preview quality setting.',
+  'Auto Ripple, still images on the video timeline, and update checks.',
 ];
 
 type WsStatus = 'live' | 'soon' | 'future';

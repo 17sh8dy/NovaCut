@@ -192,6 +192,7 @@ export function ItemChip({
         className="oc-chip__fav"
         data-on={favorite}
         aria-label={favorite ? `Remove ${label} from favourites` : `Add ${label} to favourites`}
+        title={favorite ? 'Remove from favourites' : 'Add to favourites'}
         onClick={(e) => {
           e.stopPropagation();
           onToggleFavorite();

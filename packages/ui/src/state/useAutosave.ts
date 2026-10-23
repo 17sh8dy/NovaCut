@@ -59,8 +59,19 @@ export function useAutosave() {
     };
 
     schedule();
+    // The loop ends outright when the interval is Off, so turning it back on (or changing it) in
+    // Settings has to start it again; otherwise autosave stays dead until the next launch.
+    let lastInterval = store.getState().preferences.autosaveInterval;
+    const unsubscribe = store.subscribe((s) => {
+      const next = s.preferences.autosaveInterval;
+      if (next === lastInterval) return;
+      lastInterval = next;
+      window.clearTimeout(timer);
+      schedule();
+    });
     return () => {
       cancelled = true;
+      unsubscribe();
       window.clearTimeout(timer);
     };
   }, [store]);

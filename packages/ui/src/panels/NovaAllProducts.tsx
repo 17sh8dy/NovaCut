@@ -96,7 +96,7 @@ export function NovaAllProducts({ open, onClose, current, currentLabel, products
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <button ref={closeRef} type="button" className="oc-nova-all__close" aria-label="Close" onClick={onClose}>
+      <button ref={closeRef} type="button" className="oc-nova-all__close" aria-label="Close" title="Close" onClick={onClose}>
         <X size={18} />
       </button>
       <div className="oc-nova-all">
