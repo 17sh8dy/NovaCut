@@ -157,6 +157,70 @@ export function Timeline() {
     });
   };
 
+  /*
+   * ── DRAG-SELECTION BOX ──────────────────────────────────────────────────────────────────
+   *
+   * Press on empty lane space and drag to rubber-band clips. Clips, transition badges, the ruler
+   * and the playhead all own their own pointerdown, so this only sees presses on bare lane.
+   * Geometry is measured from the DOM lanes at the moment of each move (rather than summing track
+   * heights) so it can't disagree with what is drawn. Locked tracks are skipped, matching
+   * Select All: every edit refuses them, so selecting them would only make Delete look half-done.
+   * Shift/Ctrl adds to the existing selection. A press-release with no drag clears the selection.
+   */
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const beginMarquee = (e: React.PointerEvent) => {
+    const target = e.target as HTMLElement;
+    const content = contentRef.current;
+    if (e.button !== 0 || !content || !target.closest('.oc-lane')) return;
+    if (target.closest('.oc-clip, .oc-transition')) return;
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+    const base = additive ? store.getState().selectedClipIds : [];
+    const origin = content.getBoundingClientRect();
+    const x0 = e.clientX - origin.left;
+    const y0 = e.clientY - origin.top;
+    let active = false;
+
+    const move = (ev: PointerEvent) => {
+      const r = content.getBoundingClientRect();
+      const x1 = Math.max(0, Math.min(r.width, ev.clientX - r.left));
+      const y1 = Math.max(0, Math.min(r.height, ev.clientY - r.top));
+      if (!active && Math.hypot(x1 - x0, y1 - y0) < 4) return; // a click, not yet a drag
+      active = true;
+      const left = Math.min(x0, x1);
+      const right = Math.max(x0, x1);
+      const top = Math.min(y0, y1);
+      const bottom = Math.max(y0, y1);
+      setMarquee({ x: left, y: top, w: right - left, h: bottom - top });
+
+      const hit: string[] = [];
+      const tracks = store.getState().sequence().tracks;
+      content.querySelectorAll<HTMLElement>('.oc-lane').forEach((lane) => {
+        const lr = lane.getBoundingClientRect();
+        const laneTop = lr.top - r.top;
+        if (laneTop + lr.height < top || laneTop > bottom) return;
+        const track = tracks.find((t) => t.id === lane.dataset.trackId);
+        if (!track || track.locked) return;
+        for (const c of track.clips) {
+          const cl = toPx(c.start);
+          const cr = cl + Math.max(6, toPx(c.duration));
+          if (cr >= left && cl <= right) hit.push(c.id);
+        }
+      });
+      store.getState().selectClips([...new Set([...base, ...hit])] as never);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      setMarquee(null);
+      if (!active && !additive) store.getState().selectClip(null);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
   return (
     <div className="oc-timeline">
       <TimelineToolbar />
@@ -169,7 +233,12 @@ export function Timeline() {
         </div>
 
         <div className="oc-timeline__scroll" ref={scrollRef} onScroll={onScroll}>
-          <div className="oc-timeline__content" style={{ width: contentWidth }}>
+          <div
+            className="oc-timeline__content"
+            style={{ width: contentWidth }}
+            ref={contentRef}
+            onPointerDown={beginMarquee}
+          >
             <Ruler sequence={seq} pps={pps} onSeek={seekFromEvent} width={contentWidth} />
             {seq.tracks.map((track) => (
               <Lane key={track.id} track={track} toPx={toPx} toTicks={toTicks} />
@@ -177,6 +246,12 @@ export function Timeline() {
             <NewTrackZones />
             <SnapGuide toPx={toPx} />
             <Playhead toPx={toPx} onSeek={seekFromEvent} />
+            {marquee && (
+              <div
+                className="oc-marquee"
+                style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }}
+              />
+            )}
           </div>
         </div>
       </div>

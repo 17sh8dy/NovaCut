@@ -25,7 +25,10 @@ export function Preview() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const seq = useStore((s) => s.sequence());
+  const outputFrame = useStore((s) => s.outputFrame);
+  const projectSeq = useStore((s) => s.sequence());
+  // While the Export window is open the preview shows the exported shape, not the canvas.
+  const seq = outputFrame ? { ...projectSeq, width: outputFrame.width, height: outputFrame.height } : projectSeq;
   const playhead = useStore((s) => s.playhead);
   const isPlaying = useStore((s) => s.isPlaying);
   const speed = useStore((s) => s.playbackSpeed);
@@ -57,7 +60,8 @@ export function Preview() {
           */}
           <canvas ref={canvasRef} width={seq.width} height={seq.height} />
           {/* Grab a title here and drag it anywhere; see TextDragLayer. */}
-          <TextDragLayer />
+          {/* Its boxes are in project-canvas pixels, so it is off while previewing another shape. */}
+          {!outputFrame && <TextDragLayer />}
           {fpsOverlay && <FpsOverlay />}
         </div>
       </div>

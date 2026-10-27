@@ -34,6 +34,7 @@ import {
   type Sequence,
   type Ticks,
   type Track,
+  frameSequence,
 } from '@opencut/core';
 import {
   IDENTITY_TRANSFORM,
@@ -591,6 +592,36 @@ async function main() {
       check('video_transition_progresses', early[0]! > mid[0]! && late[2]! > mid[2]!, {
         early, mid, late,
       });
+
+      // Reframing: a SQUARE red clip drawn into a 2:1 output frame. Bars or no bars at the left
+      // edge is the whole difference between the three modes, and the project is never touched.
+      {
+        const FW = SIZE * 2;
+        const reframed = (mode: 'fit' | 'fill' | 'stretch') => {
+          const fs = frameSequence(seq, { width: FW, height: SIZE }, mode);
+          compositor.render({
+            sequence: fs,
+            time: (CUT - HALF_SECOND * 2) as Ticks,
+            getMedia: (id: string) => [red, blue].find((m) => m.id === id),
+          });
+          return readback(vcanvas, FW, SIZE);
+        };
+        const fit = reframed('fit');
+        const fill = reframed('fill');
+        const stretch = reframed('stretch');
+        check('reframe_fit_leaves_bars', hue(fit(FW / 2, SIZE / 2)) === 'red' && hue(fit(2, SIZE / 2)) !== 'red', {
+          centre: fit(FW / 2, SIZE / 2), left: fit(2, SIZE / 2),
+        });
+        check('reframe_fill_covers_frame', hue(fill(2, SIZE / 2)) === 'red' && hue(fill(FW / 2, 2)) === 'red', {
+          left: fill(2, SIZE / 2), top: fill(FW / 2, 2),
+        });
+        check('reframe_stretch_covers_frame', hue(stretch(2, SIZE / 2)) === 'red' && hue(stretch(FW - 3, SIZE - 3)) === 'red', {
+          left: stretch(2, SIZE / 2), corner: stretch(FW - 3, SIZE - 3),
+        });
+        check('reframe_does_not_mutate_project', seq.width === SIZE && seq.height === SIZE, { w: seq.width, h: seq.height });
+        // Draw the project's own frame again so later cases see the original size.
+        frameAt(CUT - HALF_SECOND * 2);
+      }
 
       // Outside the window nothing changes: a transition must not leak past its own duration.
       const before = drawAt(CUT - HALF_SECOND * 2);

@@ -1,6 +1,6 @@
 {
   "name": "@opencut/desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Nova Cut desktop app — the Electron shell that hosts the editor and provides the native PlatformBridge (dialogs, filesystem, FFmpeg export).",
   "author": "Nova Cut",

@@ -997,6 +997,39 @@ async function run() {
     });
   }
 
+  // -- 25. Dragging a box over empty lane selects the clips it touches ------
+  {
+    reset();
+    const tracks = store.getState().sequence().tracks.filter((t) => t.kind === 'video');
+    const base = createClipFromMedia(media as never, 20 * S);
+    store.getState().dispatch(addClip(tracks[0]!.id, { ...base, id: 'c2', duration: 5 * S, sourceIn: 0, sourceOut: 5 * S } as never));
+    await settle();
+    const lane = document.querySelector('.oc-lane')!.getBoundingClientRect();
+    const c1 = clipEl().getBoundingClientRect();
+    // Start in empty lane space left of c1 (c1 begins at 2s), end past c2's start.
+    const y0 = lane.top + 2;
+    const x0 = Math.max(lane.left + 1, c1.left - 6);
+    const x1 = lane.left + toPxNow(21 * S);
+    pointer(document.elementFromPoint(x0, y0) ?? window, 'pointerdown', x0, y0, { alt: false });
+    pointer(window, 'pointermove', x1, lane.bottom - 2, { alt: false });
+    await settle();
+    const boxShown = !!document.querySelector('.oc-marquee');
+    pointer(window, 'pointerup', x1, lane.bottom - 2, { buttons: 0, alt: false });
+    await settle();
+    const sel = store.getState().selectedClipIds as string[];
+    check('drag_box_selects_touched_clips', sel.includes('c1') && sel.includes('c2') && boxShown && !document.querySelector('.oc-marquee'), {
+      selected: sel,
+      boxShown,
+    });
+    // A bare click on empty lane clears the selection.
+    pointer(document.elementFromPoint(x0, y0) ?? window, 'pointerdown', x0, y0, { alt: false });
+    pointer(window, 'pointerup', x0, y0, { buttons: 0, alt: false });
+    await settle();
+    check('click_empty_lane_clears_selection', store.getState().selectedClipIds.length === 0, {
+      selected: store.getState().selectedClipIds,
+    });
+  }
+
   console.log('__RESULT__' + JSON.stringify({ ...results, ok: failures === 0, failures }));
 }
 

@@ -25,6 +25,8 @@
 
 import {
   constant,
+  frameScale,
+  type FramedSequence,
   getTransitionDef,
   hasTextAnimation,
   NEUTRAL_TEXT_ANIMATION,
@@ -428,7 +430,10 @@ export class Compositor {
       if (raster) {
         this.ctx.uploadFrame(this.source, raster.canvas);
         uploaded = true;
-        fit = { x: raster.width / ctx.sequence.width, y: raster.height / ctx.sequence.height };
+        // `frameScale` is 1 unless the output frame differs from the project canvas, in which
+        // case the title keeps its share of the frame instead of its pixel size.
+        const k = frameScale(ctx.sequence as FramedSequence);
+        fit = { x: (raster.width * k) / ctx.sequence.width, y: (raster.height * k) / ctx.sequence.height };
       }
     } else if (media && media.kind !== 'audio') {
       // Same seek arithmetic prepare() uses — see syncClipSource. When the export pipeline has
@@ -528,8 +533,16 @@ export class Compositor {
     if (!fitOverride && media && media.width && media.height) {
       const seqAspect = sequence.width / sequence.height;
       const mediaAspect = media.width / media.height;
-      if (mediaAspect > seqAspect) fitY = seqAspect / mediaAspect;
-      else fitX = mediaAspect / seqAspect;
+      const mode = (sequence as FramedSequence).frame?.mode ?? 'fit';
+      const wider = mediaAspect > seqAspect;
+      if (mode === 'fit') {
+        if (wider) fitY = seqAspect / mediaAspect;
+        else fitX = mediaAspect / seqAspect;
+      } else if (mode === 'fill') {
+        // cover: the shorter side meets the frame, the other overflows and is cropped
+        if (wider) fitX = mediaAspect / seqAspect;
+        else fitY = seqAspect / mediaAspect;
+      } // 'stretch': fit stays 1,1 — the quad IS the frame
     }
 
     const cos = Math.cos(rot);
@@ -545,8 +558,11 @@ export class Compositor {
     // is exactly the quantity `dx: 1` means one of. Multiplying by `fitX` again here would
     // square it, and a slide would travel a wildly different distance depending on how big the
     // title's bitmap happened to be relative to the frame.
-    const ndcX = (tx / sequence.width) * 2 + anim.dx * scaleX * 2;
-    const ndcY = -(ty / sequence.height) * 2 - anim.dy * scaleY * 2;
+    // Offsets were authored in project-canvas pixels; against a different output frame they are
+    // taken as the same FRACTION of it, so a title placed a quarter of the way across stays there.
+    const base = (sequence as FramedSequence).frame;
+    const ndcX = (tx / (base?.baseWidth ?? sequence.width)) * 2 + anim.dx * scaleX * 2;
+    const ndcY = -(ty / (base?.baseHeight ?? sequence.height)) * 2 - anim.dy * scaleY * 2;
 
     // M = T * R * S, column-major.
     return new Float32Array([

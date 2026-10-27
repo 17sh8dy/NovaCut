@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, FolderOpen } from 'lucide-react';
 import {
   CONTAINER_CODECS,
@@ -6,10 +6,12 @@ import {
   RESOLUTIONS,
   defaultBitrateMbps,
   defaultExportSettings,
+  defaultProjectName,
   estimateFileSize,
   estimateRenderTime,
   findMedia,
   formatExportFilename,
+  frameSequence,
   formatBytes,
   formatDuration,
   toSeconds,
@@ -56,7 +58,15 @@ export function ExportDialog() {
     // {resolution} and {fps} describe THIS export, so they come from the settings resolved just
     // above — not from the "default resolution" preference, which may not be what is being used.
     return formatExportFilename(p.exportFilenamePattern, {
-      project: store.getState().project.name,
+      /*
+       * An unrenamed project is called "Nova Cut Video File at <time it was CREATED>". Exporting
+       * it a day later would stamp the file with that old time, so every export of a long-lived
+       * project claimed the same minute. The auto-generated name is swapped for the time of this
+       * export; a name the user chose is used as written.
+       */
+      project: /^Nova Cut (Video|Photo) File at /.test(store.getState().project.name)
+        ? defaultProjectName('video')
+        : store.getState().project.name,
       resolution: settings.resolution,
       fps: settings.fps,
     });
@@ -70,6 +80,18 @@ export function ExportDialog() {
    */
   const running = useRef<{ abort: () => void } | null>(null);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
+
+  /*
+   * Show the exported shape in the main preview while this window is open, and put the project's
+   * own canvas back on the way out. Nothing here touches the project.
+   */
+  const reframeMode = settings.reframe ?? 'fit';
+  useEffect(() => {
+    const t = RESOLUTIONS[settings.resolution];
+    const differs = frameSequence(seq, t, reframeMode) !== seq;
+    store.getState().setOutputFrame(differs ? { width: t.width, height: t.height, mode: reframeMode } : null);
+  }, [settings.resolution, reframeMode, seq.width, seq.height, store]);
+  useEffect(() => () => store.getState().setOutputFrame(null), [store]);
 
   const durationSec = toSeconds(seq.duration) || 1;
   /*
@@ -97,20 +119,26 @@ export function ExportDialog() {
     if (path) setOutputPath(path);
   };
 
-  const startExport = async () => {
+  /**
+   * @param retryInSoftware set by the catch below when a hardware encode died part-way: the same
+   *   export is run again with hardware acceleration off, so a flaky GPU encoder costs the user
+   *   time rather than the export.
+   */
+  const startExport = async (retryInSoftware = false, chosenPath: string | null = null): Promise<void> => {
     const bridge = store.getState().bridge;
-    let path = outputPath;
+    let path = chosenPath ?? outputPath;
     if (!path) {
       path = await bridge.chooseExportPath(`${filename}.${settings.container}`);
       if (!path) return;
       setOutputPath(path);
     }
+    const useHardware = settings.hardwareAcceleration && !retryInSoftware;
     const job = {
       id: `job_${Date.now()}`,
       sequenceId: seq.id,
       filename: `${filename}.${settings.container}`,
       outputPath: path,
-      settings: { ...settings, videoCodec: activeCodec },
+      settings: { ...settings, hardwareAcceleration: useHardware, videoCodec: activeCodec },
       createdAt: Date.now(),
     };
     setProgress({ jobId: job.id, status: 'rendering', progress: 0 });
@@ -129,12 +157,33 @@ export function ExportDialog() {
       const project = store.getState().project;
       const resolveUrl = (src: string) => bridge.resolveMediaUrl(src);
       // Mix the sequence audio offline (null if the timeline is silent), then mux it in.
-      const audioWav = await renderSequenceAudioWav(seq, (id) => findMedia(project, id as never), resolveUrl).catch(
-        () => null,
+      // A failed mix must not look like a silent timeline: say so, then export without audio.
+      const audioWav = await renderSequenceAudioWav(
+        seq,
+        (id) => findMedia(project, id as never),
+        resolveUrl,
+        (names) =>
+          store.getState().notify(
+            `Audio missing from the export: ${names.slice(0, 3).join(', ')}${names.length > 3 ? '…' : ''}`,
+            'error',
+            'Those files could not be read.',
+          ),
+      ).catch(
+        () => {
+          store.getState().notify('Audio could not be mixed — exporting without sound', 'error');
+          return null;
+        },
       );
       // Render + encode at the sequence resolution; ffmpeg scales to the chosen output size.
-      encoder = await bridge.createEncoder(job, { width: seq.width, height: seq.height, audioWav });
-      const exporter = new OfflineExporter(project, seq, resolveUrl, seq.width, seq.height);
+      /*
+       * Same aspect as the sequence: render at sequence size and let ffmpeg scale (cheap).
+       * Different aspect (Vertical / Square): render the compositor AT the target frame, with a
+       * sequence copy of that size, so footage is aspect-fitted into it instead of being
+       * squashed by a scale step.
+       */
+      const renderSeq = frameSequence(seq, RESOLUTIONS[settings.resolution], reframeMode);
+      encoder = await bridge.createEncoder(job, { width: renderSeq.width, height: renderSeq.height, audioWav });
+      const exporter = new OfflineExporter(project, renderSeq, resolveUrl, renderSeq.width, renderSeq.height);
       running.current = exporter;
       await exporter.run(encoder, settings.fps, (info) => {
         setProgress({
@@ -187,6 +236,11 @@ export function ExportDialog() {
       // so this only ever fires for a genuine mid-render failure. Its own failure is swallowed:
       // the export has already failed, and "abort failed" on top tells the user nothing.
       await encoder?.abort().catch(() => {});
+      running.current = null;
+      if (useHardware) {
+        store.getState().notify('GPU encoder failed — retrying with the software encoder', 'info');
+        return await startExport(true, path);
+      }
       setProgress({ jobId: job.id, status: 'error', progress: 0, message: String(err) });
       store.getState().notify('Export failed', 'error');
     } finally {
@@ -245,7 +299,7 @@ export function ExportDialog() {
             <Button
               variant="primary"
               icon={<Download size={16} />}
-              onClick={startExport}
+              onClick={() => void startExport()}
               disabled={progress?.status === 'rendering' || isEmpty}
               title={isEmpty ? 'Add something to the timeline first' : undefined}
             >
@@ -261,7 +315,7 @@ export function ExportDialog() {
           <select value={settings.resolution} onChange={(e) => patch({ resolution: e.target.value as Resolution })}>
             {(Object.keys(RESOLUTIONS) as Resolution[]).map((r) => (
               <option key={r} value={r}>
-                {r} ({RESOLUTIONS[r].width}×{RESOLUTIONS[r].height})
+                {r} ({RESOLUTIONS[r].width}×{RESOLUTIONS[r].height}{r.startsWith('Vertical') ? ' · 9:16' : r.startsWith('Square') ? ' · 1:1' : ''})
               </option>
             ))}
           </select>
@@ -276,6 +330,23 @@ export function ExportDialog() {
             ))}
           </select>
         </div>
+
+        {frameSequence(seq, RESOLUTIONS[settings.resolution], reframeMode) !== seq && (
+          <div className="oc-export-field" style={{ gridColumn: '1 / -1' }}>
+            <label>Reframe ({seq.width}×{seq.height} → {width}×{height})</label>
+            <div className="oc-pills">
+              {(['fit', 'fill', 'stretch'] as const).map((m) => (
+                <button key={m} className="oc-pill" data-active={reframeMode === m} onClick={() => patch({ reframe: m })}
+                  title={{ fit: 'Whole picture, bars where the shapes differ', fill: 'Cover the frame, crop the overflow', stretch: 'Force to the frame — distorts' }[m]}>
+                  {m[0]!.toUpperCase() + m.slice(1)}
+                </button>
+              ))}
+            </div>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+              Preview shows this shape. For manual framing use a clip's Scale and Position — they apply on top.
+            </span>
+          </div>
+        )}
 
         <div className="oc-export-field">
           <label>Container</label>

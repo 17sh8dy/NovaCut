@@ -32,6 +32,7 @@ import {
   createProject,
   newClipId,
   RESOLUTIONS,
+  frameSequence,
   splitClipsAt,
   deleteClips as deleteClipsCommand,
   rippleDeleteClips as rippleDeleteClipsCommand,
@@ -82,6 +83,14 @@ interface AppState {
 
   // Selection
   selectedClipIds: ClipId[];
+  /**
+   * The output shape being previewed (set while the Export window is open). Session state, not
+   * project state: it changes what the preview RENDERS, never the project's canvas or its clips.
+   */
+  outputFrame: { width: number; height: number; mode: 'fit' | 'fill' | 'stretch' } | null;
+  setOutputFrame: (f: { width: number; height: number; mode: 'fit' | 'fill' | 'stretch' } | null) => void;
+  /** The sequence the preview should draw: the project's own, or it reframed to `outputFrame`. */
+  renderSequence: () => Sequence;
   /**
    * The transition under edit, if any.
    *
@@ -148,6 +157,8 @@ interface AppState {
 
   selectClip: (id: ClipId | null, additive?: boolean) => void;
   /** Select every clip in the sequence that an edit could actually act on. */
+  /** Replace the selection with exactly these clips (drag-selection box). */
+  selectClips: (ids: ClipId[]) => void;
   selectAllClips: () => void;
   selectTransition: (sel: { trackId: TrackId; id: string } | null) => void;
   selectMedia: (ids: string[]) => void;
@@ -231,6 +242,13 @@ export function createAppStore(bridge: PlatformBridge) {
     dirty: false,
 
     selectedClipIds: [],
+    outputFrame: null,
+    setOutputFrame: (outputFrame) => set({ outputFrame }),
+    renderSequence: () => {
+      const { outputFrame } = get();
+      const seq = get().sequence();
+      return outputFrame ? frameSequence(seq, outputFrame, outputFrame.mode) : seq;
+    },
     selectedTransition: null,
     selectedMediaIds: [],
 
@@ -359,6 +377,7 @@ export function createAppStore(bridge: PlatformBridge) {
         set({ selectedClipIds: [id], inspectorTab: get().inspectorTab });
       }
     },
+    selectClips: (ids) => set({ selectedClipIds: ids, selectedTransition: null }),
     selectAllClips: () => {
       /*
        * Locked tracks are skipped, because the point of selecting everything is to then do

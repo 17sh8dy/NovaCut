@@ -18,6 +18,8 @@ export async function renderSequenceAudioWav(
   sequence: Sequence,
   getMedia: (id: string) => MediaAsset | undefined,
   resolveUrl: (src: string) => string,
+  /** Called once with the names of any sources that could not be read, so a skipped clip is never silent. */
+  onUnreadable?: (names: string[]) => void,
 ): Promise<ArrayBuffer | null> {
   const durationSec = toSeconds(sequence.duration);
   if (durationSec <= 0) return null;
@@ -28,6 +30,7 @@ export async function renderSequenceAudioWav(
   // Gather audible clips (audio clips + video clips carrying audio).
   interface Job {
     src: string;
+    name: string;
     startSec: number;
     offsetSec: number;
     durationSec: number;
@@ -46,6 +49,7 @@ export async function renderSequenceAudioWav(
       if (!media || (media.kind !== 'audio' && !media.hasAudio)) continue;
       jobs.push({
         src: media.src,
+        name: media.name,
         startSec: toSeconds(clip.start),
         offsetSec: toSeconds(clip.sourceIn),
         durationSec: toSeconds(clip.duration),
@@ -76,9 +80,13 @@ export async function renderSequenceAudioWav(
     return buf;
   };
 
+  const unreadable = new Set<string>();
   for (const j of jobs) {
     const buffer = await decode(j.src);
-    if (!buffer) continue;
+    if (!buffer) {
+      unreadable.add(j.name);
+      continue;
+    }
     const node = ctx.createBufferSource();
     node.buffer = buffer;
     node.playbackRate.value = j.rate;
@@ -98,6 +106,7 @@ export async function renderSequenceAudioWav(
     node.start(start, j.offsetSec, j.durationSec * j.rate);
   }
 
+  if (unreadable.size > 0) onUnreadable?.([...unreadable]);
   const rendered = await ctx.startRendering();
   return audioBufferToWav(rendered);
 }

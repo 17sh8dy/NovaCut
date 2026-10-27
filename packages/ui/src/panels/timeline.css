@@ -527,3 +527,14 @@
   background: var(--accent-soft);
   color: var(--accent-text);
 }
+
+/* Drag-selection box: a calm accent outline + wash; never intercepts the pointer. */
+.oc-marquee {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 2px;
+}

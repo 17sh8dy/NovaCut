@@ -8,7 +8,11 @@
 
 import type { SequenceId } from '../model/ids.js';
 
-export type Resolution = '480p' | '720p' | '1080p' | '1440p' | '4K' | '8K';
+export type Resolution =
+  | '480p' | '720p' | '1080p' | '1440p' | '4K' | '8K'
+  // Short-form / social shapes. Unlike the 16:9 rows these change the FRAME, not just the size:
+  // the export renders at this aspect, so footage is fitted (letterboxed) rather than stretched.
+  | 'Vertical 1080p' | 'Vertical 720p' | 'Square 1080p' | 'Square 720p';
 export type Container = 'mp4' | 'mov' | 'avi' | 'mkv' | 'gif';
 export type VideoCodec = 'h264' | 'h265' | 'vp9' | 'av1' | 'prores' | 'gif';
 export type QualityPreset = 'low' | 'medium' | 'high' | 'ultra';
@@ -20,6 +24,10 @@ export const RESOLUTIONS: Record<Resolution, { width: number; height: number }> 
   '1440p': { width: 2560, height: 1440 },
   '4K': { width: 3840, height: 2160 },
   '8K': { width: 7680, height: 4320 },
+  'Vertical 1080p': { width: 1080, height: 1920 }, // 9:16 — TikTok, Reels, Shorts
+  'Vertical 720p': { width: 720, height: 1280 },
+  'Square 1080p': { width: 1080, height: 1080 }, // 1:1 — feed posts
+  'Square 720p': { width: 720, height: 720 },
 };
 
 export const FRAME_RATES = [24, 25, 30, 50, 60, 120, 144, 240] as const;
@@ -46,6 +54,8 @@ export interface ExportSettings {
   hardwareAcceleration: boolean;
   /** Export only the sequence's in/out range when true. */
   useInOutRange: boolean;
+  /** How footage is placed when the output shape differs from the project's. Default 'fit'. */
+  reframe?: 'fit' | 'fill' | 'stretch';
 }
 
 export interface ExportJob {

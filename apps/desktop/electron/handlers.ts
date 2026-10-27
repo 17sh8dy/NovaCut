@@ -185,8 +185,20 @@ export function registerHandlers(hooks: HandlerHooks): void {
     // Joined HERE rather than in the renderer, which has no business knowing the platform's path
     // separator. `defaultName` is always a bare filename.
     const defaultPath = hostPrefs.exportDir ? join(hostPrefs.exportDir, defaultName) : defaultName;
-    const res = await dialog.showSaveDialog({ title: 'Export Video', defaultPath });
-    return res.canceled ? null : res.filePath ?? null;
+    /*
+     * The container is the extension of `defaultName`, and the file written MUST carry it: ffmpeg
+     * picks the muxer from the extension, and a save dialog with no filter lets a name like
+     * "Clip_at_4.43_PM" through, where ".43_PM" is read as the extension. Pin the type with a
+     * filter and append the extension if the typed name dropped or changed it.
+     */
+    const ext = extname(defaultName).slice(1).toLowerCase();
+    const res = await dialog.showSaveDialog({
+      title: 'Export Video',
+      defaultPath,
+      ...(ext ? { filters: [{ name: `${ext.toUpperCase()} Video`, extensions: [ext] }] } : {}),
+    });
+    if (res.canceled || !res.filePath) return null;
+    return ext && extname(res.filePath).toLowerCase() !== `.${ext}` ? `${res.filePath}.${ext}` : res.filePath;
   });
 
   ipcMain.handle(

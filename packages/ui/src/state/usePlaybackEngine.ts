@@ -39,6 +39,8 @@ export function usePlaybackEngine(): PlaybackEngine {
   const renderAt = (time: Ticks) => {
     const state = store.getState();
     const seq = state.sequence();
+    // The frame to DRAW; audio and the clock keep using the project's own sequence.
+    const drawSeq = state.renderSequence();
     dthrottle('renderAt', 400, 'engine', () => [
       'renderAt',
       {
@@ -53,7 +55,7 @@ export function usePlaybackEngine(): PlaybackEngine {
     const speed = state.playbackSpeed;
     const t0 = performance.now();
     compositor.current?.render({
-      sequence: seq,
+      sequence: drawSeq,
       time,
       getMedia: (id) => findMedia(state.project, id as never),
       playing: clock.current?.isPlaying ?? false,
@@ -159,6 +161,7 @@ export function usePlaybackEngine(): PlaybackEngine {
      * majority of ticks, where the edit was to a clip and not to the media.
      */
     let lastMedia = store.getState().project.media;
+    let lastFrame = store.getState().outputFrame;
     const unsub = store.subscribe((s) => {
       c.configure({ fps: s.sequence().fps, duration: s.sequence().duration, loop: s.loop });
       if (s.project.media !== lastMedia) {
@@ -166,7 +169,8 @@ export function usePlaybackEngine(): PlaybackEngine {
         const dropped = pool.current?.pruneTo(lastMedia.map((m) => m.id)) ?? 0;
         if (dropped > 0) dlog('engine', 'pruned frame sources for removed media', { dropped });
       }
-      if (!c.isPlaying && (s.playhead !== lastPlayhead || s.project !== lastProject)) {
+      if (!c.isPlaying && (s.playhead !== lastPlayhead || s.project !== lastProject || s.outputFrame !== lastFrame)) {
+        lastFrame = s.outputFrame;
         lastPlayhead = s.playhead;
         lastProject = s.project;
         if (c.currentTime !== s.playhead) c.seek(s.playhead);
